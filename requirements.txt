@@ -17,3 +17,4 @@ google-genai
 google-api-core
 pytz
 reportlab
+openpyxl
