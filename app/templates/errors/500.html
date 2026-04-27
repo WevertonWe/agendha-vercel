@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Erro 500 - Erro Interno do Servidor{% endblock %}
+
+{% block content %}
+<div class="container d-flex flex-column justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="text-center">
+        <h1 class="display-1 fw-bold text-danger">500</h1>
+        <h2 class="mb-4">Ops! Algo deu errado.</h2>
+        <p class="lead text-muted mb-5">Ocorreu um erro interno no servidor. Nossa equipe técnica já foi notificada.</p>
+        <a href="/" class="btn btn-primary btn-lg">
+            <i class="bi bi-house-door-fill me-2"></i>Voltar ao Início
+        </a>
+    </div>
+</div>
+{% endblock %}

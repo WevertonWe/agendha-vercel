@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Categorias - Água que Alimenta{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col-md-3 text-start">
+            <a href="/mapa" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Voltar ao Mapa
+            </a>
+        </div>
+        <div class="col-md-6 text-center">
+            <h1 class="m-0">Categorias do Mapa (Legenda)</h1>
+        </div>
+        <div class="col-md-3 text-end">
+            <button class="btn btn-success" onclick="openModal()">
+                <i class="bi bi-plus-lg me-2"></i>Nova Categoria
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Cor</th>
+                            <th scope="col" class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaCategorias">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Salvar -->
+<div class="modal fade" id="modalCategoria" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Nova Categoria</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCategoria" onsubmit="salvarCategoria(event)">
+                    <input type="hidden" id="catId">
+                    
+                    <div class="mb-3">
+                        <label for="catNome" class="form-label">Nome da Categoria</label>
+                        <input type="text" class="form-control" id="catNome" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="catCor" class="form-label">Cor no Mapa</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="catCor" value="#563d7c" required>
+                            <input type="text" class="form-control" id="catCorHex" readonly>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sincronizar input color com texto
+    document.getElementById('catCor').addEventListener('input', e => {
+        document.getElementById('catCorHex').value = e.target.value;
+    });
+
+    async function loadCategorias() {
+        try {
+            const res = await fetch('/api/mapa/categorias');
+            if (res.status === 401) { window.location.href = '/login'; return; }
+            if (!res.ok) throw new Error('Erro ao carregar');
+            
+            const categorias = await res.json();
+            const tbody = document.getElementById('listaCategorias');
+            tbody.innerHTML = '';
+            
+            categorias.forEach(cat => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold">${cat.nome}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="d-inline-block border rounded-circle" style="width: 24px; height: 24px; background-color: ${cat.cor};"></span>
+                            <span class="text-muted small">${cat.cor}</span>
+                        </div>
+                    </td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick='editCategoria(${JSON.stringify(cat)})'>
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteCategoria(${cat.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao carregar categorias.');
+        }
+    }
+
+    function openModal() {
+        document.getElementById('formCategoria').reset();
+        document.getElementById('catId').value = '';
+        document.getElementById('modalTitle').textContent = 'Nova Categoria';
+        document.getElementById('catCor').value = '#3388ff';
+        document.getElementById('catCorHex').value = '#3388ff';
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalCategoria'));
+        modal.show();
+    }
+
+    function editCategoria(cat) {
+        document.getElementById('catId').value = cat.id;
+        document.getElementById('catNome').value = cat.nome;
+        document.getElementById('catCor').value = cat.cor;
+        document.getElementById('catCorHex').value = cat.cor;
+        document.getElementById('modalTitle').textContent = 'Editar Categoria';
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalCategoria'));
+        modal.show();
+    }
+
+    async function salvarCategoria(e) {
+        e.preventDefault();
+        
+        const id = document.getElementById('catId').value;
+        const data = {
+            nome: document.getElementById('catNome').value,
+            cor: document.getElementById('catCor').value
+        };
+        
+        try {
+            const url = id ? `/api/mapa/categorias/${id}` : '/api/mapa/categorias';
+            const method = id ? 'PUT' : 'POST';
+            
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalCategoria')).hide();
+                ui.feedbackSucesso('Salvo com sucesso!');
+                loadCategorias();
+            } else {
+                alert('Erro ao salvar.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro de conexão.');
+        }
+    }
+
+    async function deleteCategoria(id) {
+        ui.confirmarExclusao(
+            `/api/mapa/categorias/${id}`,
+            `Categoria (Pode afetar pontos existentes)`,
+            () => loadCategorias()
+        );
+    }
+
+    // Init
+    loadCategorias();
+</script>
+{% endblock %}

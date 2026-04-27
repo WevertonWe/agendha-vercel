@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Planejamento Abaré{% endblock %}
+
+{% block content %}
+<div class="container-fluid mb-5 pt-4">
+    <div class="d-flex align-items-center mb-4 border-bottom pb-3 justify-content-between">
+        <h1 class="h2 page-header-title mb-0">
+            <i class="bi bi-map-fill me-2 text-primary"></i>Planejamento Logístico - Abaré
+        </h1>
+        <button id="btnGerarPrevia" class="btn btn-primary">
+            <i class="bi bi-arrow-repeat me-1"></i> Gerar Prévia Inteligente
+        </button>
+    </div>
+
+    <div id="loading" class="text-center py-5" style="display: none;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Analisando coordenadas e agrupando beneficiários...</p>
+    </div>
+
+    <div id="dashboard" style="display: none;">
+        <!-- 
+            DASHBOARD DE PREVIA
+            Exibido após carregar dados da API /api/logistica/abare/preview.
+            Contém: Cards de Resumo + Botão de PDF + Lista de Grupos.
+        -->
+        <!-- Resumo -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="text-white-50 text-uppercase small fw-bold">Total Candidatos</h6>
+                        <h2 class="display-4 fw-bold mb-0" id="totalCandidatos">0</h2>
+                        <small>Abaré (Sem GRH)</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="text-white-50 text-uppercase small fw-bold">Custo Total Estimado</h6>
+                        <h2 class="display-6 fw-bold mb-0" id="custoTotal">R$ 0,00</h2>
+                        <small>Kits + Logística</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="fw-bold"><i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Cotação Oficial
+                            </h5>
+                            <p class="text-muted mb-0 small">Gera documento com assinatura do Coord. Financeiro.</p>
+                        </div>
+                        <button id="btnExportarPdf" class="btn btn-outline-danger btn-lg">
+                            <i class="bi bi-download me-1"></i> Baixar PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grupos -->
+        <h4 class="fw-bold mb-3 text-secondary">Sugestão de Eventos Logísticos</h4>
+        <!-- 
+            CONTAINER DE GRUPOS
+            ID: #groupsContainer
+            Preenchido por JS: Cards com tabelas de candidatos por evento.
+        -->
+        <div class="row g-4" id="groupsContainer">
+            <!-- Cards de Grupos serão inseridos aqui via JS -->
+        </div>
+
+    </div>
+
+    <!-- Area para erro -->
+    <div id="errorMsg" class="alert alert-danger mt-3" style="display: none;"></div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const btnGerar = document.getElementById('btnGerarPrevia');
+        const loading = document.getElementById('loading');
+        const dashboard = document.getElementById('dashboard');
+        const errorMsg = document.getElementById('errorMsg');
+        const container = document.getElementById('groupsContainer');
+        const btnPdf = document.getElementById('btnExportarPdf');
+
+        // Load on Init or Click? Let's load on click to show "Generating..."
+        // Or load automatically. Let's do Click for explicit action.
+
+        btnGerar.addEventListener('click', async () => {
+            dashboard.style.display = 'none';
+            loading.style.display = 'block';
+            errorMsg.style.display = 'none';
+
+            try {
+                // Use fetchWithAuth if available (assumes it handles headers), else fetch
+                const fetcher = (typeof fetchWithAuth !== 'undefined') ? fetchWithAuth : fetch;
+                const response = await fetcher('/api/logistica/abare/preview');
+
+                if (!response.ok) {
+                    if (response.status === 401) throw new Error("Não autorizado. Faça login novamente.");
+                    throw new Error("Erro na API");
+                }
+                const data = await response.json();
+
+                renderDashboard(data);
+
+                loading.style.display = 'none';
+                dashboard.style.display = 'block';
+            } catch (e) {
+                console.error(e);
+                loading.style.display = 'none';
+                errorMsg.textContent = "Erro ao buscar dados: " + e.message;
+                errorMsg.style.display = 'block';
+            }
+        });
+
+        // Auto-load once for convenience check
+        // btnGerar.click(); 
+
+        function renderDashboard(data) {
+            document.getElementById('totalCandidatos').textContent = data.total_candidatos;
+            document.getElementById('custoTotal').textContent = (data.custo_total_estimado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            container.innerHTML = '';
+
+            data.grupos.forEach(grupo => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4';
+
+                // Comunidades (limit to first 5 unique for display)
+                const comunidades = [...new Set(grupo.beneficiarios.map(b => b.comunidade || 'N/I'))].slice(0, 5).join(', ');
+
+                col.innerHTML = `
+                    <div class="card h-100 border-0 shadow-sm rounded-4">
+                        <div class="card-header bg-white border-0 pt-4 pb-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="fw-bold text-primary mb-0">${grupo.nome_evento}</h5>
+                                <span class="badge bg-primary rounded-pill">${grupo.quantidade_beneficiarios} Beneficiários</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">
+                                <i class="bi bi-geo-alt-fill me-1"></i> Principais Comunidades: <br>
+                                <strong>${comunidades}...</strong>
+                            </p>
+                            
+                            <ul class="list-group list-group-flush small mb-3">
+                                <li class="list-group-item d-flex justify-content-between px-0">
+                                    <span>Kits (${grupo.quantidade_beneficiarios}x)</span>
+                                    <span>${(grupo.detalhes_custo.kits || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between px-0">
+                                    <span>Logística (Fixo)</span>
+                                    <span>${(grupo.detalhes_custo.logistica || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between px-0 fw-bold bg-light rounded px-2 mt-1">
+                                    <span>Subtotal</span>
+                                    <span>${(grupo.custo_estimado || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                </li>
+                            </ul>
+                            
+                            <button class="btn btn-outline-secondary btn-sm w-100" data-bs-toggle="collapse" data-bs-target="#lista-${grupo.grupo_id}">
+                                Ver Lista de Nomes
+                            </button>
+                            <div class="collapse mt-2" id="lista-${grupo.grupo_id}">
+                                <div class="card card-body p-2 bg-light border-0" style="max-height: 200px; overflow-y: auto;">
+                                    <ul class="list-unstyled small mb-0">
+                                        ${grupo.beneficiarios.map(b => `<li>${b.nome_completo} <span class="text-muted">(${b.comunidade})</span></li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(col);
+            });
+        }
+
+        btnPdf.addEventListener('click', async () => {
+            const btnOldHtml = btnPdf.innerHTML;
+            btnPdf.disabled = true;
+            btnPdf.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Baixando...';
+
+            try {
+                const fetcher = (typeof fetchWithAuth !== 'undefined') ? fetchWithAuth : fetch;
+                const response = await fetcher('/api/logistica/abare/pdf');
+
+                if (!response.ok) throw new Error("Erro ao baixar PDF");
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Cotacao_Logistica_Abare.pdf";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+            } catch (e) {
+                alert("Erro no download: " + e.message);
+            } finally {
+                btnPdf.disabled = false;
+                btnPdf.innerHTML = btnOldHtml;
+            }
+        });
+    });
+</script>
+{% endblock %}

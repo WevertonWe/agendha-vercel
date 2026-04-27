@@ -1,0 +1,466 @@
+{% extends "base_financeiro.html" %}
+
+{% block styles %}
+<style>
+    /* Dashboard Moderno - Financeiro */
+    .stat-card {
+        border: none;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        text-decoration: none;
+        color: inherit;
+        height: 100%;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        border-radius: 16px;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        color: #212529;
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    /* Temas Específicos Financeiro */
+    .theme-blue .stat-icon {
+        background-color: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+    }
+
+    .theme-blue .stat-value {
+        color: #0d6efd;
+    }
+
+    .theme-green .stat-icon {
+        background-color: rgba(25, 135, 84, 0.1);
+        color: #198754;
+    }
+
+    .theme-green .stat-value {
+        color: #198754;
+    }
+
+    .theme-cyan .stat-icon {
+        background-color: rgba(13, 202, 240, 0.1);
+        color: #0dcaf0;
+    }
+
+    .theme-cyan .stat-value {
+        color: #0aa2c0;
+    }
+</style>
+{% endblock %}
+
+{% block financeiro_content %}
+
+<!-- Totais calculados no Backend -->
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-2 pb-4 mb-4 border-bottom">
+    <h1 class="h2 page-header-title"><i class="bi bi-speedometer2 me-2"></i>Painel Financeiro</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-custom-primary" data-bs-toggle="modal" data-bs-target="#modalNovoProjeto">
+            <i class="bi bi-plus-lg me-2"></i>Novo Projeto
+        </button>
+    </div>
+</div>
+
+<div class="row mb-5 g-4">
+    <div class="col-md-4">
+        <div class="stat-card p-4 theme-blue shadow-sm">
+            <div>
+                <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+                <div class="stat-value mt-3">
+                    {{ total_carteira | currency }}
+                </div>
+                <div class="stat-label fw-bold text-uppercase">Total em Carteira</div>
+                <small class="text-muted mt-2 d-block">Orçamento Total Aprovado</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card p-4 theme-green shadow-sm">
+            <div>
+                <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
+                <div class="stat-value mt-3">
+                    {{ total_executado | currency }}
+                </div>
+                <div class="stat-label fw-bold text-uppercase">Total Executado</div>
+                <small class="text-muted mt-2 d-block">Valores já processados</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card p-4 theme-cyan shadow-sm">
+            <div>
+                <div class="stat-icon"><i class="bi bi-folder2-open"></i></div>
+                <div class="stat-value mt-3">{{ projetos_ativos }}</div>
+                <div class="stat-label fw-bold text-uppercase">Projetos Ativos</div>
+                <small class="text-muted mt-2 d-block">Em andamento</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h4 class="mb-4 text-secondary border-bottom pb-2"><i class="bi bi-grid-fill me-2"></i>Meus Projetos</h4>
+
+<div class="row">
+    {% for projeto in projetos %}
+    <div class="col-md-4 mb-4">
+        <div class="card-custom h-100 project-card">
+            <div class="card-body d-flex flex-column p-4">
+                <div class="row align-items-start mb-3">
+                    <div class="col-8 ps-3">
+                        <h5 class="card-title fw-bold text-dark text-truncate mb-1" title="{{ projeto.nome }}">
+                            {{ projeto.nome }}
+                        </h5>
+                        <div class="d-flex align-items-center text-muted small">
+                            <i class="bi bi-file-text me-1"></i>
+                            <span>Contrato: {{ projeto.numero_contrato }}</span>
+                        </div>
+                    </div>
+                    <div class="col-4 text-end">
+                        <div class="d-flex justify-content-end gap-1">
+                            <button class="btn btn-sm btn-light text-secondary btn-edit-projeto rounded-circle"
+                                style="width: 32px; height: 32px;" data-id="{{ projeto.id }}"
+                                data-nome="{{ projeto.nome }}" data-contrato="{{ projeto.numero_contrato }}"
+                                data-inicio="{{ projeto.data_inicio }}" data-fim="{{ projeto.data_fim }}"
+                                data-valor="{{ projeto.valor_total }}" title="Editar">
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <button class="btn btn-sm btn-light text-danger btn-delete-projeto rounded-circle"
+                                style="width: 32px; height: 32px;" data-id="{{ projeto.id }}" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            <span class="badge bg-light text-dark border ms-1 align-self-center">{{ projeto.id }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-secondary small fw-bold text-uppercase"
+                            style="font-size: 0.75rem; letter-spacing: 0.5px;">Execução Física</span>
+                        <span class="text-primary small fw-bold">{{ "%.1f"|format(projeto.percentual_concluido or 0)
+                            }}%</span>
+                    </div>
+                    <div class="progress mb-4 progress-custom">
+                        <div class="progress-bar bg-primary progress-bar-custom" role="progressbar"
+                            style="--progress-width: {{ projeto.percentual_concluido or 0 }}%;"
+                            aria-valuenow="{{ projeto.percentual_concluido or 0 }}" aria-valuemin="0"
+                            aria-valuemax="100">
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-2 border rounded bg-light text-center h-100">
+                                <small class="text-muted d-block text-uppercase mb-1"
+                                    style="font-size: 0.7rem;">Orçado</small>
+                                <span class="fw-bold text-dark d-block text-truncate" style="font-size: 0.9rem;">
+                                    {{ (projeto.total_orcado or 0) | currency }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div
+                                class="p-2 border rounded bg-light text-center h-100 position-relative overflow-hidden">
+                                <small class="text-muted d-block text-uppercase mb-1"
+                                    style="font-size: 0.7rem;">Saldo</small>
+                                <span
+                                    class="fw-bold d-block text-truncate {% if (projeto.saldo or 0) < 0 %}text-danger{% else %}text-success{% endif %}"
+                                    style="font-size: 0.9rem;">
+                                    {{ (projeto.saldo or 0) | currency }}
+                                </span>
+                                <div
+                                    class="card-status-bar {% if (projeto.saldo or 0) < 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <a href="/financeiro/plano/{{ projeto.id }}"
+                            class="btn btn-outline-primary btn-sm rounded-pill fw-bold py-2">
+                            Gerenciar Detalhes <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+            <h5>Nenhum projeto encontrado</h5>
+            <p>Clique em "Novo Projeto" para começar a gerenciar.</p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Modal Novo Projeto -->
+<div class="modal fade" id="modalNovoProjeto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content card-custom border-0">
+            <div class="modal-header border-0 bg-light">
+                <h5 class="modal-title fw-bold-custom"><i class="bi bi-plus-circle me-2"></i>Novo Projeto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formNovoProjeto">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label fw-bold">Nome do Projeto</label>
+                        <input type="text" class="form-control-custom" id="nome" name="nome" required
+                            placeholder="Ex: Projeto Água Viva">
+                    </div>
+                    <div class="mb-3">
+                        <label for="numero_contrato" class="form-label fw-bold">Número do Contrato</label>
+                        <input type="text" class="form-control-custom" id="numero_contrato" name="numero_contrato"
+                            required placeholder="Ex: 123/2024">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="data_inicio" class="form-label fw-bold">Data Início</label>
+                            <input type="date" class="form-control-custom" id="data_inicio" name="data_inicio" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="data_fim" class="form-label fw-bold">Data Fim</label>
+                            <input type="date" class="form-control-custom" id="data_fim" name="data_fim" required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="valor_total" class="form-label fw-bold">Valor Total do Convênio</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-0 bg-light">R$</span>
+                            <input type="number" step="0.01" class="form-control-custom" id="valor_total"
+                                name="valor_total" required placeholder="0,00">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary w-100 py-2">Criar Projeto</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Projeto -->
+<div class="modal fade" id="modalEditarProjeto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Editar Projeto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formEditarProjeto">
+                    <input type="hidden" id="edit_id" name="id">
+                    <div class="mb-3">
+                        <label for="edit_nome" class="form-label fw-bold">Nome do Projeto</label>
+                        <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_numero_contrato" class="form-label fw-bold">Número do Contrato</label>
+                        <input type="text" class="form-control" id="edit_numero_contrato" name="numero_contrato"
+                            required>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="edit_data_inicio" class="form-label fw-bold">Data Início</label>
+                            <input type="date" class="form-control" id="edit_data_inicio" name="data_inicio" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="edit_data_fim" class="form-label fw-bold">Data Fim</label>
+                            <input type="date" class="form-control" id="edit_data_fim" name="data_fim" required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="edit_valor_total" class="form-label fw-bold">Valor Total do Convênio</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control" id="edit_valor_total" name="valor_total" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100 py-2 fw-bold">Salvar Alterações</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- 1. Formatação de Moeda ---
+        function formatarMoeda(input) {
+            let value = input.value.replace(/\D/g, '');
+            value = (value / 100).toFixed(2) + '';
+            value = value.replace(".", ",");
+            value = value.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+            input.value = value;
+        }
+
+        const editValorInput = document.getElementById('edit_valor_total');
+        if (editValorInput) {
+            editValorInput.addEventListener('input', function () {
+                formatarMoeda(this);
+            });
+        }
+
+        // --- 2. Novo Projeto (Submit) ---
+        const formNovo = document.getElementById('formNovoProjeto');
+        if (formNovo) {
+            formNovo.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const data = Object.fromEntries(formData.entries());
+
+                // Conversão de valor
+                if (data.valor_total) data.valor_total = parseFloat(data.valor_total);
+
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+
+                // Loading State
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Criando...';
+
+                try {
+                    const response = await fetch('/financeiro/projetos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        ui.feedbackSucesso('Projeto criado com sucesso!');
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        const err = await response.json();
+                        ui.feedbackErro('Erro: ' + (err.detail || 'Erro desconhecido'));
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    ui.feedbackErro('Erro de conexão ao criar projeto.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+        }
+
+        // --- 3. Editar Projeto (Listeners) ---
+        const modalEditEl = document.getElementById('modalEditarProjeto');
+        let modalEdit;
+        if (typeof bootstrap !== 'undefined' && modalEditEl) {
+            modalEdit = new bootstrap.Modal(modalEditEl);
+        } else {
+            console.warn('Bootstrap or Modal Element not found');
+        }
+
+        document.querySelectorAll('.btn-edit-projeto').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ds = btn.dataset;
+                document.getElementById('edit_id').value = ds.id;
+                document.getElementById('edit_nome').value = ds.nome;
+                document.getElementById('edit_numero_contrato').value = ds.contrato;
+                document.getElementById('edit_data_inicio').value = ds.inicio;
+                document.getElementById('edit_data_fim').value = ds.fim;
+
+                // Formatar valor para o input (pt-BR)
+                document.getElementById('edit_valor_total').value = valorFloat.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+
+                if (modalEdit) modalEdit.show();
+            });
+        });
+
+        // --- 4. Editar Projeto (Submit) ---
+        const formEdit = document.getElementById('formEditarProjeto');
+        if (formEdit) {
+            formEdit.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const data = Object.fromEntries(formData.entries());
+
+                // Parser R$ -> Float
+                if (data.valor_total) {
+                    // Remove pontos de milhar, troca vírgula por ponto
+                    let v = data.valor_total.replace(/\./g, '').replace(',', '.');
+                    data.valor_total = parseFloat(v);
+                }
+
+                const id = data.id;
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+
+                try {
+                    const response = await fetch(`/financeiro/projetos/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (response.ok) {
+                        ui.feedbackSucesso('Projeto atualizado!');
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        const err = await response.json();
+                        ui.feedbackErro('Erro ao atualizar: ' + (err.detail || 'Erro desconhecido'));
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    ui.feedbackErro('Erro de conexão ao atualizar.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            });
+        }
+
+        // --- 5. Excluir Projeto ---
+        document.querySelectorAll('.btn-delete-projeto').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                ui.confirmarExclusao(
+                    `/financeiro/projetos/${id}`,
+                    'Projeto (Todos os dados serão perdidos)',
+                    () => window.location.reload()
+                );
+            });
+        });
+    });
+</script>
+{% endblock %}

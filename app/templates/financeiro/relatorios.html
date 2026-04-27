@@ -1,0 +1,86 @@
+{% extends "base_financeiro.html" %}
+
+{% block financeiro_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Relatórios - {{ projeto.nome }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="exportarExcel()">
+            <i class="bi bi-file-earmark-excel"></i> Exportar para Excel
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Extrato Completo do Projeto</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0" id="tabela-extrato">
+                <thead class="table-light">
+                    <tr>
+                        <th>Data</th>
+                        <th>Nº Processo</th>
+                        <th>Rubrica</th>
+                        <th>Beneficiário</th>
+                        <th>Histórico</th>
+                        <th>Valor (R$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in lancamentos %}
+                    <tr>
+                        <td>{{ l.data_lancamento }}</td>
+                        <td>{{ l.numero_processo or '-' }}</td>
+                        <td>
+                            <span title="{{ l.rubrica_descricao }}">{{ l.rubrica_codigo }}</span>
+                        </td>
+                        <td>{{ l.nome_razao_social or '-' }}</td>
+                        <td>{{ l.historico }}</td>
+                        <td class="text-nowrap">{{ "{:,.2f}".format(l.valor_total_executado) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">Nenhum lançamento encontrado neste projeto.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    function exportarExcel() {
+        const table = document.getElementById("tabela-extrato");
+        let csvContent = "data:text/csv;charset=utf-8,";
+
+        // Add BOM for Excel to recognize UTF-8
+        csvContent += "\uFEFF";
+
+        const rows = table.querySelectorAll("tr");
+
+        rows.forEach(function (row) {
+            const cols = row.querySelectorAll("td, th");
+            let rowData = [];
+
+            cols.forEach(function (col) {
+                // Clean text content: remove newlines, escape quotes
+                let text = col.innerText.replace(/(\r\n|\n|\r)/gm, " ").replace(/"/g, '""');
+                rowData.push('"' + text + '"');
+            });
+
+            csvContent += rowData.join(";") + "\r\n"; // Use semicolon for Excel in some regions, or comma
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "extrato_projeto_{{ projeto.id }}.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+{% endblock %}

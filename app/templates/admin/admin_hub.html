@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}Central de Operações - Agendha{% endblock %}
+
+{% block styles %}
+<style>
+    /* Dashboard Moderno - Zero Gap */
+    body {
+        background-color: #f8f9fa; /* Ensure light background for glass effect */
+    }
+
+    .dashboard-header {
+        /* Glassmorphism applied inline/via classes, this is fallback/base */
+        transition: background 0.3s ease;
+        padding-top: 0.5rem; /* Visual balance */
+    }
+
+    .stat-card {
+        border: none;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        text-decoration: none;
+        color: inherit;
+        height: 100%;
+        background: white; /* Fallback */
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    a.stat-card {
+        cursor: pointer;
+    }
+    
+    div.stat-card {
+        cursor: default;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important;
+        color: inherit;
+    }
+    
+    .hover-lift {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        color: #212529;
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .progress-micro {
+        height: 6px;
+        border-radius: 3px;
+        background-color: #e9ecef;
+        margin-top: auto; /* Push to bottom if needed */
+    }
+
+    /* Temas de Cores */
+    .theme-bsf .stat-icon { background-color: rgba(220, 53, 69, 0.1); color: #dc3545; }
+    .theme-bsf .stat-value { color: #dc3545; }
+    
+    .theme-aqa .stat-icon { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+    .theme-aqa .stat-value { color: #0d6efd; }
+
+    .theme-fin .stat-icon { background-color: rgba(25, 135, 84, 0.1); color: #198754; }
+    .theme-fin .stat-value { color: #198754; }
+
+    .theme-oficios .stat-icon { background-color: rgba(255, 193, 7, 0.1); color: #ffc107; }
+    .theme-oficios .stat-value { color: #d39e00; }
+
+    .section-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #adb5bd;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+    }
+    .section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #e9ecef;
+        margin-left: 1rem;
+    }
+
+    /* Utilitário de Carregando */
+    .loading-skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    .loading-text { width: 60px; height: 32px; }
+    
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header sticky-top top-0 py-2" style="z-index: 999; backdrop-filter: blur(10px); background: rgba(248, 249, 250, 0.8);">
+    <div class="container d-flex justify-content-between align-items-center py-2">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark"><i class="bi bi-grid-fill me-2 text-primary"></i>Central de Operações</h4>
+            <small class="text-muted">Visão Geral dos Projetos</small>
+        </div>
+
+        {% if user_username in ['admin', 'fabiano', 'marilac'] %}
+        <button onclick="fazerBackup()" class="btn btn-light btn-sm border-0 shadow-sm d-flex align-items-center gap-2 text-secondary hover-shadow" style="background: rgba(255,255,255,0.8); cursor: pointer;">
+            <i class="bi bi-database-down"></i>
+            <span class="d-none d-md-inline">Backup Manual</span>
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="container py-4">
+    
+<!-- Seção: Métricas Principais (Cards de Topo) -->
+    <!-- Restaurados e Estilizados com Cores Específicas -->
+    <div class="row g-4 mb-5">
+        <!-- BSF (Vermelho) -->
+        <div class="col-md-6 col-lg-3">
+            <a href="/projetos/ater-bahia-sem-fome/producao" class="stat-card p-4 theme-bsf shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+                <div>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="stat-icon"><i class="bi bi-basket-fill"></i></div>
+                        <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3">Prioridade</span>
+                    </div>
+                    <div class="stat-value mt-3" id="val-bsf-realizado"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Bahia Sem Fome</div>
+                    <div class="progress progress-micro mt-3">
+                        <div class="progress-bar bg-danger" id="prog-bsf" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block" id="desc-bsf">Carregando...</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- AQA (Azul) -->
+        <div class="col-md-6 col-lg-3">
+            <a href="/portal" class="stat-card p-4 theme-aqa shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+                <div>
+                    <div class="stat-icon"><i class="bi bi-droplet-fill"></i></div>
+                    <div class="stat-value mt-3" id="val-aqa"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Água que Alimenta</div>
+                    <small class="text-muted mt-3 d-block">Beneficiários totais</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- Financeiro (Verde) -->
+        <div class="col-md-6 col-lg-3">
+            {% if user_username in ['admin', 'marilac', 'mauricio', 'fabiano', 'valda'] %}
+            <a href="/financeiro/painel" class="stat-card p-4 theme-fin shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+            {% else %}
+            <div class="stat-card p-4 theme-fin shadow-sm opacity-75" style="border-radius: 16px;">
+            {% endif %}
+                <div>
+                    <div class="stat-icon"><i class="bi bi-cash-coin"></i></div>
+                    <div class="stat-value mt-3" id="val-fin"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Execução Financeira</div>
+                    <small class="text-muted mt-3 d-block">Total Executado (R$)</small>
+                </div>
+            {% if user_username in ['admin', 'marilac', 'mauricio', 'fabiano', 'valda'] %}
+            </a>
+            {% else %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Ofícios (Amarelo) -->
+        <div class="col-md-6 col-lg-3">
+            <a href="/oficios" class="stat-card p-4 theme-oficios shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+                <div>
+                    <div class="stat-icon"><i class="bi bi-envelope-paper-fill"></i></div>
+                    <div class="stat-value mt-3" id="val-oficios"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Ofícios Expedidos</div>
+                    <small class="text-muted mt-3 d-block">Total registrado</small>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Seção: Todos os Projetos e Acessos (Unificado) -->
+    <div class="d-flex align-items-center mb-4">
+        <h5 class="fw-bold text-secondary mb-0 me-3">Módulos e Ferramentas</h5>
+        <div class="flex-grow-1 bg-light rounded-pill" style="height: 4px;"></div>
+    </div>
+    
+    <div class="row g-4 mb-5">
+        <!-- ATER BIOMAS CA 13 -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/projetos/ater-biomas-ca-13" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-success"><i class="bi bi-tree-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">ATER BIOMAS CA 13</h6>
+                    <small class="text-muted">Itaparica</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- ATER BIOMAS CA 24 -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/projetos/ater-biomas-ca-24" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-warning"><i class="bi bi-sun-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">ATER BIOMAS CA 24</h6>
+                    <small class="text-muted">Semiárido NII</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- Mapa Geral -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/api/mapa/geral" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-primary"><i class="bi bi-map-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Mapa Geral</h6>
+                    <small class="text-muted">Visualização Pública</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- Sugestões -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/projetos/admin/sugestoes" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-info"><i class="bi bi-lightbulb-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Sugestões</h6>
+                    <small class="text-muted">Feedback da Equipe</small>
+                </div>
+            </a>
+        </div>
+
+        {% if user_role == 'admin' %}
+        <!-- Usuários -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/admin/users" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-dark"><i class="bi bi-people-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Usuários</h6>
+                    <small class="text-muted">Gestão de Acessos</small>
+                </div>
+            </a>
+        </div>
+
+        <!-- Auditoria -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/admin/auditoria" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-danger"><i class="bi bi-shield-check"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Auditoria</h6>
+                    <small class="text-muted">Logs do Sistema</small>
+                </div>
+            </a>
+        </div>
+        {% endif %}
+        
+        {% if user_username == 'fgermino' %}
+        <!-- Mapa Coord -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/api/mapa/privado" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light text-danger"><i class="bi bi-geo-alt-fill"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Mapa Coord.</h6>
+                    <small class="text-muted">Dados Sensíveis</small>
+                </div>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Carrega dados do Dashboard
+        try {
+            const token = localStorage.getItem('access_token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            
+            const req = await fetch('/api/dashboard/resumo', { headers });
+            if(req.ok) {
+                const data = await req.json();
+                
+                // BSF
+                const formatNumber = new Intl.NumberFormat('pt-BR');
+                document.getElementById('val-bsf-realizado').textContent = formatNumber.format(data.bsf.realizado);
+                // Formato: "60 / 15.350 (0.4%)"
+                document.getElementById('desc-bsf').textContent = `${formatNumber.format(data.bsf.realizado)} / ${formatNumber.format(data.bsf.meta)} (${data.bsf.percent.toString().replace('.', ',')}%)`;
+                document.getElementById('prog-bsf').style.width = `${Math.min(data.bsf.percent, 100)}%`;
+                
+                // AQA
+                document.getElementById('val-aqa').textContent = data.aqa.beneficiarios;
+                
+                // Financeiro
+                const formatBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                document.getElementById('val-fin').textContent = formatBRL.format(data.financeiro.executado);
+                
+                // Ofícios
+                document.getElementById('val-oficios').textContent = data.oficios.total;
+                
+            } else {
+                console.error("Erro ao carregar dashboard api");
+            }
+        } catch(e) {
+            console.error("Erro fetch dashboard:", e);
+        }
+    });
+
+    // Função global para Backup (usa ui_utils.js)
+    async function fazerBackup() {
+        ui.confirmar(
+            'Fazer Backup?',
+            'Deseja realizar um backup manual do banco de dados agora?',
+            async () => {
+                ui.feedbackInfo('Iniciando backup...');
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+                    
+                    const response = await fetch('/api/backup/manual', { method: 'POST', headers });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        ui.feedbackSucesso(`Backup realizado!\nArquivo: ${data.filename}`);
+                    } else {
+                        const error = await response.json();
+                        ui.feedbackErro(`Erro ao realizar backup: ${error.detail}`);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    ui.feedbackErro('Erro de conexão ao tentar realizar backup.');
+                }
+            },
+            'Sim, fazer backup'
+        );
+    }
+</script>
+{% endblock %}

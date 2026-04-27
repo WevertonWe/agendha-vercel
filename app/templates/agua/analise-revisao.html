@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Revisão da Análise de Cotação{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Revisão da Análise de Cotação</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="/cotacoes">Cotações</a></li>
+        <li class="breadcrumb-item active">Revisão da Análise</li>
+    </ol>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-edit me-1"></i>
+            Revisar e Gerar PDF
+        </div>
+        <div class="card-body">
+            <p>
+                Confirme os dados abaixo. O texto principal foi gerado automaticamente, mas pode ser <strong>editado</strong> 
+                antes de gerar o PDF final.
+            </p>
+
+            <form id="form-analise-revisao">
+                
+                <input type="hidden" id="cotacao_id" name="cotacao_id" value="{{ cotacao.id }}">
+
+                <h5 class="mt-3">1. Dados Gerais da Cotação</h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="codigo_cotacao" class="form-label">Código (Célula E11)</label>
+                        <input type="text" class="form-control" id="codigo_cotacao" name="codigo_cotacao" value="{{ cotacao.codigo_cotacao }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="descricao_item" class="form-label">Descrição do Item (Célula C24)</label>
+                        <input type="text" class="form-control" id="descricao_item" name="descricao_item" value="{{ cotacao.descricao }}">
+                    </div>
+                </div>
+
+                <h5 class="mt-4">2. Texto da Análise (Células B13-K18)</h5>
+                <div class="mb-3">
+                    <label for="texto_analise" class="form-label">Parágrafo da Análise</label>
+                    <textarea class="form-control" id="texto_analise" name="texto_analise" rows="8">{{ texto_dinamico }}</textarea>
+                </div>
+                
+                <h5 class="mt-4">3. Propostas (Para Preenchimento da Tabela)</h5>
+                <div class="alert alert-info">
+                    Apenas as 3 propostas mais baratas (se existirem) serão incluídas no PDF final.
+                </div>
+                
+                <div class="row g-3">
+                    {% if proposta1 %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-success">1º Lugar (Empresa 1)</span></h6>
+                        <label class="form-label">Nome (Célula F22)</label>
+                        <input type="text" class="form-control" id="empresa1_nome" name="empresa1_nome" value="{{ proposta1.nome_fornecedor }}">
+                        <label class="form-label mt-2">Valor (Célula F24)</label>
+                        <input type="number" step="0.01" class="form-control" id="empresa1_valor" name="empresa1_valor" value="{{ proposta1.valor }}">
+                    </div>
+                    {% else %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-secondary">1º Lugar (Empresa 1)</span></h6>
+                        <p>Nenhuma proposta encontrada.</p>
+                        <input type="hidden" id="empresa1_nome" name="empresa1_nome" value="">
+                        <input type="hidden" id="empresa1_valor" name="empresa1_valor" value="0">
+                    </div>
+                    {% endif %}
+
+                    {% if proposta2 %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-warning text-dark">2º Lugar (Empresa 2)</span></h6>
+                        <label class="form-label">Nome (Célula H22)</label>
+                        <input type="text" class="form-control" id="empresa2_nome" name="empresa2_nome" value="{{ proposta2.nome_fornecedor }}">
+                        <label class="form-label mt-2">Valor (Célula H24)</label>
+                        <input type="number" step="0.01" class="form-control" id="empresa2_valor" name="empresa2_valor" value="{{ proposta2.valor }}">
+                    </div>
+                    {% else %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-secondary">2º Lugar (Empresa 2)</span></h6>
+                        <p>Nenhuma proposta encontrada.</p>
+                        <input type="hidden" id="empresa2_nome" name="empresa2_nome" value="">
+                        <input type="hidden" id="empresa2_valor" name="empresa2_valor" value="0">
+                    </div>
+                    {% endif %}
+
+                    {% if proposta3 %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-danger">3º Lugar (Empresa 3)</span></h6>
+                        <label class="form-label">Nome (Célula J22)</label>
+                        <input type="text" class="form-control" id="empresa3_nome" name="empresa3_nome" value="{{ proposta3.nome_fornecedor }}">
+                        <label class="form-label mt-2">Valor (Célula J24)</label>
+                        <input type="number" step="0.01" class="form-control" id="empresa3_valor" name="empresa3_valor" value="{{ proposta3.valor }}">
+                    </div>
+                    {% else %}
+                    <div class="col-md-4">
+                        <h6><span class="badge bg-secondary">3º Lugar (Empresa 3)</span></h6>
+                        <p>Nenhuma proposta encontrada.</p>
+                        <input type="hidden" id="empresa3_nome" name="empresa3_nome" value="">
+                        <input type="hidden" id="empresa3_valor" name="empresa3_valor" value="0">
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="mt-5 text-end">
+                    <a href="/cotacoes" class="btn btn-secondary me-2">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary" id="btn-gerar-pdf">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                        <i class="fas fa-file-pdf me-1" style="display: inline-block;"></i>
+                        Confirmar e Gerar PDF
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalErroGeracao" tabindex="-1" aria-labelledby="modalErroLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalErroLabel">Erro ao Gerar PDF</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Ocorreu um erro ao tentar gerar o PDF no servidor.</p>
+                <p><strong>Detalhe:</strong> <span id="erro-detalhe"></span></p>
+                <p>Por favor, tente novamente. Se o erro persistir, contacte o administrador.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('form-analise-revisao');
+        const btnGerar = document.getElementById('btn-gerar-pdf');
+        const btnSpinner = btnGerar.querySelector('.spinner-border');
+        const btnIcon = btnGerar.querySelector('.fa-file-pdf');
+        
+        const modalErro = new bootstrap.Modal(document.getElementById('modalErroGeracao'));
+        const spanErroDetalhe = document.getElementById('erro-detalhe');
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            // 1. Get Token
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                Swal.fire('Erro', 'Usuário não autenticado. Faça login novamente.', 'error');
+                return;
+            }
+
+            // 2. Coletar dados do formulário
+            const formData = new FormData(form);
+            const dados = {};
+            formData.forEach((value, key) => {
+                if (key.includes('_valor') || key.includes('valor')) {
+                   const cleanVal = value.toString().replace('.', '').replace(',', '.');
+                   dados[key] = parseFloat(cleanVal) || 0;
+                } else if (key === 'cotacao_id') {
+                    dados[key] = parseInt(value);
+                } else {
+                    dados[key] = value;
+                }
+            });
+
+            // 3. Feedback visual de carregamento (Swal)
+            Swal.fire({
+                title: 'Gerando PDF...',
+                text: 'Aguarde enquanto processamos o documento.',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                // 4. Enviar dados para a API (POST)
+                const response = await fetch('/api/cotacoes/gerar-analise-final', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(dados),
+                });
+
+                if (response.ok) {
+                    // 5. Sucesso: A resposta é o PDF ou Excel
+                    const blob = await response.blob();
+                    const contentType = response.headers.get('content-type');
+                    
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let filename = `Analise_Cotacao_${dados.cotacao_id}.pdf`;
+                    let isExcel = false;
+
+                    if (contentType && contentType.includes('spreadsheetml')) {
+                        isExcel = true;
+                        filename = `Analise_Cotacao_${dados.cotacao_id}.xlsx`;
+                    }
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+                        if (filenameMatch && filenameMatch.length > 1) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+
+                    // Download Link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Cleanup
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    Swal.close(); // Close loading
+                    if (isExcel) {
+                        Swal.fire('Aviso', 'Motor de PDF indisponível. Baixando versão em Excel.', 'warning');
+                    } else {
+                        Swal.fire('Sucesso', 'PDF gerado e baixado com sucesso.', 'success');
+                    }
+
+                } else {
+                    // Erro da API
+                    const erroData = await response.json();
+                    Swal.fire('Erro', erroData.detail || 'Falha ao gerar PDF.', 'error');
+                }
+
+            } catch (error) {
+                console.error('Erro no fetch:', error);
+                Swal.fire('Erro', 'Falha de conexão com o servidor.', 'error');
+            }
+        });
+    });
+</script>
+{% endblock %}

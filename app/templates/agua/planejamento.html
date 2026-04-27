@@ -1,0 +1,692 @@
+{% extends "base.html" %}
+
+{% block title %}Planejamento e Cronogramas{% endblock %}
+
+{% block styles %}
+<style>
+    /* Estilos Tabela 1 (GANTT) - Mantidos */
+    .table-planejamento th,
+    .table-planejamento td {
+        vertical-align: middle;
+        font-size: 0.8rem;
+        /* Fonte menor */
+    }
+
+    .table-planejamento .periodo {
+        text-align: center;
+        width: 40px;
+    }
+
+    .table-responsive thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background-color: #e9ecef;
+    }
+
+    .table-planejamento .col-item {
+        text-align: center;
+        width: 80px;
+        /* Aumentamos a largura */
+    }
+
+    .card-body.p-0 .table-responsive .table-planejamento {
+        border-top: none;
+        /* Remove linha branca */
+    }
+
+    .card-body.p-0 {
+        font-size: 0;
+    }
+
+    /* Remove espaços */
+    .card-body.p-0 .table-responsive {
+        font-size: 0.8rem;
+    }
+
+    /* Restaura fonte */
+
+
+    /* Estilos Tabela 2 (Quantidades) */
+    .table-quantidades th,
+    .table-quantidades td {
+        vertical-align: middle;
+        font-size: 0.85rem;
+    }
+
+    .table-quantidades .col-periodo {
+        width: 60%;
+        /* Coluna Período mais larga */
+        text-align: left;
+    }
+
+    .table-quantidades .col-quantidade {
+        width: 40%;
+        text-align: center;
+    }
+
+    #filtros-municipios-cronograma .btn {
+        margin-bottom: 0.5rem;
+        /* Espaçamento entre botões */
+    }
+
+    .btn-teal {
+        background-color: #6f42c1;
+        border-color: #6f42c1;
+        color: white;
+    }
+
+    .btn-teal:hover {
+        background-color: #59359a;
+        border-color: #59359a;
+        color: white;
+    }
+
+    /* Autocomplete Fixes */
+    .autocomplete-dropdown {
+        position: absolute !important;
+        z-index: 9999 !important;
+        background-color: #ffffff !important;
+        width: 100% !important;
+        max-height: 250px !important;
+        overflow-y: auto !important;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15) !important;
+        border: 1px solid #ced4da !important;
+        border-radius: 0 0 4px 4px !important;
+    }
+    
+    .autocomplete-dropdown .list-group-item {
+        cursor: pointer !important;
+        border-right: none;
+        border-left: none;
+        color: #212529 !important;
+        pointer-events: auto !important;
+    }
+    
+    .autocomplete-dropdown .list-group-item:first-child {
+        border-top: none;
+    }
+    
+    .autocomplete-dropdown .list-group-item:hover {
+        background-color: #f8f9fa !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container mb-5">
+    <h1 class="display-6 mb-4">Planejamento e Cronogramas</h1>
+
+    <div class="card shadow-sm mb-5">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Planejamento Geral de Execução</h2>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <!--
+                    TABELA GANTT (Planejamento Geral)
+                    Estrutura: Exibe fases (1.0 a 7.0) e marcações de meses (X).
+                    Estilo customizado: .table-planejamento
+                -->
+                <table class="table table-bordered table-sm table-hover table-planejamento mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" class="col-item">Item</th>
+                            <th scope="col">Descrição</th>
+                            <th scope="col">Encaminhamentos</th>
+                            <th scope="col" class="periodo">out..25</th>
+                            <th scope="col" class="periodo">nov..25</th>
+                            <th scope="col" class="periodo">dez..25</th>
+                            <th scope="col" class="periodo">jan..26</th>
+                            <th scope="col" class="periodo">fev..26</th>
+                            <th scope="col" class="periodo">mar..26</th>
+                            <th scope="col" class="periodo">abr..26</th>
+                            <th scope="col" class="periodo">mai..26</th>
+                            <th scope="col" class="periodo">jun..26</th>
+                            <th scope="col" class="periodo">jul..26</th>
+                            <th scope="col" class="periodo">ago..26</th>
+                            <th scope="col" class="periodo">set..26</th>
+                            <th scope="col" class="periodo">out..26</th>
+                            <th scope="col" class="periodo">nov..26</th>
+                            <th scope="col" class="periodo">dez..26</th>
+                            <th scope="col" class="periodo">jan..27</th>
+                            <th scope="col" class="periodo">fev..27</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="col-item">1.0</td>
+                            <td>Escavação buracos cisternas</td>
+                            <td>contratado</td>
+                            <td class="periodo">X</td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">2.0</td>
+                            <td>Treinamento pedreiros</td>
+                            <td>em contratação</td>
+                            <td class="periodo"></td>
+                            <td class="periodo">X</td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0</td>
+                            <td>Execução das cisternas</td>
+                            <td>Materiais em contratação</td>
+                            <td class="periodo"></td>
+                            <td class="periodo">X</td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.1</td>
+                            <td>Glória</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.2</td>
+                            <td>Paulo Afonso</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.3</td>
+                            <td>Macururé</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.4</td>
+                            <td>Chorrochó</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.5</td>
+                            <td>Abaré</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">3.0.6</td>
+                            <td>Rodelas</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">4.0</td>
+                            <td>Aquisição: bombas, filtros, sistema descarte</td>
+                            <td>em aquisição</td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">5.0</td>
+                            <td>Placas indicativas do projeto</td>
+                            <td>em aquisição</td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">6.0</td>
+                            <td>Finalização - aval da fiscalização</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                        <tr>
+                            <td class="col-item">7.0</td>
+                            <td>Termos de recebimento das cisternas</td>
+                            <td></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                            <td class="periodo"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="card shadow-sm mt-5">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 class="h5 mb-0">Cronograma de Execução</h2>
+            <div class="d-flex align-items-center gap-2">
+                <button id="btn-adicionar-linha" class="btn btn-sm btn-success text-white" title="Adicionar nova linha">
+                    <i class="bi bi-plus-lg"></i> Adicionar Linha
+                </button>
+                <button id="btn-limpar-tudo" class="btn btn-sm btn-outline-danger"
+                    title="Apagar todas as linhas deste município">
+                    <i class="bi bi-trash"></i> Limpar Tudo
+                </button>
+                <button class="btn btn-teal btn-sm" onclick="abrirModalGerar()">
+                    <i class="bi bi-magic"></i> Gerar Automático
+                </button>
+                <span id="municipio-selecionado-titulo" class="badge bg-secondary">Selecione...</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="mb-3" id="filtros-municipios-cronograma">
+                <!-- Botões gerados via JS -->
+            </div>
+
+            <!--
+                TABELA DE EXECUÇÃO (Quantidades)
+                ID: #tbody-quantidades
+                Preenchimento: Via JS (carregarCronograma)
+                Funcionalidade: Input de quantidades, cálculo de saldo acumulado e vínculo de beneficiários.
+            -->
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover table-quantidades mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" style="width: 150px;">Período</th>
+                            <th scope="col" style="text-align: center;">Quant. Cisternas</th>
+                            <th scope="col" style="text-align: center;">Meta Planejada</th>
+                            <th scope="col" style="text-align: center;">Executado</th>
+                            <th scope="col" style="width: 250px;">Beneficiários</th>
+                            <th scope="col" style="text-align: center;">Saldo Acumulado</th>
+                            <th scope="col" style="width: 50px; text-align: center;">Status</th>
+                            <th scope="col" style="width: 50px; text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-quantidades">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">Aguardando seleção...</td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th scope="row" class="text-end">TOTAIS:</th>
+                            <td id="total-quant" class="text-center fw-bold">0</td>
+                            <td id="total-meta" class="text-center fw-bold">0</td>
+                            <td id="total-exec" class="text-center fw-bold">0</td>
+                            <td></td> <!-- Coluna Beneficiários vazia no footer -->
+                            <td id="total-saldo" class="text-center fw-bold">0</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!--
+    MODAL: Gerar Cronograma Automático
+    ID: #modalGerarCronograma
+    Uso: Define data de início, meta e total para gerar semanas automaticamente.
+-->
+<div class="modal fade" id="modalGerarCronograma" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-teal text-white">
+                <h5 class="modal-title"><i class="bi bi-gear-wide-connected"></i> Gerar Expectativa de Execução</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label>Data de Início</label>
+                    <input type="date" class="form-control" id="genDataInicio">
+                </div>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label>Total de Cisternas</label>
+                        <input type="number" class="form-control" id="genTotal" placeholder="Ex: 100">
+                        <small class="text-muted">Estoque total do município</small>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label>Meta por Semana</label>
+                        <input type="number" class="form-control" id="genMeta" placeholder="Ex: 10">
+                        <small class="text-muted">Capacidade da equipe</small>
+                    </div>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Atenção: Isso substituirá o cronograma atual deste
+                    município.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary bg-teal border-0"
+                    onclick="enviarGeracaoAutomatica()">Gerar Agora</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--
+    MODAL: Vincular Beneficiário
+    ID: #modalVincularBeneficiario
+    Uso: Fluxo de 3 etapas (Buscar Beneficiário -> Selecionar Pedreiro -> Data Execução).
+-->
+<div class="modal fade" id="modalVincularBeneficiario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-check2-circle"></i> Registrar Execução</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="vincularCronogramaId">
+
+                <!-- Feedback Local -->
+                <div class="alert alert-light border small text-muted mb-3">
+                    <i class="bi bi-geo-alt-fill text-danger me-1"></i> Filtrando para: <strong id="lblMunicipioVinculo"
+                        class="text-dark">...</strong>
+                </div>
+
+                <!-- 1. Busca Beneficiário -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-uppercase text-secondary">1. Beneficiário
+                        (Cisterna)</label>
+                    <div class="position-relative">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="buscaBeneficiarioInput"
+                                placeholder="Busque por nome ou CPF..." autocomplete="off">
+                            <span class="input-group-text bg-white text-muted"><i class="bi bi-search"></i></span>
+                        </div>
+                        <!-- Dropdown de Resultados -->
+                        <div class="list-group autocomplete-dropdown d-none" 
+                             id="listaResultadosBeneficiarios">
+                        </div>
+                    </div>
+                    <!-- Selecionado -->
+                    <div id="beneficiarioSelecionadoCard"
+                        class="d-none mt-2 p-2 bg-success bg-opacity-10 border border-success rounded d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="d-block fw-bold text-success" id="selBenefNome">Nome</span>
+                            <small class="text-muted" id="selBenefCpf">CPF</small>
+                        </div>
+                        <input type="hidden" id="selBenefId">
+                        <button class="btn btn-sm btn-close" onclick="limparSelecaoBeneficiario()" title="Desfazer seleção"></button>
+                    </div>
+                </div>
+
+                <!-- 2. Seleção de Pedreiro -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase text-secondary">2. Pedreiro
+                        Responsável</label>
+                    <select class="form-select" id="selectPedreiro">
+                        <option value="">Selecione...</option>
+                        <!-- Options carregados via JS -->
+                    </select>
+                </div>
+
+                <!-- 3. Data Execução -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase text-secondary">3. Data de Conclusão</label>
+                    <input type="date" class="form-control" id="dataExecucao">
+                </div>
+
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success fw-bold px-4" onclick="confirmarVinculoEtapaFinal()">
+                    <i class="bi bi-save me-1"></i> Confirmar & Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!--
+    MODAL: Detalhes do Beneficiário
+    ID: #modalDetalhesBeneficiario
+    Uso: Exibe perfil resumido e link para documento PDF ao clicar no badge da tabela.
+-->
+<div class="modal fade" id="modalDetalhesBeneficiario" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-person-vcard-fill me-2"></i> PERFIL DO BENEFICIÁRIO
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="p-4 bg-light border-bottom">
+                    <h4 class="text-primary fw-bold mb-1" id="detalheNome">Carregando...</h4>
+                    <span class="badge bg-secondary" id="detalheStatus">-</span>
+                </div>
+                <div class="p-4">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="small text-muted text-uppercase fw-bold">CPF</label>
+                            <div class="fs-6 fw-bold text-dark" id="detalheCpf">-</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-uppercase fw-bold">NIS</label>
+                            <div class="fs-6 fw-bold text-dark" id="detalheNis">-</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-uppercase fw-bold">Município</label>
+                            <div class="fs-6 text-dark" id="detalheMunicipio">-</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-uppercase fw-bold">Comunidade</label>
+                            <div class="fs-6 text-dark" id="detalheComunidade">-</div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4 opacity-10">
+
+                    <h6 class="fw-bold text-primary mb-3">
+                        <i class="bi bi-folder-fill me-2"></i> Documentação
+                    </h6>
+
+                    <div id="areaDocumento" class="p-3 bg-white border rounded shadow-sm text-center">
+                        <span class="text-muted d-block small mb-2">Nenhum documento anexado.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-top-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                <a href="#" id="btnVerCompleto" target="_blank" class="btn btn-primary btn-sm fw-bold">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Abrir Cadastro Completo
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/planejamento.js"></script>
+{% endblock %}

@@ -1,0 +1,655 @@
+{% extends "bahia-sem-fome/base_bsf.html" %}
+
+{% block bsf_content %}
+<!-- Compact Status Bar -->
+<div class="bg-white border-bottom shadow-sm py-2 sticky-top" style="top: 60px; z-index: 1020;">
+    <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <!-- Title/Context -->
+        <h5 class="mb-0 fw-bold text-primary">
+            <i class="fas fa-file-contract me-2"></i>Contrato 014/2024
+        </h5>
+
+        <!-- Buttons -->
+        <div class="d-flex align-items-center gap-2">
+            <button onclick="abrirModalLote()" class="btn btn-sm btn-warning fw-bold shadow-sm">
+                <i class="fas fa-layer-group me-1"></i> Lançamento Rápido
+            </button>
+            <a href="/api/bsf/visitas/export" class="btn btn-sm btn-outline-success" title="Baixar Planilha Excel">
+                <i class="fas fa-file-excel me-1"></i> <span class="d-none d-md-inline">Exportar</span>
+            </a>
+            <button onclick="abrirModalConfigMetas()" class="btn btn-sm btn-primary fw-bold text-white shadow-sm">
+                <i class="fas fa-cog me-1"></i> Configurar Metas
+            </button>
+            <button onclick="abrirModalNovoMunicipio()" class="btn btn-sm btn-outline-secondary"
+                title="Adicionar Município">
+                <i class="fas fa-plus"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Charts Section -->
+<div class="container mt-5 pt-3">
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white border-bottom-0 pt-3">
+            <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-chart-bar me-2"></i>Desempenho Global do Contrato
+            </h6>
+        </div>
+        <div class="card-body pt-0">
+            <div id="loadingCharts" class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary"></div> Carregando indicadores...
+            </div>
+            <div id="globalChartsContainer" class="row g-3 d-none">
+                <!-- Charts injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <select id="filtroAno" class="form-select form-select-sm" style="width: auto;">
+            <option value="">Todos os Anos</option>
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+        </select>
+        <select id="filtroMes" class="form-select form-select-sm" style="width: auto;">
+            <option value="">Todos os Meses</option>
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+        </select>
+        <select id="filtroTecnico" class="form-select form-select-sm" style="width: auto;">
+            <option value="">Todos os Técnicos</option>
+        </select>
+        <button onclick="carregarDados()" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-filter"></i>
+        </button>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div id="dashboardGrid" class="row g-3 justify-content-center">
+        <!-- Cards inserted via JS -->
+    </div>
+
+    <!-- Link para Tabela Completa -->
+    <div class="text-center mt-4">
+        <a href="/projetos/ater-bahia-sem-fome/visitas" class="btn btn-outline-primary">
+            <i class="fas fa-list-alt me-2"></i>Ver Listagem Completa de Visitas
+        </a>
+    </div>
+</div>
+
+<!-- Modal Configurar Metas (Read-only for now or simple list) -->
+<div id="modalConfigMetas" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-tasks me-2"></i>Metas do Contrato</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Atividade</th>
+                                <th class="text-center">Meta Mensal</th>
+                                <th class="text-center">Meta Anual</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableMetasContrato">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Município (Simplified) -->
+<div id="modalNovoMunicipio" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">Novo Município</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nome do Município</label>
+                    <input type="text" id="novoMuniNome" class="form-control" placeholder="Ex: Juazeiro">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Técnico Responsável</label>
+                    <input type="text" id="novoMuniTecnico" class="form-control">
+                </div>
+                <input type="hidden" id="novoMuniAno" value="2026">
+            </div>
+            <div class="modal-footer">
+                <button onclick="salvarNovoMunicipio()" class="btn btn-primary">Adicionar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Lançamento em Lote -->
+<div id="modalLancamentoLote" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title fw-bold"><i class="fas fa-layer-group me-2"></i>Lançamento Rápido (Lote)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formLancamentoLote">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Município</label>
+                        <select id="loteMunicipio" class="form-select" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Técnico</label>
+                        <select id="loteTecnico" class="form-select" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Atividade</label>
+                        <select id="loteAtividade" class="form-select" required>
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold">Mês</label>
+                            <select id="loteMes" class="form-select" required>
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Março</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold">Ano</label>
+                            <select id="loteAno" class="form-select">
+                                <option value="2026">2026</option>
+                                <option value="2025">2025</option>
+                            </select>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label fw-bold">Quantidade</label>
+                            <input type="number" id="loteQuantidade" class="form-control" min="1" max="500" value="1" required>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-warning fw-bold">
+                            <i class="fas fa-bolt me-1"></i>Lançar em Lote
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast/Modal Generico removed: using ui_utils.js (SweetAlert2) -->
+
+<!-- Visit Registration Modal (Reused) -->
+<div id="modalRegistrarVisita" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold">Registrar Produção</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formRegistrarVisita">
+                    <input type="hidden" id="visitaMunicipio" name="municipio">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Atividade Realizada</label>
+                        <select id="atividade_id" name="atividade_id" class="form-select" required>
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label">Data</label>
+                            <input type="date" name="data_visita" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Técnico</label>
+                            <input type="text" id="visitaTecnico" name="visitaTecnico" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-bold">Qtd.</label>
+                            <input type="number" id="visitaQuantidade" name="visitaQuantidade" class="form-control" value="1" min="1" required>
+                            <small class="text-muted" style="font-size:0.75rem;">>1 lança lote</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Beneficiário (Nome ou ID)</label>
+                        <input type="text" name="visitaBeneficiario" class="form-control"
+                            placeholder="Opcional se for evento coletivo">
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-success">Salvar Registro</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script>
+    let globalMetas = [];
+
+    // --- Init ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Ensure UI Utils is loaded
+        if (!window.ui) console.error("ui_utils.js not loaded!");
+
+        carregarTecnicos(); 
+        carregarDados();
+        document.getElementById('filtroAno').addEventListener('change', carregarDados);
+        document.getElementById('filtroMes').addEventListener('change', carregarDados);
+        document.getElementById('filtroTecnico').addEventListener('change', carregarDados);
+
+        carregarAtividadesSelect();
+    });
+
+    async function carregarTecnicos() {
+        try {
+            const res = await fetch('/api/bsf/metas/tecnicos');
+            const list = await res.json();
+            const sel = document.getElementById('filtroTecnico');
+            sel.innerHTML = '<option value="">Todos os Técnicos</option>';
+            list.forEach(t => {
+                sel.innerHTML += `<option value="${t}">${t}</option>`;
+            });
+        } catch (e) { console.error("Erro ao carregar técnicos", e); }
+    }
+
+    async function carregarDados() {
+        const ano = document.getElementById('filtroAno').value;
+        const mes = document.getElementById('filtroMes').value;
+        const tecnico = document.getElementById('filtroTecnico').value;
+
+        document.getElementById('loadingCharts').classList.remove('d-none');
+        document.getElementById('globalChartsContainer').classList.add('d-none');
+        document.getElementById('dashboardGrid').innerHTML = '<div class="col-12 text-center text-muted">Carregando dados...</div>';
+
+        try {
+            let url = `/api/bsf/metas?`;
+            if (ano) url += `ano=${ano}&`;
+            if (mes) url += `mes=${mes}&`;
+            if (tecnico) url += `tecnico=${encodeURIComponent(tecnico)}&`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Erro API');
+
+            const data = await res.json();
+            globalMetas = data.global_status;
+
+            renderGlobalCharts(data.global_status);
+            renderMunicipios(data.municipios);
+
+        } catch (e) {
+            console.error(e);
+            ui.feedbackErro("Erro ao carregar dados.");
+        } finally {
+            document.getElementById('loadingCharts').classList.add('d-none');
+            document.getElementById('globalChartsContainer').classList.remove('d-none');
+        }
+    }
+
+    function renderGlobalCharts(statusList) {
+        const container = document.getElementById('globalChartsContainer');
+        container.innerHTML = '';
+
+        if (!statusList || statusList.length === 0) {
+            container.innerHTML = '<div class="col-12 text-muted small text-center">Nenhuma meta configurada.</div>';
+            return;
+        }
+
+        statusList.forEach(item => {
+            const metaAlvo = item.meta_anual;
+            const percent = item.percentual;
+            const color = percent >= 100 ? '#28a745' : (percent >= 50 ? '#17a2b8' : '#ffc107');
+            const statusIcon = percent >= 100 ? '✅' : (percent >= 50 ? '🔵' : '⚠️');
+
+            const col = document.createElement('div');
+            col.className = 'col-md-6 col-lg-4 mb-3';
+            col.innerHTML = `
+            <div class="d-flex justify-content-between align-items-end mb-1">
+                <span class="fw-bold text-dark small text-truncate" style="max-width:65%;" title="${item.atividade_nome}">${item.atividade_nome}</span>
+                <span class="small text-muted">${statusIcon} ${item.total_realizado} / ${metaAlvo}</span>
+            </div>
+            <div class="position-relative" style="height: 12px; border-radius: 6px; background: #e9ecef;">
+                <div style="position:absolute;top:0;left:0;height:100%;width:100%;border-radius:6px;background:repeating-linear-gradient(90deg,#dee2e6 0,#dee2e6 1px,transparent 1px,transparent 10%);opacity:0.3;"></div>
+                <div style="position:absolute;top:0;left:0;height:100%;width:${Math.min(percent, 100)}%;border-radius:6px;background:${color};transition:width 0.5s ease;"></div>
+            </div>
+        `;
+            container.appendChild(col);
+        });
+    }
+
+    function renderMunicipios(municipios) {
+        const grid = document.getElementById('dashboardGrid');
+        grid.innerHTML = '';
+
+        if (!municipios || municipios.length === 0) {
+            grid.innerHTML = '<div class="col-12 text-center text-muted py-5">Nenhum município cadastrado. Adicione um para começar.</div>';
+            return;
+        }
+
+        municipios.forEach(m => {
+            let actHtml = '<div class="d-flex flex-column gap-1 mt-3">';
+            if (m.resumo_atividades && m.resumo_atividades.length > 0) {
+                m.resumo_atividades.forEach(a => {
+                    actHtml += `
+                    <div class="d-flex justify-content-between small border-bottom pb-1">
+                        <span class="text-truncate text-muted" style="max-width: 70%;">${a.nome}</span>
+                        <span class="fw-bold">${a.count}</span>
+                    </div>
+                `;
+                });
+            } else {
+                actHtml += '<div class="text-center text-muted small fst-italic py-2">Sem produção registrada</div>';
+            }
+            actHtml += '</div>';
+
+            const card = document.createElement('div');
+            card.className = 'col-sm-6 col-md-4 col-lg-3';
+            card.innerHTML = `
+            <div class="card h-100 shadow-sm border-0 position-relative">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="fw-bold text-primary mb-0 text-truncate" style="max-width: 150px;" title="${m.municipio}">${m.municipio}</h6>
+                            <small class="text-muted d-block"><i class="fas fa-user me-1"></i>${m.tecnico_responsavel || '-'}</small>
+                        </div>
+                        <button class="btn btn-link text-danger p-0" style="opacity: 0.5;" title="Excluir Município" onclick="deletarMunicipality('${m.municipio}')">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                    
+                    ${actHtml}
+                    
+                    <button class="btn btn-outline-primary btn-sm w-100 mt-3 rounded-pill" 
+                        onclick="abrirModalVisita('${m.municipio}', '${m.tecnico_responsavel || ''}')">
+                        <i class="fas fa-plus-circle me-1"></i> Registrar
+                    </button>
+                </div>
+            </div>
+        `;
+            grid.appendChild(card);
+        });
+    }
+
+    // --- Modais ---
+    let modalVisitaInst = null;
+    let modalNovoMuniInst = null;
+    let modalConfigInst = null;
+    let modalLoteInst = null;
+
+    function abrirModalVisita(municipio, tecnico) {
+        document.getElementById('visitaMunicipio').value = municipio;
+        document.getElementById('visitaTecnico').value = tecnico;
+        // Reset qty
+        document.getElementById('visitaQuantidade').value = 1;
+
+        const dateInput = document.querySelector('#formRegistrarVisita input[name="data_visita"]');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+
+        const el = document.getElementById('modalRegistrarVisita');
+        if (typeof bootstrap !== 'undefined') {
+            modalVisitaInst = new bootstrap.Modal(el);
+            modalVisitaInst.show();
+        }
+    }
+
+    function abrirModalNovoMunicipio() {
+        const el = document.getElementById('modalNovoMunicipio');
+        if (typeof bootstrap !== 'undefined') {
+            modalNovoMuniInst = new bootstrap.Modal(el);
+            modalNovoMuniInst.show();
+        }
+    }
+
+    function abrirModalConfigMetas() {
+        const tbody = document.getElementById('tableMetasContrato');
+        tbody.innerHTML = '';
+        globalMetas.forEach(m => {
+            tbody.innerHTML += `
+            <tr>
+                <td>${m.atividade_nome}</td>
+                <td class="text-center">${m.meta_mensal}</td>
+                <td class="text-center">${m.meta_anual}</td>
+            </tr>
+        `;
+        });
+        const el = document.getElementById('modalConfigMetas');
+        if (typeof bootstrap !== 'undefined') {
+            modalConfigInst = new bootstrap.Modal(el);
+            modalConfigInst.show();
+        }
+    }
+
+    // --- Actions ---
+    async function carregarAtividadesSelect() {
+        try {
+            const res = await fetch('/api/bsf/visitas/atividades');
+            const list = await res.json();
+            const sel = document.getElementById('atividade_id');
+            const selLote = document.getElementById('loteAtividade');
+            
+            let options = '<option value="">Selecione...</option>';
+            list.forEach(a => {
+                options += `<option value="${a.id}">${a.nome}</option>`;
+            });
+            
+            sel.innerHTML = options;
+            if(selLote) selLote.innerHTML = options;
+            
+        } catch (e) { console.error(e); }
+    }
+
+    async function salvarNovoMunicipio() {
+        const municipio = document.getElementById('novoMuniNome').value;
+        const tecnico = document.getElementById('novoMuniTecnico').value;
+        if (!municipio) return ui.feedbackErro("Nome do município obrigatório");
+
+        try {
+            const res = await fetch('/api/bsf/metas/bulk-municipio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    municipio, ano: 2026, meta_mensal: 0, tecnico_responsavel: tecnico
+                })
+            });
+            if (res.ok) {
+                if (modalNovoMuniInst) modalNovoMuniInst.hide();
+                carregarDados();
+                ui.feedbackSucesso(`Município ${municipio} adicionado!`);
+            } else {
+                const err = await res.json();
+                ui.feedbackErro(err.detail);
+            }
+        } catch (e) { ui.feedbackErro("Erro de conexão"); }
+    }
+
+    async function deletarMunicipality(municipio) {
+        ui.confirmarExclusao(
+            `/api/bsf/metas/municipio/${encodeURIComponent(municipio)}`,
+            municipio,
+            () => {
+                carregarDados();
+            }
+        );
+    }
+
+    // --- Modal Lote ---
+    function abrirModalLote() {
+        const selMuni = document.getElementById('loteMunicipio');
+        selMuni.innerHTML = '<option value="">Selecione...</option>';
+        document.querySelectorAll('#dashboardGrid .card h6').forEach(el => {
+            const m = el.getAttribute('title') || el.textContent.trim();
+            if (m) selMuni.innerHTML += `<option value="${m}">${m}</option>`;
+        });
+
+        const selTec = document.getElementById('loteTecnico');
+        selTec.innerHTML = '<option value="">Selecione...</option>';
+        const filterTec = document.getElementById('filtroTecnico');
+        Array.from(filterTec.options).forEach(opt => {
+            if (opt.value) selTec.innerHTML += `<option value="${opt.value}">${opt.textContent}</option>`;
+        });
+
+        carregarAtividadesSelect(); // Reload to be safe
+
+        const now = new Date();
+        document.getElementById('loteMes').value = now.getMonth() + 1;
+        document.getElementById('loteAno').value = now.getFullYear();
+
+        const el = document.getElementById('modalLancamentoLote');
+        if (typeof bootstrap !== 'undefined') {
+            modalLoteInst = new bootstrap.Modal(el);
+            modalLoteInst.show();
+        }
+    }
+
+    document.getElementById('formLancamentoLote').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            municipio: document.getElementById('loteMunicipio').value,
+            tecnico_id: document.getElementById('loteTecnico').value,
+            atividade_id: parseInt(document.getElementById('loteAtividade').value),
+            mes: parseInt(document.getElementById('loteMes').value),
+            ano: parseInt(document.getElementById('loteAno').value),
+            quantidade: parseInt(document.getElementById('loteQuantidade').value)
+        };
+
+        if (!payload.municipio || !payload.tecnico_id || !payload.atividade_id || !payload.quantidade) {
+            ui.feedbackErro('Preencha todos os campos.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/bsf/visitas/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                const data = await res.json();
+                ui.feedbackSucesso(data.message || 'Lote registrado!');
+                if (modalLoteInst) modalLoteInst.hide();
+                carregarDados();
+            } else {
+                const err = await res.json();
+                ui.feedbackErro(err.detail || 'Erro no lançamento.');
+            }
+        } catch (err) { ui.feedbackErro('Erro de conexão.'); }
+    });
+
+    // --- Form Registrar Visita (Unitário com lógica híbrida de Batch) ---
+    document.getElementById('formRegistrarVisita').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const atividadeId = parseInt(document.getElementById('atividade_id').value);
+        if (!atividadeId || isNaN(atividadeId)) {
+            ui.feedbackErro("Selecione uma atividade válida.");
+            return;
+        }
+        
+        const dataVisita = e.target.querySelector('input[name="data_visita"]').value;
+        const qtd = parseInt(document.getElementById('visitaQuantidade').value) || 1;
+        
+        // Se Qtd > 1, redireciona para Batch
+        if (qtd > 1) {
+            const dt = new Date(dataVisita);
+            const payloadBatch = {
+                municipio: document.getElementById('visitaMunicipio').value,
+                tecnico_id: document.getElementById('visitaTecnico').value,
+                atividade_id: atividadeId,
+                mes: dt.getMonth() + 1, // JS Date month is 0-indexed
+                ano: dt.getFullYear(),
+                quantidade: qtd
+            };
+
+            console.log("Fluxo Híbrido -> Batch:", payloadBatch);
+            
+            try {
+                const res = await fetch('/api/bsf/visitas/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payloadBatch)
+                });
+                if (res.ok) {
+                    ui.feedbackSucesso(`${qtd} visitas registradas (Lote Automático)!`);
+                    if (modalVisitaInst) modalVisitaInst.hide();
+                    e.target.reset();
+                    carregarDados();
+                } else {
+                    const err = await res.json();
+                    ui.feedbackErro(err.detail || 'Erro ao registrar lote.');
+                }
+            } catch (err) { ui.feedbackErro("Erro de conexão."); }
+            
+            return; // STOP here
+        }
+
+        // Fluxo Unitário (Qtd = 1)
+        const payload = {
+            municipio: document.getElementById('visitaMunicipio').value,
+            tecnico_id: document.getElementById('visitaTecnico').value,
+            data_visita: dataVisita,
+            beneficiario_id: e.target.querySelector('input[name="visitaBeneficiario"]').value || "N/A",
+            atividade_id: atividadeId,
+            quantidade: 1 
+        };
+
+        try {
+            const res = await fetch('/api/bsf/visitas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                ui.feedbackSucesso("Visita registrada com sucesso!");
+                if (modalVisitaInst) modalVisitaInst.hide();
+                e.target.reset();
+                carregarDados();
+            } else {
+                const err = await res.json();
+                ui.feedbackErro(err.detail || "Erro ao registrar visita.");
+            }
+        } catch (err) { ui.feedbackErro("Erro de conexão."); }
+    });
+</script>
+{% endblock %}

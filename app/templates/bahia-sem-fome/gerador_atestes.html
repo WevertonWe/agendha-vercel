@@ -1,0 +1,122 @@
+{% extends "bahia-sem-fome/base_bsf.html" %}
+
+{% block title %}Gerador de Atestes - BSF{% endblock %}
+
+{% block bsf_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Page Header -->
+        <div class="text-center mb-5">
+            <h2 class="h3 fw-bold text-dark">
+                <i class="fas fa-file-word me-2 text-primary"></i> Gerador de Atestes em Lote
+            </h2>
+            <p class="text-muted">Crie múltiplos documentos Word automaticamente a partir de uma planilha Excel ou CSV.</p>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="card shadow-sm border-0 rounded-4 mb-4 bg-light">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i> Orientações da Planilha</h6>
+                <p class="small text-muted mb-0">
+                    A planilha deve conter os seguintes cabeçalhos exatos:
+                </p>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <ul class="small text-muted mb-0">
+                            <li>Dados do Grupo Familiar > Nome</li>
+                            <li>Dados do Grupo Familiar > CPF</li>
+                            <li>DAP / CAF</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="small text-muted mb-0">
+                            <li>Dados de Execução > Comunidade</li>
+                            <li>Dados de Execução > Nome do(a) técnico(a) responsável</li>
+                            <li>Dados de Execução > CPF do(a) técnico(a) responsável</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Drag and Drop Area -->
+        <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
+            <div class="card-body p-5">
+                <div id="drop-zone" class="drop-zone border-dashed rounded-4 p-5 text-center bg-light transition-all">
+                    <div class="drop-zone-content">
+                        <i class="fas fa-file-excel display-1 text-primary mb-3"></i>
+                        <h4 class="fw-bold">Arraste sua Planilha aqui</h4>
+                        <p class="text-muted small">Suporte para .xlsx, .xls e .csv</p>
+                        <input type="file" id="file-input" accept=".xlsx, .xls, .csv" class="d-none">
+                        <button type="button" class="btn btn-primary px-4 rounded-pill mt-2" onclick="document.getElementById('file-input').click()">
+                            Selecionar Arquivo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Files List -->
+                <div id="file-list-container" class="mt-4 d-none">
+                    <h6 class="fw-bold mb-3 border-bottom pb-2">Planilha Selecionada (<span id="file-count">0</span>)</h6>
+                    <div id="file-list" class="list-group list-group-flush">
+                        <!-- JS handles listing -->
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <div id="action-container" class="mt-4 text-center d-none">
+                    <button id="btn-processar" class="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold">
+                        <i class="fas fa-cogs me-2"></i> Gerar Atestes (ZIP)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status and Logs -->
+        <div id="status-container" class="card shadow border-0 rounded-4 d-none">
+            <div class="card-header bg-white py-3 border-0">
+                <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-tasks me-2"></i>Processando Documentos</h6>
+            </div>
+            <div class="card-body py-4">
+                <div class="progress mb-3 rounded-pill" style="height: 10px;">
+                    <div id="process-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
+                </div>
+                <p id="process-status-text" class="text-center fw-bold text-primary mb-3">Iniciando...</p>
+                
+                <div id="process-logs" class="bg-dark text-light p-3 rounded-3 small font-monospace" style="height: 150px; overflow-y: auto;">
+                    <div>> Aguardando início do processo...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .drop-zone {
+        border: 3px dashed #dee2e6;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: #0d6efd;
+        background-color: rgba(13, 110, 253, 0.05) !important;
+        transform: scale(1.01);
+    }
+    .border-dashed {
+        border-style: dashed !important;
+    }
+    .transition-all {
+        transition: all 0.3s ease;
+    }
+    #process-logs::-webkit-scrollbar {
+        width: 6px;
+    }
+    #process-logs::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/bahia-sem-fome/atestes.js') }}?v=1.0"></script>
+{% endblock %}

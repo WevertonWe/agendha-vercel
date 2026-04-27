@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Sugestões de Projetos - Agendha{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/hub" class="text-decoration-none">Hub</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Sugestões</li>
+                </ol>
+            </nav>
+            <h2 class="fw-bold text-secondary">Sugestões dos Coordenadores</h2>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="py-3 px-4">Projeto</th>
+                            <th class="py-3 px-4">Usuário</th>
+                            <th class="py-3 px-4">Sugestão</th>
+                            <th class="py-3 px-4">Data</th>
+                            <th class="py-3 px-4 text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sugestoes %}
+                        <tr id="row-{{ item.id }}">
+                            <td class="py-3 px-4 fw-bold text-primary">{{ item.projeto_id }}</td>
+                            <td class="py-3 px-4">{{ item.usuario_id }}</td>
+                            <td class="py-3 px-4 text-wrap" style="max-width: 400px;">
+                                <span id="text-{{ item.id }}">{{ item.sugestao }}</span>
+                            </td>
+                            <td class="py-3 px-4 text-muted small">{{ item.data_criacao }}</td>
+                            <td class="py-3 px-4 text-end">
+                                <button onclick="editarSugestao('{{ item.id }}')" class="btn btn-warning btn-sm me-1" title="Editar">
+                                    <i class="bi bi-pencil-fill"></i>
+                                </button>
+                                <button onclick="deletarSugestao('{{ item.id }}')" class="btn btn-danger btn-sm" title="Excluir">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                Nenhuma sugestão encontrada.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edição -->
+<div class="modal fade" id="modalEdicao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Sugestão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-id">
+                <div class="mb-3">
+                    <label class="form-label">Texto da Sugestão</label>
+                    <textarea class="form-control" id="edit-texto" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" onclick="salvarEdicao()" class="btn btn-primary">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let modalEdicao;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        modalEdicao = new bootstrap.Modal(document.getElementById('modalEdicao'));
+    });
+
+    function editarSugestao(id) {
+        const textoAtual = document.getElementById(`text-${id}`).innerText;
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-texto').value = textoAtual;
+        modalEdicao.show();
+    }
+
+    async function salvarEdicao() {
+        const id = document.getElementById('edit-id').value;
+        const novoTexto = document.getElementById('edit-texto').value;
+
+        if (!novoTexto.trim()) return alert("O texto não pode estar vazio.");
+
+        try {
+            const response = await fetch(`/projetos/api/sugestao/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sugestao: novoTexto })
+            });
+
+            if (response.ok) {
+                document.getElementById(`text-${id}`).innerText = novoTexto;
+                modalEdicao.hide();
+                alert("Sugestão atualizada!");
+            } else {
+                alert("Erro ao atualizar.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Erro de conexão.");
+        }
+    }
+
+    async function deletarSugestao(id) {
+        if (!confirm("Tem certeza que deseja excluir esta sugestão?")) return;
+
+        try {
+            const response = await fetch(`/projetos/api/sugestao/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                const row = document.getElementById(`row-${id}`);
+                row.remove();
+                alert("Sugestão excluída.");
+            } else {
+                alert("Erro ao excluir.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Erro de conexão.");
+        }
+    }
+</script>
+{% endblock %}

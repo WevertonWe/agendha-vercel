@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid with-sidebar">
+    <div class="row">
+        <nav id="sidebarMenu" class="d-md-block bg-light sidebar collapse d-flex flex-column justify-content-between">
+            <div class="position-sticky pt-3 flex-grow-1">
+
+                <!-- Global Section -->
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path.startswith('/financeiro/painel') %}active{% endif %}"
+                            aria-current="page" href="/financeiro/painel">
+                            <i class="bi bi-house-door"></i>
+                            Painel de Projetos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.url.path.startswith('/financeiro/cadastros') %}active{% endif %}"
+                            href="/financeiro/cadastros">
+                            <i class="bi bi-people"></i>
+                            Cadastros Gerais
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Project Context Section -->
+                {% if projeto %}
+                <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <span>Gestão do Projeto</span>
+                </h6>
+                <div class="px-3 mb-2">
+                    <small class="project-context-title"><i class="bi bi-folder2-open me-1"></i> {{ projeto.nome
+                        }}</small>
+                </div>
+
+                <ul class="nav flex-column mb-2">
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/plano/' in request.url.path %}active{% endif %}"
+                            href="/financeiro/plano/{{ projeto.id }}">
+                            <i class="bi bi-file-earmark-text"></i>
+                            Plano de Trabalho
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/lancamentos' in request.url.path %}active{% endif %}"
+                            href="/financeiro/projeto/{{ projeto.id }}/lancamentos">
+                            <i class="bi bi-cash-coin"></i>
+                            Lançamentos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if '/relatorios' in request.url.path %}active{% endif %}"
+                            href="/financeiro/projeto/{{ projeto.id }}/relatorios">
+                            <i class="bi bi-bar-chart"></i>
+                            Relatórios
+                        </a>
+                    </li>
+                </ul>
+                {% endif %}
+
+            </div>
+
+            <div class="sidebar-footer">
+                Versão 1.0 &copy; Agendha
+            </div>
+        </nav>
+
+        <div class="financeiro-content px-md-4">
+            {% block financeiro_content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% endblock %}

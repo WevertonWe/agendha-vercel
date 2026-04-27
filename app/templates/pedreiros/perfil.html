@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="bi bi-person-lines-fill"></i> Perfil do Pedreiro
+            </h4>
+            <a href="/pedreiros" class="btn btn-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-2 text-center">
+                    <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto" 
+                         style="width: 100px; height: 100px; font-size: 2.5rem;">
+                         <i class="bi bi-person"></i>
+                    </div>
+                </div>
+                <div class="col-md-10">
+                    <h2 class="text-primary">{{ pedreiro.nome_completo }}</h2>
+                    <p class="mb-1"><i class="bi bi-card-heading"></i> CPF: {{ pedreiro.cpf }}</p>
+                    <p class="mb-1"><i class="bi bi-telephone"></i> Telefone: {{ pedreiro.telefone or '-' }}</p>
+                    <hr>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="card bg-light border-primary p-3 text-center">
+                            <h3 class="mb-0 fw-bold text-primary">{{ pedreiro.total_obras }}</h3>
+                            <small class="text-muted">Cisternas Construídas</small>
+                        </div>
+                        <span class="badge {{ 'bg-success' if pedreiro.status == 'Ativo' else 'bg-danger' }}">
+                            {{ pedreiro.status }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <h4 class="mb-3"><i class="bi bi-bricks"></i> Histórico de Obras</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Beneficiário</th>
+                            <th>Local</th>
+                            <th>Data Conclusão</th>
+                            <th>Status Obra</th>
+                            <th>Pagamento</th>
+                            <th>Nota Fiscal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if obras %}
+                            {% for obra in obras %}
+                            <tr>
+                                <td>
+                                    <a href="/beneficiarios/perfil/{{ obra.id }}" target="_blank" class="fw-bold text-decoration-none">
+                                        {{ obra.nome_completo }}
+                                    </a>
+                                </td>
+                                <td>{{ obra.comunidade }} / {{ obra.municipio }}</td>
+                                <td>{{ obra.data_conclusao or '-' }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ obra.status }}</span>
+                                </td>
+                                <td>
+                                    {% if obra.status_pagamento == 'PAGO' %}
+                                        <span class="badge bg-success">Pago</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Pendente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if obra.link_nota_fiscal %}
+                                        <a href="/{{ obra.link_nota_fiscal }}" target="_blank" class="btn btn-sm btn-success">
+                                            <i class="bi bi-file-earmark-check"></i> Ver Nota
+                                        </a>
+                                    {% else %}
+                                        <!-- Form de Upload Discreto -->
+                                        <form onsubmit="uploadNota(event, {{ obra.id }})" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+                                            <label class="btn btn-sm btn-outline-primary" style="cursor: pointer;">
+                                                <i class="bi bi-paperclip"></i> Anexar
+                                                <input type="file" name="arquivo" hidden onchange="this.form.dispatchEvent(new Event('submit'))">
+                                            </label>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">Nenhuma obra registrada para este pedreiro.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function uploadNota(event, id) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    if (!formData.get('arquivo').size) return;
+
+    if (!confirm("Confirmar envio da Nota Fiscal? Isso marcará como PAGO.")) return;
+
+    try {
+        const response = await fetch(`/api/beneficiarios/${id}/nota_fiscal`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('access_token') // Ensure token presence
+            }
+        });
+
+        if (response.ok) {
+            alert("Nota Fiscal enviada com sucesso!");
+            location.reload();
+        } else {
+            const err = await response.json();
+            alert("Erro: " + (err.detail || "Falha no envio"));
+        }
+    } catch (e) {
+        alert("Erro de conexão: " + e.message);
+    }
+}
+</script>

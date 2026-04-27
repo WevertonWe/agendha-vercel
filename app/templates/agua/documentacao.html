@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Documentação{% endblock %}
+{% block styles %}
+<style>
+    /* O padding-top do body já vem do base.html */
+    body {
+        /* Mantém o fundo cinza claro se desejar */
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Módulo de Documentação</h1>
+    </div>
+
+    <!-- Tabela em Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-collection-fill me-1"></i> Documentos Arquivados
+            </h6>
+            <button class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalDocumento">
+                <i class="bi bi-cloud-upload-fill me-1"></i> Adicionar Documento
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover align-middle w-100 mb-0">
+                    <thead class="bg-light text-secondary text-uppercase small fw-bold">
+                        <tr>
+                            <th style="width: 5%;" class="text-center">ID</th>
+                            <th style="width: 35%;">Nome do Documento</th>
+                            <th style="width: 30%;">Descrição</th>
+                            <th>Ficheiro</th>
+                            <th>Data Upload</th>
+                            <th class="text-center" style="width: 12%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <!--
+                        TBODY DOCUMENTOS
+                        ID: #tbody-documentos
+                        Preenchido via JS (carregarDocumentos).
+                    -->
+                    <tbody id="tbody-documentos">
+                        <!-- JS Render -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Cadastro -->
+<!--
+    MODAL DOCUMENTO
+    ID: #modalDocumento
+    Uso: Upload e Edição.
+    Nota: Campo arquivo é required na criação, opcional na edição.
+-->
+<div class="modal fade" id="modalDocumento" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalTitulo">
+                    <i class="bi bi-cloud-upload-fill me-2"></i><span>Novo Documento</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="form-documento" enctype="multipart/form-data">
+                    <input type="hidden" id="documento_id" name="id">
+                    <div class="mb-4">
+                        <label for="nome_documento" class="form-label small text-muted text-uppercase fw-bold">Título do
+                            Documento</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-file-earmark-text"></i></span>
+                            <input type="text" class="form-control" id="nome_documento" name="nome_documento" required
+                                placeholder="Ex: Contrato Social">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="arquivo" class="form-label small text-muted text-uppercase fw-bold">Ficheiro</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-paperclip"></i></span>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label small text-muted text-uppercase fw-bold">Descrição
+                            (Opcional)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-quote"></i></span>
+                            <textarea class="form-control" id="descricao" name="descricao" rows="2"
+                                placeholder="Detalhes adicionais..."></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light px-4 py-3 border-top-0 d-flex justify-content-between">
+                <small class="text-muted fst-italic">* Upload obrigatório</small>
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary fw-bold shadow-sm px-4"
+                        onclick="document.getElementById('form-documento').dispatchEvent(new Event('submit', {cancelable: true}))">
+                        <i class="bi bi-save me-1"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/pages/documentacao.js"></script>
+{% endblock %}

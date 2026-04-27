@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Cronograma do Projeto{% endblock %}
+{% block styles %}
+<style>
+    /* O padding-top do body já vem do base.html */
+    .status-badge {
+        font-size: 0.9em;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<main class="container mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-6">Cronograma do Projeto</h1>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+            <i class="bi bi-plus-circle"></i> Nova Tarefa
+        </button>
+    </div>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Tarefa</th>
+                            <th>Status</th>
+                            <th>Data Prevista</th>
+                            <th>Data Realizada</th>
+                            <th>Responsável</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <!--
+                        TBODY CRONOGRAMA
+                        ID: #tbody-cronograma
+                        Preenchido via JS.
+                    -->
+                    <tbody id="tbody-cronograma">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Criar Nova Tarefa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-criacao" aria-label="Formulário de Criação">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Tarefa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-edicao" aria-label="Formulário de Edição">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/pages/cronograma.js"></script>
+{% endblock %}

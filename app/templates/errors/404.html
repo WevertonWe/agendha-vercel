@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Erro 404 - Página Não Encontrada{% endblock %}
+
+{% block content %}
+<div class="container d-flex flex-column justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="text-center">
+        <h1 class="display-1 fw-bold text-warning">404</h1>
+        <h2 class="mb-4">Página não encontrada.</h2>
+        <p class="lead text-muted mb-5">A página que você está procurando não existe ou foi movida.</p>
+        <a href="/" class="btn btn-primary btn-lg">
+            <i class="bi bi-house-door-fill me-2"></i>Voltar ao Início
+        </a>
+    </div>
+</div>
+{% endblock %}

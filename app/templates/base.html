@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Agendha System - Plataforma inteligente de Gestão Integrada">
+    <meta name="keywords" content="Gestão, Dashboard, Agendha, Monitoramento">
+    <meta name="theme-color" content="#0d6efd">
+    
+    <!-- Open Graph (LinkedIn / WhatsApp / Social) -->
+    <meta property="og:title" content="Agendha System">
+    <meta property="og:description" content="Plataforma inteligente de Gestão e Monitoramento">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agendha.system">
+    <meta property="og:image" content="{{ url_for('static', path='imagens/logo-agendha.jpg') }}">
+
+    <title>{% block title %}AGENDHA{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- FontAwesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Application Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=1.1">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/theme.css') }}?v=1.0">
+    <link rel="icon" href="{{ url_for('static', path='favicon.ico') }}" type="image/x-icon">
+
+    {% block styles %}{% endblock %}
+
+    <style>
+        body {
+            padding-top: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        main {
+            flex: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="fixed-top">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+
+                <a class="navbar-brand d-flex align-items-center" href="/">
+                    {% if 'bahia-sem-fome' in request.url.path %}
+                        <img src="{{ url_for('static', path='imagens/logo-agendha.jpg') }}" alt="Logotipo da Agendha" width="50" height="50" class="me-2">
+                        <span class="mb-0">Agendha - Bahia Sem Fome</span>
+                    {% elif context_project == 'agua' %}
+                        <img src="{{ url_for('static', path='imagens/logo-agendha.jpg') }}" alt="Logotipo da Agendha" width="50" height="50" class="me-2">
+                        <img src="{{ url_for('static', path='imagens/logo-agua.jpeg') }}" alt="Logotipo do Projeto Água que Alimenta" width="50" height="50" class="me-2">
+                        <span class="mb-0">Agendha - Água que Alimenta</span>
+                    {% else %}
+                        <img src="{{ url_for('static', path='imagens/logo-agendha.jpg') }}" alt="Logotipo da Instituição Agendha" width="50" height="50" class="me-2">
+                        <span class="mb-0">Agendha</span>
+                    {% endif %}
+                </a>
+
+                <!-- Botão Voltar (Lógica Jinja2 Segura) -->
+                <div class="ms-3 d-none d-lg-block">
+                    {% if request.url.path.startswith('/financeiro') or request.url.path.startswith('/admin/users') or request.url.path.startswith('/oficios') %}
+                    <a href="/hub" class="btn btn-outline-light btn-sm" aria-label="Voltar ao Hub de Gestão"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Hub</a>
+                    {% elif request.url.path.startswith('/consolidado') or request.url.path.startswith('/graficos') or request.url.path.startswith('/beneficiarios') or request.url.path.startswith('/processar') or request.url.path.startswith('/cotacoes') or request.url.path.startswith('/fornecedores') or request.url.path.startswith('/materiais') or request.url.path.startswith('/documentacao') or request.url.path.startswith('/monitoramento') or request.url.path.startswith('/cronograma') or request.url.path.startswith('/fila-validacao') or request.url.path.startswith('/pedreiros') or request.url.path.startswith('/planejamento') or request.url.path.startswith('/conferencia') or request.url.path.startswith('/validacao') or request.url.path.startswith('/mapa') %}
+                    <a href="/portal" class="btn btn-outline-light btn-sm" aria-label="Voltar à tela Home do Portal"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Portal</a>
+                    {% elif request.url.path == '/portal' %}
+                    <a href="/hub" class="btn btn-outline-light btn-sm" aria-label="Voltar para a seleção de Portfólio (Hub)"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Hub</a>
+                    {% endif %}
+                </div>
+
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Alternar navegação">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        
+                        {# --- MENUS BSF (Exibir se estiver no contexto BSF) --- #}
+                        {% if 'bahia-sem-fome' in request.url.path %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'bsf_producao' %}active{% endif %}" 
+                               href="/projetos/ater-bahia-sem-fome/producao">
+                               <i class="fa-solid fa-chart-column me-1"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'bsf_visitas' %}active{% endif %}" 
+                               href="/projetos/ater-bahia-sem-fome/visitas">
+                               <i class="fa-solid fa-list-check me-1"></i> Visitas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'bsf_renomeador' %}active{% endif %}" 
+                               href="/projetos/ater-bahia-sem-fome/renomeador">
+                               <i class="fa-solid fa-file-signature me-1"></i> Renomeador
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'bsf_atestes' %}active{% endif %}" 
+                               href="/projetos/ater-bahia-sem-fome/atestes">
+                               <i class="fa-solid fa-file-word me-1"></i> Gerador de Atestes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                             <!-- Admin Link placeholder if needed, reused or separate -->
+                        </li>
+                        {% endif %}
+
+                        {# --- MENUS GERAIS (Ocultar se estiver no BSF) --- #}
+                        <li class="nav-item" id="hub-link-item" style="display: none;">
+                            <a class="nav-link" href="/hub" title="Voltar ao Painel de Gestão">
+                                <i class="bi bi-house-door-fill"></i> Hub
+                            </a>
+                        </li>
+
+                        {% if 'bahia-sem-fome' not in request.url.path %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'portal' %}active{% endif %}"
+                                href="/portal">Portal</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'consolidado' %}active{% endif %}"
+                                href="/consolidado">Consolidado</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'graficos' %}active{% endif %}"
+                                href="/graficos">Gráficos</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'beneficiarios' %}active{% endif %}"
+                                href="/beneficiarios">Beneficiários</a>
+                        </li>
+
+                        <li class="nav-item dropdown" id="gestao-menu-item" style="display: none;">
+                            <a class="nav-link dropdown-toggle {% if current_page in ['monitoramento', 'cotacoes', 'fornecedores', 'materiais', 'documentacao', 'cronograma', 'pedreiros', 'planejamento', 'conferencia', 'fila_validacao', 'admin_users'] %}active{% endif %}"
+                                href="#" id="navbarDropdownGestao" role="button" data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                                Gestão
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownGestao">
+                                <li><a class="dropdown-item {% if current_page == 'planejamento' %}active{% endif %}"
+                                        href="/planejamento"><i class="bi bi-calendar-week"></i> Planejamento e
+                                        Cronogramas</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'conferencia' %}active{% endif %}"
+                                        href="/conferencia"><i class="bi bi-clipboard-check"></i> Conferência de
+                                        Dados</a></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item {% if current_page == 'monitoramento' %}active{% endif %}"
+                                        href="/monitoramento-grh"><i class="bi bi-graph-up-arrow"></i> Monitoramento
+                                        GRH</a></li>
+                                <li><a class="dropdown-item" href="/planejamento/abare"><i class="bi bi-map-fill"></i>
+                                        Planejamento Abaré</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'cotacoes' %}active{% endif %}"
+                                        href="/cotacoes"><i class="bi bi-currency-dollar"></i> Cotações</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'fornecedores' %}active{% endif %}"
+                                        href="/fornecedores"><i class="bi bi-box-seam"></i> Fornecedores</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'materiais' %}active{% endif %}"
+                                        href="/materiais"><i class="bi bi-tools"></i> Materiais</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'documentacao' %}active{% endif %}"
+                                        href="/documentacao"><i class="bi bi-file-earmark-text"></i> Documentação</a>
+                                </li>
+                                <li><a class="dropdown-item {% if current_page == 'cronograma' %}active{% endif %}"
+                                        href="/cronograma"><i class="bi bi-list-task"></i> Cronograma (Tarefas)</a></li>
+                                <li><a class="dropdown-item {% if current_page == 'fila_validacao' %}active{% endif %}"
+                                        href="/fila-validacao"><i class="bi bi-check-circle"></i> Fila de Validação</a>
+                                </li>
+                                <li><a class="dropdown-item {% if current_page == 'pedreiros' %}active{% endif %}"
+                                        href="/pedreiros"><i class="bi bi-bricks"></i> Gestão de Pedreiros</a></li>
+
+                                <!-- Item visível apenas para Admin -->
+                                <li id="admin-users-item">
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li id="admin-users-link">
+                                    <a class="dropdown-item {% if current_page == 'admin_users' %}active{% endif %}"
+                                        href="/admin/users"><i class="bi bi-people-fill"></i> Gerenciar Usuários</a>
+                                </li>
+                            </ul>
+                        </li>
+                        {% endif %}
+
+                        <li class="nav-item dropdown" id="user-menu-item" style="display: none;">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownUser" role="button"
+                                data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu do Usuário">
+                                <i class="bi bi-person-circle" aria-hidden="true"></i> <span id="user-name-display">Usuário</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal"
+                                        data-bs-target="#modalTrocarSenha"><i class="bi bi-key me-2"></i>Alterar
+                                        Senha</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="logout()">Sair</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="my-5">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-primary py-3 mt-auto position-relative">
+        <div class="container text-center">
+            <p class="text-white mb-0">&copy; 2025 Agendha. Desenvolvido por Weverton
+                Wilson.</p>
+            
+            <!-- Gemini Growth Engine Badge -->
+            <div class="position-absolute end-0 top-50 translate-middle-y me-4 d-none d-md-block">
+                <div class="gemini-ai-badge">
+                    <span class="sparkle-icon">✨</span>
+                    <span class="badge-text" style="font-size: 0.85rem; font-weight: 500; letter-spacing: 0.3px; color: rgba(255, 255, 255, 0.9);">Powered by Gemini AI</span>
+                </div>
+            </div>
+            
+            <!-- Mobile Badge version -->
+            <div class="mt-2 d-block d-md-none text-center w-100">
+                <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.7);">✨ Powered by Gemini AI</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal Trocar Senha -->
+    <div class="modal fade" id="modalTrocarSenha" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Alterar Senha</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar Modal de Senha"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formTrocarSenha">
+                        <div class="mb-3">
+                            <label for="senha_atual" class="form-label">Senha Atual</label>
+                            <input type="password" class="form-control" id="senha_atual" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="nova_senha" class="form-label">Nova Senha</label>
+                            <input type="password" class="form-control" id="nova_senha" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmar_senha" class="form-label">Confirmar Nova Senha</label>
+                            <input type="password" class="form-control" id="confirmar_senha" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Salvar Nova Senha</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modais Globais (Confirmação) -->
+    <div class="modal fade" id="modalExcluirPadrao" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirmar Exclusão</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">Tem a certeza de que deseja excluir este item? Esta ação <strong>não pode ser desfeita</strong>.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="btnConfirmarExclusao">Sim, Excluir</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalConfirmacaoGenerico" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 shadow">
+                <div class="modal-header text-white" id="modalConfirmacaoGenericoHeader">
+                    <h5 class="modal-title fw-bold" id="modalConfirmacaoGenericoTitle">Confirmação</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <div class="mb-3" id="modalConfirmacaoGenericoIconContainer">
+                        <i class="bi bi-question-circle text-primary display-1"></i>
+                    </div>
+                    <p class="mb-0 text-muted fs-5 px-3" id="modalConfirmacaoGenericoBody">Tem certeza?</p>
+                </div>
+                <div class="modal-footer justify-content-center bg-light rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary fw-bold px-5 rounded-pill" id="btnConfirmarGenerico">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Scripts: Ordem Correta -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- SweetAlert2 (Global) -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- UI Utils (Shared) -->
+    <script src="{{ url_for('static', path='js/shared/ui_utils.js') }}?v=1.1"></script>
+
+    <script src="{{ url_for('static', path='js/auth.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                try {
+                    // Decodifica o payload do JWT (parte do meio)
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+
+                    // Mostra o menu do usuário com o nome
+                    const userMenu = document.getElementById('user-menu-item');
+                    if (userMenu) {
+                        userMenu.style.display = 'block';
+                        document.getElementById('user-name-display').textContent = payload.sub || 'Usuário';
+                    }
+
+                    // Controle de visibilidade baseado em role
+                    const role = payload.role;
+                    const gestaoMenu = document.getElementById('gestao-menu-item');
+                    const hubLink = document.getElementById('hub-link-item');
+                    const adminUsersItem = document.getElementById('admin-users-item');
+                    const adminUsersLink = document.getElementById('admin-users-link');
+
+                    if (gestaoMenu) {
+                        if (['admin', 'diretoria', 'coordenacao'].includes(role)) {
+                            gestaoMenu.style.display = 'block';
+                        }
+                    }
+
+                    if (hubLink) {
+                        if (['admin', 'diretoria'].includes(role)) {
+                            hubLink.style.display = 'block';
+                        }
+                    }
+
+                    if (adminUsersItem && adminUsersLink) {
+                        if (role !== 'admin') {
+                            adminUsersItem.style.display = 'none';
+                            adminUsersLink.style.display = 'none';
+                        }
+                    }
+
+                } catch (e) {
+                    console.error('Erro ao decodificar token:', e);
+                    localStorage.removeItem('access_token'); // Token inválido
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

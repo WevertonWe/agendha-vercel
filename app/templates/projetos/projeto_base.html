@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ projeto_name }} - Agendha{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Header -->
+    <div class="d-flex align-items-center justify-content-between mb-5">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/hub" class="text-decoration-none">Hub</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Projetos</li>
+                </ol>
+            </nav>
+            <h1 class="fw-bold display-6 text-success">{{ projeto_name }}</h1>
+            <p class="text-muted">Área de gestão e acompanhamento do projeto.</p>
+        </div>
+        <div>
+            <span class="badge bg-success p-2 fs-6">Em Execução</span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Content Area (Placeholder) -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-5 text-center bg-light rounded">
+                    <i class="bi bi-cone-striped fs-1 text-muted mb-3 d-block"></i>
+                    <h3 class="fw-bold text-secondary">Em Construção</h3>
+                    <p class="text-muted">Os indicadores e ferramentas deste projeto estarão disponíveis em breve.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar: Sugestões -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm" style="background-color: #f1f8e9;">
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="fw-bold text-success mb-0">
+                        <i class="bi bi-lightbulb-fill me-2"></i>Caixa de Sugestões
+                    </h5>
+                </div>
+                <div class="card-body px-4 pb-4">
+                    <p class="small text-muted mb-3">
+                        Tem uma ideia para melhorar a gestão deste projeto? Envie diretamente para a equipe de desenvolvimento.
+                    </p>
+                    
+                    <form id="formSugestao" onsubmit="enviarSugestao(event)">
+                        <input type="hidden" name="projeto_id" value="{{ projeto_slug }}">
+                        <input type="hidden" name="usuario_id" value="{{ user_username }}">
+                        
+                        <div class="mb-3">
+                            <textarea class="form-control border-success" name="sugestao" rows="4" placeholder="Descreva sua ideia..." required></textarea>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-send-fill me-2"></i>Enviar Sugestão
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function enviarSugestao(event) {
+    event.preventDefault();
+    const form = event.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch('/projetos/api/sugestao', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            alert('Sua sugestão foi enviada com sucesso! Obrigado por contribuir.');
+            form.reset();
+        } else {
+            alert('Erro ao enviar sugestão. Tente novamente.');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Erro de conexão.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+</script>
+{% endblock %}

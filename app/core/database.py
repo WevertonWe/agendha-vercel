@@ -1,0 +1,416 @@
+import sqlite3
+import logging
+import os
+from passlib.context import CryptContext
+from app.config import settings
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- CORREÇÃO DEFINITIVA DE CAMINHO ---
+# 1. Pega o caminho absoluto deste arquivo (database.py)
+current_file_path = os.path.abspath(__file__)
+# 2. Sobe 2 níveis para chegar na raiz do projeto (app/core/database.py -> app/core -> app -> raiz)
+# Ajuste isso se a estrutura for diferente. Baseado no seu log, database.py está em app/core/ ou raiz?
+# Vamos assumir que database.py está dentro de app/alguma_coisa.
+# O jeito mais seguro é procurar a pasta 'agendha' no caminho.
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
+
+# Fallback de segurança: Se subir 3 pastas cair fora do projeto, tenta pegar direto.
+if os.path.basename(BASE_DIR).lower() not in ['agendha', 'projetos']:
+    # Tenta usar o diretório de trabalho se o cálculo relativo falhar, mas loga o aviso
+    BASE_DIR = os.getcwd()
+
+DB_PATH_FIX = os.path.join(BASE_DIR, "agendha.db")
+
+print(f"BANCO DE DADOS CARREGADO EM: {DB_PATH_FIX}") # Log forçado no terminal
+# --------------------------------------
+
+from app.database.wrapper import AuditConnection  # noqa: E402
+
+def get_db_connection(request=None): # Request optional for backward compatibility
+    """Conexão por requisição com Auditoria"""
+    # Use AuditConnection factory
+    # Note: check_same_thread=False is needed for FastAPI threaded behavior
+    conexao = AuditConnection(DB_PATH_FIX, check_same_thread=False)
+    conexao.execute("PRAGMA foreign_keys = ON") # Enable Foreign Keys
+    conexao.row_factory = sqlite3.Row
+    
+    # Try to set user context if request is provided and has user
+    try:
+        if request and hasattr(request, "state") and hasattr(request.state, "user"):
+            user = request.state.user
+            # Assuming user is dict or object with username or id
+            user_id = user.get("username") if isinstance(user, dict) else getattr(user, "username", "SYSTEM")
+            conexao.set_user(user_id)
+    except Exception:
+        pass # Fallback to SYSTEM
+
+    try:
+        yield conexao
+    finally:
+        conexao.close()
+
+def init_db():
+    """Cria tabelas se não existirem"""
+    logging.info(f"Inicializando banco de dados em: {DB_PATH_FIX}")
+    
+    conn = sqlite3.connect(DB_PATH_FIX)
+    conn.execute("PRAGMA foreign_keys = OFF")  # OFF during init_db for safety
+    cursor = conn.cursor()
+    
+    # --- MÓDULO DE ACESSO E USUÁRIOS ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        is_active BOOLEAN NOT NULL DEFAULT 1,
+        full_name TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS user_project_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        project_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+    )
+    """)
+    
+    # --- MÓDULO ADMINISTRATIVO ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS oficios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        numero_oficio TEXT,
+        destinatario TEXT NOT NULL,
+        data_envio TEXT NOT NULL,
+        motivo_descricao TEXT,
+        criado_por TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fornecedores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        razao_social TEXT NOT NULL,
+        nome_fantasia TEXT,
+        cnpj_cpf TEXT UNIQUE,
+        email TEXT,
+        telefone TEXT,
+        endereco TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS materiais (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        unidade TEXT NOT NULL,
+        categoria TEXT,
+        descricao TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cotacao_itens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cotacao_master_id INTEGER NOT NULL,
+        material_id INTEGER NOT NULL,
+        quantidade REAL NOT NULL,
+        FOREIGN KEY (cotacao_master_id) REFERENCES cotacoes_master (id),
+        FOREIGN KEY (material_id) REFERENCES materiais (id)
+    )
+    """)
+
+    # --- MÓDULO FINANCEIRO (GARANTINDO A CRIAÇÃO) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS financeiro_projetos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        descricao TEXT,
+        orcamento_total REAL DEFAULT 0.0,
+        data_inicio TEXT,
+        data_fim TEXT,
+        status TEXT DEFAULT 'Ativo'
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS financeiro_rubricas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projeto_id INTEGER NOT NULL,
+        codigo TEXT,
+        nome TEXT NOT NULL,
+        tipo TEXT, 
+        orcamento_previsto REAL DEFAULT 0.0,
+        FOREIGN KEY (projeto_id) REFERENCES financeiro_projetos (id)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS financeiro_lancamentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projeto_id INTEGER NOT NULL,
+        rubrica_id INTEGER,
+        data_lancamento TEXT NOT NULL,
+        descricao TEXT NOT NULL,
+        valor REAL NOT NULL,
+        tipo TEXT NOT NULL, 
+        status TEXT DEFAULT 'Pendente',
+        comprovante_url TEXT,
+        FOREIGN KEY (projeto_id) REFERENCES financeiro_projetos (id),
+        FOREIGN KEY (rubrica_id) REFERENCES financeiro_rubricas (id)
+    )
+    """)
+
+    # --- MÓDULO PROJETOS (SUGESTÕES) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS sugestoes_projetos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projeto_id TEXT NOT NULL,
+        usuario_id TEXT,
+        sugestao TEXT NOT NULL,
+        data_criacao TEXT
+    )
+    """)
+
+    # --- MÓDULO BAHIA SEM FOME (BSF) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_metas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        municipio TEXT NOT NULL,
+        mes INTEGER NOT NULL,
+        ano INTEGER NOT NULL,
+        meta_total INTEGER NOT NULL,
+        UNIQUE(municipio, mes, ano)
+    )
+    """)
+
+    # --- MÓDULO ÁGUA QUE ALIMENTA (AQA) ---
+    # Tabelas recuperadas via Code Archaeology (2026-02-12)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pedreiros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_completo TEXT NOT NULL,
+        cpf TEXT UNIQUE,
+        telefone TEXT,
+        endereco TEXT,
+        dados_pagamento TEXT,
+        status TEXT DEFAULT 'Ativo'
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS faturamentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pedreiro_id INTEGER NOT NULL,
+        valor_total REAL DEFAULT 0.0,
+        valor_dam REAL DEFAULT 0.0,
+        status_dam TEXT DEFAULT 'Pendente',
+        arquivo_nf TEXT,
+        arquivo_dam TEXT,
+        data_criacao TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (pedreiro_id) REFERENCES pedreiros(id)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS beneficiarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_completo TEXT,
+        nome_familiar TEXT,
+        cpf TEXT UNIQUE,
+        cpf_familiar TEXT,
+        nis TEXT,
+        data_nascimento TEXT,
+        sexo TEXT,
+        escolaridade TEXT,
+        municipio TEXT,
+        comunidade TEXT,
+        estado_uf TEXT,
+        ref_localizacao TEXT, 
+        latitude TEXT,
+        longitude TEXT,
+        status TEXT DEFAULT 'Em Cadastro',
+        doc_status TEXT, 
+        pedreiro_id INTEGER,
+        link_nota_fiscal TEXT,
+        status_pagamento TEXT DEFAULT 'PENDENTE',
+        data_conclusao TEXT,
+        faturamento_id INTEGER,
+        FOREIGN KEY (pedreiro_id) REFERENCES pedreiros(id),
+        FOREIGN KEY (faturamento_id) REFERENCES faturamentos(id)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cronograma (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tarefa TEXT NOT NULL,
+        data_prevista TEXT,
+        data_realizada TEXT,
+        status TEXT DEFAULT 'Pendente',
+        responsavel TEXT,
+        observacao TEXT
+    )
+    """)
+
+    # --- MÓDULO BAHIA SEM FOME (BSF) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_atividades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL UNIQUE,
+        descricao TEXT,
+        meta_padrao INTEGER DEFAULT 0
+    )
+    """)
+
+    # Seed de atividades — as 16 reais do Contrato 014/2024
+    # Formato: (nome, descricao, meta_mensal, meta_anual)
+    atividades_contrato = [
+        ("Reunião de Articulação com os Parceiros", "Reuniões com lideranças e parceiros", 1, 6),
+        ("Levantamento Socioeconômico e Geolocalização", "Levantamento inicial de dados", 41, 490),
+        ("Cadastro do Grupo Familiar", "Cadastro de famílias no sistema", 41, 490),
+        ("Caracterização da UPF I (Inicial)", "Caracterização inicial da unidade", 41, 490),
+        ("Caracterização da UPF II (Intermediária)", "Caracterização intermediária", 41, 490),
+        ("Caracterização da UPF III (Final)", "Caracterização final da unidade", 41, 490),
+        ("Visita Técnica Social", "Visitas de acompanhamento a famílias", 163, 1960),
+        ("Elaboração do Plano Produtivo da UPF", "Elaboração de planos produtivos", 41, 490),
+        ("Visita Técnica", "Visitas técnicas de campo", 898, 10771),
+        ("Demonstração Didática", "Demonstrações práticas", 25, 300),
+        ("Seminário Territorial", "Seminários territoriais", 1, 1),
+        ("Seminário Final", "Seminários de encerramento", 1, 1),
+        ("Excursão/Intercâmbio", "Visitas de intercâmbio entre comunidades", 1, 12),
+        ("Curso", "Cursos de capacitação", 8, 93),
+        ("Oficina Temática", "Oficinas e treinamentos temáticos", 8, 96),
+        ("Dia de Campo", "Demonstração prática em campo", 8, 96),
+    ]
+    for nome, desc, _, _ in atividades_contrato:
+        try:
+            cursor.execute("INSERT OR IGNORE INTO bsf_atividades (nome, descricao) VALUES (?, ?)", (nome, desc))
+        except Exception:
+            pass
+        # Garantir que a descrição esteja atualizada
+        cursor.execute("UPDATE bsf_atividades SET descricao = ? WHERE nome = ?", (desc, nome))
+
+    # --- Tabela de Metas do Contrato BSF ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_metas_contrato (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        atividade_id INTEGER NOT NULL,
+        ano INTEGER NOT NULL,
+        meta_mensal INTEGER DEFAULT 0,
+        meta_anual INTEGER DEFAULT 0,
+        FOREIGN KEY (atividade_id) REFERENCES bsf_atividades(id),
+        UNIQUE(atividade_id, ano)
+    )
+    """)
+
+    # Seed das metas do contrato para 2025 e 2026
+    for nome, _, meta_mensal, meta_anual in atividades_contrato:
+        cursor.execute("SELECT id FROM bsf_atividades WHERE nome = ?", (nome,))
+        row = cursor.fetchone()
+        if row:
+            atv_id = row[0]
+            for ano_seed in [2025, 2026]:
+                try:
+                    cursor.execute("""
+                        INSERT INTO bsf_metas_contrato (atividade_id, ano, meta_mensal, meta_anual)
+                        VALUES (?, ?, ?, ?)
+                    """, (atv_id, ano_seed, meta_mensal, meta_anual))
+                except sqlite3.IntegrityError:
+                    pass  # Já existe
+
+    # --- Tabela de Composição de Metas BSF ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_metas_composicao (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meta_id INTEGER NOT NULL,
+        atividade_id INTEGER NOT NULL,
+        valor_meta INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY(meta_id) REFERENCES bsf_metas(id) ON DELETE CASCADE,
+        FOREIGN KEY(atividade_id) REFERENCES bsf_atividades(id)
+    )
+    """)
+
+    # NOTE: SEM FOREIGN KEY em municipio! bsf_metas usa UNIQUE(municipio,mes,ano)
+    # então FK simples em municipio é inválida e causa constraint failure.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_visitas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tecnico_id TEXT NOT NULL,
+        beneficiario_id TEXT NOT NULL,
+        municipio TEXT NOT NULL,
+        comunidade TEXT,
+        data_visita TEXT NOT NULL,
+        status TEXT DEFAULT 'Realizada',
+        atividade_id INTEGER,
+        data_registro TEXT
+    )
+    """)
+
+    # --- Tabela de Metas por Técnico ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_metas_tecnicos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tecnico_id TEXT NOT NULL,
+        atividade_id INTEGER NOT NULL,
+        mes INTEGER NOT NULL,
+        ano INTEGER NOT NULL,
+        valor_meta INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (atividade_id) REFERENCES bsf_atividades(id),
+        UNIQUE(tecnico_id, atividade_id, mes, ano)
+    )
+    """)
+
+    # --- MIGRAÇÕES E DADOS PADRÃO ---
+    try:
+        cursor.execute("ALTER TABLE propostas ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedores(id)")
+    except sqlite3.OperationalError:
+        pass
+
+    # Migração: adicionar atividade_id em bsf_visitas (para bancos antigos)
+    try:
+        cursor.execute("ALTER TABLE bsf_visitas ADD COLUMN atividade_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+
+    # Migração: adicionar data_registro em bsf_visitas (para bancos antigos)
+    try:
+        cursor.execute("ALTER TABLE bsf_visitas ADD COLUMN data_registro TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # Migração: adicionar tecnico_responsavel em bsf_metas (para bancos antigos)
+    try:
+        cursor.execute("ALTER TABLE bsf_metas ADD COLUMN tecnico_responsavel TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    # Migração: adicionar faturamento_id em beneficiarios
+    try:
+        cursor.execute("ALTER TABLE beneficiarios ADD COLUMN faturamento_id INTEGER REFERENCES faturamentos(id)")
+    except sqlite3.OperationalError:
+        pass
+    
+    # Cria usuário admin se não existir
+    cursor.execute("SELECT * FROM users WHERE username = ?", (settings.ADMIN_USERNAME,))
+    if not cursor.fetchone():
+        logging.info("Criando usuário admin padrão...")
+        password_hash = pwd_context.hash(settings.ADMIN_PASSWORD)
+        cursor.execute("""
+        INSERT INTO users (username, password_hash, role, is_active, full_name)
+        VALUES (?, ?, 'admin', 1, 'Administrador do Sistema')
+        """, (settings.ADMIN_USERNAME, password_hash))
+        conn.commit()
+    
+    # Garantir que tudo é salvo e FK volta a funcionar
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.close()
+    logging.info("Banco de dados inicializado com sucesso.")

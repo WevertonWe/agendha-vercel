@@ -1,0 +1,310 @@
+{% extends "base_financeiro.html" %}
+
+{% block financeiro_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-4 mb-3 border-bottom">
+    <h1 class="h2 page-header-title">Lançamentos - {{ projeto.nome }}</h1>
+</div>
+
+<div class="row g-5">
+    <!-- Lista de Lançamentos (Full Width) -->
+    <div class="col-md-12">
+        <div class="card-custom p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0 fw-bold-custom text-main">
+                    Histórico de Lançamentos
+                </h4>
+                <button class="btn btn-custom-primary" onclick="abrirModalLancamento()">
+                    <i class="bi bi-plus-lg me-2"></i> Novo Lançamento
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table-custom" id="tabela-lancamentos">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Nº Processo</th>
+                            <th>Beneficiário</th>
+                            <th>Rubrica</th>
+                            <th class="text-end">Valor</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Lançamento -->
+<div class="modal fade" id="modalLancamento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content card-custom border-0 p-3">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold-custom" id="modalTitle">Novo Lançamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-lancamento" class="needs-validation" novalidate>
+                    <input type="hidden" id="projeto_id" name="projeto_id" value="{{ projeto.id }}">
+                    <input type="hidden" id="lancamento_id" name="id">
+
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label for="data_lancamento" class="form-label">Data</label>
+                            <input type="date" class="form-control-custom" id="data_lancamento" name="data_lancamento"
+                                required>
+                        </div>
+
+                        <div class="col-sm-6">
+                            <label for="valor_total_executado" class="form-label">Valor (R$)</label>
+                            <input type="number" step="0.01" class="form-control-custom font-monospace"
+                                id="valor_total_executado" name="valor_total_executado" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="entidade_id" class="form-label">Beneficiário (Quem recebeu?)</label>
+                            <select class="form-control-custom form-select" id="entidade_id" name="entidade_id"
+                                required>
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="rubrica_id" class="form-label">Classificação (Rubrica)</label>
+                            <select class="form-control-custom form-select" id="rubrica_id" name="rubrica_id" required>
+                                <option value="">Carregando...</option>
+                            </select>
+                            <div id="rubrica-warning" class="form-text text-danger d-none">
+                                Nenhuma rubrica encontrada para este projeto. Cadastre rubricas no Plano de Trabalho.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="numero_processo" class="form-label">Nº Processo</label>
+                            <input type="text" class="form-control-custom" id="numero_processo" name="numero_processo">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="numero_nota_fiscal" class="form-label">Nº Nota Fiscal</label>
+                            <input type="text" class="form-control-custom" id="numero_nota_fiscal"
+                                name="numero_nota_fiscal">
+                        </div>
+
+                        <div class="col-12">
+                            <label for="historico" class="form-label">Histórico (Descrição do Gasto)</label>
+                            <textarea class="form-control-custom" id="historico" name="historico" rows="3"
+                                required></textarea>
+                        </div>
+
+                        <div class="col-12 text-end mt-4">
+                            <button type="button" class="btn btn-light border me-2"
+                                data-bs-dismiss="modal">Cancelar</button>
+                            <button class="btn btn-custom-primary" type="submit">Salvar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let modalLancamento;
+    // Store data globally to avoid re-fetching for edit if possible, 
+    // but fetching fresh is safer. We will fetch fresh for edit.
+    // However, we need to load entities and rubrics once for the dropdowns.
+    let formOptionsLoaded = false;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        modalLancamento = new bootstrap.Modal(document.getElementById('modalLancamento'));
+
+        carregarUltimosLancamentos();
+        // Pre-load form options
+        carregarDadosFormulario();
+
+        document.getElementById('form-lancamento').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            if (!this.checkValidity()) {
+                e.stopPropagation();
+                this.classList.add('was-validated');
+                return;
+            }
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            const id = document.getElementById('lancamento_id').value;
+
+            // Conversions
+            data.valor_total_executado = parseFloat(data.valor_total_executado);
+            data.projeto_id = parseInt(data.projeto_id);
+            data.entidade_id = data.entidade_id ? parseInt(data.entidade_id) : null;
+            data.rubrica_id = parseInt(data.rubrica_id);
+            data.quantidade_executada = 1.0;
+
+            const url = id ? `/financeiro/lancamentos/${id}` : '/financeiro/lancamentos';
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    ui.feedbackSucesso('Operação realizada com sucesso!');
+                    modalLancamento.hide();
+                    carregarUltimosLancamentos();
+                } else {
+                    const errorData = await response.json();
+                    ui.feedbackErro('Erro: ' + (errorData.detail || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                ui.feedbackErro('Erro: ' + error.message);
+            }
+        });
+    });
+
+    async function carregarDadosFormulario() {
+        if (formOptionsLoaded) return;
+        const projetoId = document.getElementById('projeto_id').value;
+        try {
+            const response = await fetch(`/financeiro/lancamentos/dados-formulario?projeto_id=${projetoId}`);
+            const data = await response.json();
+
+            const selectEntidade = document.getElementById('entidade_id');
+            selectEntidade.innerHTML = '<option value="">Selecione...</option>';
+            data.entidades.forEach(entidade => {
+                const option = document.createElement('option');
+                option.value = entidade.id;
+                option.textContent = entidade.nome_razao_social;
+                selectEntidade.appendChild(option);
+            });
+
+            const selectRubrica = document.getElementById('rubrica_id');
+            selectRubrica.innerHTML = '<option value="">Selecione...</option>';
+
+            if (data.rubricas.length === 0) {
+                document.getElementById('rubrica-warning').classList.remove('d-none');
+            } else {
+                document.getElementById('rubrica-warning').classList.add('d-none');
+                data.rubricas.forEach(rubrica => {
+                    const option = document.createElement('option');
+                    option.value = rubrica.id;
+                    option.textContent = rubrica.full_name;
+                    selectRubrica.appendChild(option);
+                });
+            }
+            formOptionsLoaded = true;
+
+        } catch (error) {
+            console.error('Erro ao carregar dados do formulário:', error);
+        }
+    }
+
+    function abrirModalLancamento() {
+        document.getElementById('form-lancamento').reset();
+        document.getElementById('form-lancamento').classList.remove('was-validated');
+        document.getElementById('lancamento_id').value = '';
+        document.getElementById('modalTitle').textContent = 'Novo Lançamento';
+
+        // Set default date
+        document.getElementById('data_lancamento').value = new Date().toISOString().split('T')[0];
+
+        modalLancamento.show();
+    }
+
+    async function carregarUltimosLancamentos() {
+        try {
+            const projetoId = document.getElementById('projeto_id').value;
+            const response = await fetch(`/financeiro/projetos/${projetoId}/extrato`);
+            const lancamentos = await response.json();
+
+            const tbody = document.querySelector('#tabela-lancamentos tbody');
+            tbody.innerHTML = '';
+
+            if (lancamentos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum lançamento encontrado.</td></tr>';
+                return;
+            }
+
+            lancamentos.forEach(l => {
+                const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor_total_executado);
+                let dataFormatada = l.data_lancamento;
+                if (l.data_lancamento) {
+                    const parts = l.data_lancamento.split('-');
+                    if (parts.length === 3) dataFormatada = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+
+                const row = `
+                    <tr>
+                        <td>${dataFormatada}</td>
+                        <td>${l.numero_processo || '-'}</td>
+                        <td>${l.nome_razao_social || '-'}</td>
+                        <td title="${l.rubrica_descricao}"><span class="badge bg-light text-dark border">${l.rubrica_codigo || '-'}</span></td>
+                        <td class="text-money">${valorFormatado}</td>
+                        <td class="text-center">
+                            <button onclick="imprimirRecibo(${l.id})" class="btn btn-sm btn-outline-secondary me-1" title="Imprimir Recibo">
+                                <i class="bi bi-printer"></i>
+                            </button>
+                            <button onclick="editarLancamento(${l.id})" class="btn btn-sm btn-outline-primary me-1" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button onclick="excluirLancamento(${l.id})" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        } catch (error) {
+            console.error('Erro ao carregar lançamentos:', error);
+        }
+    }
+
+    async function editarLancamento(id) {
+        try {
+            const response = await fetch(`/financeiro/lancamentos/${id}`);
+            const l = await response.json();
+
+            document.getElementById('lancamento_id').value = l.id;
+            document.getElementById('data_lancamento').value = l.data_lancamento;
+            document.getElementById('valor_total_executado').value = l.valor_total_executado;
+            document.getElementById('entidade_id').value = l.entidade_id;
+            document.getElementById('rubrica_id').value = l.rubrica_id;
+            document.getElementById('numero_processo').value = l.numero_processo || '';
+            document.getElementById('numero_nota_fiscal').value = l.numero_nota_fiscal || '';
+            document.getElementById('historico').value = l.historico;
+
+            document.getElementById('modalTitle').textContent = 'Editar Lançamento';
+            modalLancamento.show();
+        } catch (e) {
+            console.error(e);
+            ui.feedbackErro('Erro ao carregar dados.');
+        }
+    }
+
+    async function excluirLancamento(id) {
+        ui.confirmarExclusao(
+            `/financeiro/lancamentos/${id}`,
+            `Lançamento`,
+            () => {
+                ui.feedbackSucesso('Lançamento excluído.');
+                carregarUltimosLancamentos();
+            }
+        );
+    }
+
+    function imprimirRecibo(id) {
+        window.open('/financeiro/lancamento/' + id + '/recibo', '_blank');
+    }
+</script>
+{% endblock %}

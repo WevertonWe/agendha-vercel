@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria do Sistema{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">
+                <i class="bi bi-shield-lock-fill text-primary me-2"></i>Auditoria Global
+            </h2>
+            <p class="text-muted mb-0">Monitoramento centralizado de atividades e reversão de ações.</p>
+        </div>
+        <div>
+            <span class="badge bg-dark rounded-pill px-3 py-2">
+                <i class="bi bi-circle-fill text-success small me-1"></i> Sistema monitorado
+            </span>
+        </div>
+    </div>
+
+    <!-- Success Modal Generic -->
+    <div class="modal fade" id="modalSucessoAudit" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-body text-center p-5">
+                    <div class="mb-4 text-success">
+                        <i class="bi bi-check-circle-fill display-1"></i>
+                    </div>
+                    <h3 class="fw-bold mb-3">Sucesso!</h3>
+                    <p id="modalSucessoMsg" class="text-muted fs-5 mb-4">Ação realizada com sucesso.</p>
+                    <div class="d-grid d-sm-flex justify-content-sm-center">
+                        <button type="button" class="btn btn-success btn-lg rounded-pill px-5 fw-bold shadow-sm"
+                            data-bs-dismiss="modal">Entendido</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts: Ordem Correta -->
+    <!-- Filters Card -->
+    <div class="card shadow-sm mb-4 border-0 rounded-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="auditSearch" class="form-control border-0 bg-light"
+                            placeholder="Buscar por usuário, tabela ou detalhes...">
+                    </div>
+                </div>
+                <!-- Add styled date filters/tables here if needed -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Container -->
+    <div class="row">
+        <!-- Main Timeline -->
+        <div class="col-lg-8">
+            <div class="card shadow border-0 rounded-4">
+                <div class="card-header bg-white py-3 border-0">
+                    <h5 class="fw-bold mb-0">Fluxo de Atividades</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="auditTimeline" class="list-group list-group-flush timeline-list p-3">
+                        <!-- Loading State -->
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="text-muted mt-2">Carregando logs...</p>
+                        </div>
+                    </div>
+                    <!-- Pagination Load More -->
+                    <div class="p-3 text-center border-top">
+                        <button id="loadMoreBtn" class="btn btn-outline-primary rounded-pill px-4">Carregar
+                            Mais</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Panel (Sticky) -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 rounded-4 sticky-top" style="top: 20px;">
+                <div class="card-header bg-dark text-white py-3 border-0 rounded-top-4">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-card-text me-2"></i>Detalhes da Ação</h6>
+                </div>
+                <div class="card-body" id="detailPanel">
+                    <div class="text-center py-5 text-muted opacity-50">
+                        <i class="bi bi-cursor-fill display-4 mb-3"></i>
+                        <p>Selecione um item na timeline para ver o Diff e Opções.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Styles Specific to Timeline -->
+<style>
+    .timeline-list {
+        max-height: 700px;
+        overflow-y: auto;
+    }
+
+    .timeline-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .diff-added {
+        background-color: #d1fae5;
+        color: #065f46;
+    }
+
+    /* Tailwind green-100/800 */
+    .diff-removed {
+        background-color: #fee2e2;
+        color: #991b1b;
+        text-decoration: line-through;
+    }
+
+    /* Tailwind red-100/800 */
+    /* Border Indications */
+    .system-border {
+        border-left: 4px solid #adb5bd !important;
+    }
+
+    .user-border {
+        border-left: 4px solid #0d6efd !important;
+    }
+
+    .diff-container {
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        font-size: 0.9em;
+    }
+
+    .shadow-inner {
+        box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    }
+
+    .active-item {
+        background-color: #f8f9fa;
+    }
+
+    /* Custom Scrollbar */
+    .timeline-list::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .timeline-list::-webkit-scrollbar-thumb {
+        background-color: #dee2e6;
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/admin_auditoria.js"></script>
+{% endblock %}

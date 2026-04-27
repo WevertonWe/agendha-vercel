@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recibo de Pagamento - Agendha</title>
+    <meta name="description" content="Recibo gerado pelo sistema Agendha">
+    <meta property="og:title" content="Recibo de Pagamento - Agendha">
+    <meta property="og:description" content="Documento de recibo Agendha">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid #000;
+            padding: 40px;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 20px;
+        }
+
+        .logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 10px 0;
+        }
+
+        .content {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 40px;
+        }
+
+        .value-box {
+            float: right;
+            border: 2px solid #000;
+            padding: 10px 20px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #f9f9f9;
+        }
+
+        .signature-section {
+            margin-top: 80px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signature-block {
+            text-align: center;
+            width: 45%;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 12px;
+            text-align: center;
+            color: #666;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 0; }
+            .container { border: none !important; box-shadow: none !important; padding: 0; margin: 0; width: 100%; max-width: 100%; }
+            .recibo-toolbar { display: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="recibo-toolbar no-print" style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #ddd; display: flex; gap: 10px; align-items: center; justify-content: center;">
+        <button onclick="window.print()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            <i class="fa fa-print"></i> Imprimir Recibo
+        </button>
+        <button onclick="window.close()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Fechar
+        </button>
+    </div>
+    <div class="container">
+        <div class="header">
+            <!-- Replace with actual logo path if available, or use text -->
+            <img src="/static/imagens/logo-agendha.jpg" alt="Logo Agendha" class="logo">
+            <div class="title">Recibo de Pagamento</div>
+            <div>Nº {{ lancamento.id }}/{{ lancamento.data_lancamento[:4] }}</div>
+        </div>
+
+        <div class="value-box">
+            R$ {{ "{:,.2f}".format(lancamento.valor_total_executado) }}
+        </div>
+
+        <div class="content">
+            <p>Recebi(emos) da <strong>AGENDHA - Assessoria e Gestão em Estudos da Natureza, Desenvolvimento Humano e
+                    Agroecologia</strong>,
+                a importância de <strong>R$ {{ "{:,.2f}".format(lancamento.valor_total_executado) }}</strong>.</p>
+
+            <p><strong>Referente a:</strong> {{ lancamento.historico }}</p>
+
+            <p><strong>Beneficiário:</strong> {{ lancamento.nome_razao_social }}<br>
+                <strong>CPF/CNPJ:</strong> {{ lancamento.cpf_cnpj or 'Não informado' }}
+            </p>
+
+            <p><strong>Projeto:</strong> {{ lancamento.projeto_nome }}
+                (Contrato: {{ lancamento.numero_contrato }})<br>
+                <strong>Rubrica:</strong> {{ lancamento.rubrica_codigo }} - {{ lancamento.rubrica_descricao }}
+            </p>
+        </div>
+
+        <div style="text-align: right; margin-bottom: 60px;">
+            Paulo Afonso - BA, {{ lancamento.data_lancamento_formatada }}
+        </div>
+
+        <div class="signature-section">
+            <div class="signature-block">
+                <strong>AGENDHA</strong><br>
+                Pagador
+            </div>
+            <div class="signature-block">
+                <strong>{{ lancamento.nome_razao_social }}</strong><br>
+                Beneficiário
+            </div>
+        </div>
+
+        <div class="footer">
+            Gerado automaticamente pelo Sistema Agendha em <span id="data-impressao"></span>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('data-impressao').textContent = new Date().toLocaleDateString('pt-BR');
+        
+        // Fallback para o botão Fechar
+        if (history.length > 1) {
+            document.querySelector('button[onclick="window.close()"]').setAttribute('onclick', 'history.back()');
+        }
+    </script>
+</body>
+
+</html>

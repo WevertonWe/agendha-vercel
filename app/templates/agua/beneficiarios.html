@@ -1,0 +1,624 @@
+{% extends "base.html" %}
+
+{% block title %}Beneficiários{% endblock %}
+
+{% block styles %}
+<link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<style>
+    #tabela th,
+    #tabela td {
+        font-size: 0.8rem;
+        vertical-align: middle;
+        white-space: normal;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid mb-5 pt-4">
+    <!-- Header Padronizado -->
+    <div class="d-flex align-items-center mb-4 border-bottom pb-3">
+        <h1 class="h2 page-header-title mb-0">
+            <i class="bi bi-people-fill me-2 text-primary"></i>Beneficiários Cadastrados
+        </h1>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+
+            <!-- Toolbar Superior -->
+            <div
+                class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+                <div id="filtros-rapidos-municipios" class="d-flex flex-wrap gap-2">
+                    <span class="text-muted small">Carregando filtros...</span>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <input type="file" id="inputScanGRH" accept=".pdf,.jpg,.jpeg,.png" class="d-none">
+                    <button id="btnScanGRH" class="btn btn-outline-primary" title="Escanear Lista de Presença via IA">
+                        <i class="bi bi-magic me-1"></i> Scan GRH
+                    </button>
+                    <button id="btnGerarRelatorio" class="btn btn-outline-success">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i> Gerar Relatório
+                    </button>
+                    <button id="btnExportarKML" class="btn btn-outline-secondary">
+                        <i class="bi bi-geo-alt me-1"></i> Exportar KML
+                    </button>
+                    <input type="file" id="inputImportCsv" accept=".xlsx,.xls,.csv" class="d-none">
+                    <button id="btnImportarCsv" class="btn btn-outline-secondary"
+                        onclick="document.getElementById('inputImportCsv').click()">
+                        <i class="bi bi-file-earmark-excel me-1"></i> Importar Planilha (.xlsx)
+                    </button>
+                    <a href="/processar" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i> Adicionar Novo
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filtros de Tabela -->
+            <div class="bg-light p-3 rounded-3 mb-4">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-3">
+                        <select id="columnSelect" class="form-select border-0 shadow-sm">
+                            <option value="0">Pesquisa Global</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group shadow-sm">
+                            <span class="input-group-text bg-white border-0"><i
+                                    class="bi bi-search text-muted"></i></span>
+                            <input type="text" id="searchInput" class="form-control border-0"
+                                placeholder="Pesquisar...">
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <button id="clearFilterButton" class="btn btn-link text-decoration-none text-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela -->
+            <!-- Tabela Principal de Beneficiários
+                 ID: #tabela
+                 Comportamento: Poupulada via DataTables (server-side/ajax).
+                 Colunas: Definidas em beneficiarios.js (inicializarTabela).
+            -->
+            <div class="table-responsive">
+                <table id="tabela"
+                    class="table table-hover table-striped table-bordered table-sm align-middle w-100 text-center">
+                    <thead class="table-light text-secondary">
+                        <tr class="text-uppercase fs-7 fw-bold">
+                            <th>Nº</th>
+                            <th>Nome Técnico</th>
+                            <th>CPF Técnico</th>
+                            <th>Município</th>
+                            <th>Comunidade</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
+                            <th>Data Atividade</th>
+                            <th>Nome Familiar</th>
+                            <th>CPF Familiar</th>
+                            <th>NIS</th>
+                            <th>Renda Média</th>
+                            <th>Status</th>
+                            <th>Técnico</th>
+                            <th>Documento</th>
+                            <th>GRH</th>
+                            <th>Verif. BSF</th>
+                            <th class="text-end">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- Modais Removidos (Migrados para base.html) -->
+
+<!-- 
+    MODAL: Edição de Beneficiário
+    ID: #modalEditarPadrao
+    Uso: Formulário para editar dados e anexar documentos.
+    Acionado por: Botão .js-btn-edit na tabela.
+-->
+<div class="modal fade" id="modalEditarPadrao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Beneficiário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formEditarPadrao">
+                <div class="modal-body">
+                    <input type="hidden" id="edit-id" name="id">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit-nome_completo" class="form-label">Nome Completo</label>
+                            <input type="text" class="form-control" id="edit-nome_completo" name="nome_completo">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-cpf" class="form-label">CPF</label>
+                            <input type="text" class="form-control" id="edit-cpf" name="cpf">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-sexo" class="form-label">Sexo</label>
+                            <select class="form-select" id="edit-sexo" name="sexo">
+                                <option value="">Selecione...</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Feminino">Feminino</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-data_nascimento" class="form-label">Data de Nascimento</label>
+                            <input type="date" class="form-control" id="edit-data_nascimento" name="data_nascimento">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-municipio" class="form-label">Município</label>
+                            <input type="text" class="form-control" id="edit-municipio" name="municipio">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-comunidade" class="form-label">Comunidade</label>
+                            <input type="text" class="form-control" id="edit-comunidade" name="comunidade">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="edit-nis" class="form-label">NIS</label>
+                            <input type="text" class="form-control" id="edit-nis" name="nis">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="edit-grh" class="form-label">GRH</label>
+                            <input type="text" class="form-control" id="edit-grh" name="grh">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="edit-status" class="form-label">Status</label>
+                            <input type="text" class="form-control" id="edit-status" name="status">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-latitude" class="form-label">Latitude</label>
+                            <input type="text" class="form-control" id="edit-latitude" name="latitude">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-longitude" class="form-label">Longitude</label>
+                            <input type="text" class="form-control" id="edit-longitude" name="longitude">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit-verificado_bsf" class="form-label">Verificação BSF</label>
+                            <input type="text" class="form-control" id="edit-verificado_bsf" name="verificado_bsf">
+                        </div>
+                        <div class="col-12">
+                            <hr class="my-3">
+                            <label for="edit-arquivo" class="form-label fw-bold">Anexar Documento (PDF/Imagem)</label>
+                            <input class="form-control" type="file" id="edit-arquivo" name="arquivo">
+                            <div id="edit-arquivo-info" class="form-text mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    MODAL: Scanner GRH (IA)
+    ID: #modalScanGRH
+    Uso: Interface de tela dividida (Preview PDF vs Dados Extraídos).
+    Acionado por: Botão "Scan GRH" na toolbar.
+-->
+<div class="modal fade" id="modalScanGRH" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Revisão de Leitura Inteligente (GRH)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="row h-100 g-0">
+                    <!-- Esquerda: Visualizador de Documento -->
+                    <div class="col-md-6 bg-secondary d-flex justify-content-center align-items-center position-relative"
+                        style="min-height: 400px;">
+                        <iframe id="iframePreviewGRH" class="w-100 h-100 border-0" src=""></iframe>
+                        <div id="preview-placeholder-grh" class="text-white text-center p-4">
+                            <div class="spinner-border mb-3" role="status"></div>
+                            <p>Processando documento...</p>
+                        </div>
+                    </div>
+
+                    <!-- Direita: Dados Extraídos -->
+                    <div class="col-md-6 overflow-auto p-4 bg-light">
+                        <h6 class="border-bottom pb-2 mb-3 fw-bold text-primary">Beneficiários Detectados</h6>
+
+                        <div class="alert alert-info d-flex align-items-center small py-2">
+                            <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                            <div>
+                                O sistema compara <strong>CPF</strong> e <strong>Nome</strong> com a base de dados.
+                                <br>Itens <span class="badge bg-success">VERDES</span> foram identificados
+                                automaticamente.
+                            </div>
+                        </div>
+
+                        <div class="table-responsive shadow-sm rounded border bg-white mb-3">
+                            <table class="table table-hover table-sm align-middle mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Nome Extraído / CPF</th>
+                                        <th style="width: 100px;">Status</th>
+                                        <th style="width: 120px;" class="text-end">Ações</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-scan-grh">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-end pt-3 border-top gap-2 align-items-center">
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-muted small">Ref. GRH</span>
+                                <input type="text" id="inputTextoGRH" class="form-control"
+                                    placeholder="Ex: GRH 05/2024">
+                            </div>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" id="btnSalvarGRH" class="btn btn-success"><i
+                                    class="bi bi-save me-1"></i> Gravar GRH</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- 
+    MODAL: Curadoria de Importação (Excel/CSV)
+    ID: #modalImportCompare
+    Uso: Interface principal de "De-Para" e validação pré-importação.
+    Estrutura: Lista à esquerda (#triagem-list), Detalhes à direita (#triagem-detail-container).
+-->
+<div class="modal fade" id="modalImportCompare" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 95vw; height: 95vh;">
+        <div class="modal-content rounded-4 shadow h-100">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Curadoria de Importação</h5>
+                <button type="button" class="btn btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light p-0 h-100">
+                <div class="container-fluid g-0 h-100">
+                    <div class="row g-0" style="height: 100%;">
+
+                        <!-- LEFT COLUMN: List / Navigation -->
+                        <div class="col-md-3 border-end bg-white d-flex flex-column h-100">
+                            <!-- Search/Filter Header -->
+                            <div class="p-2 border-bottom bg-light">
+                                <div class="input-group input-group-sm mb-2">
+                                    <span class="input-group-text bg-white border-end-0"><i
+                                            class="bi bi-search"></i></span>
+                                    <input type="text" id="input-triagem-filter" class="form-control border-start-0"
+                                        placeholder="Buscar...">
+                                </div>
+                                <div class="btn-group w-100 btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="btnfilter" id="filter-all"
+                                        autocomplete="off" checked>
+                                    <label class="btn btn-outline-secondary" for="filter-all">Todos</label>
+
+                                    <input type="radio" class="btn-check" name="btnfilter" id="filter-novos"
+                                        autocomplete="off">
+                                    <label class="btn btn-outline-success" for="filter-novos">Novos</label>
+
+                                    <input type="radio" class="btn-check" name="btnfilter" id="filter-dups"
+                                        autocomplete="off">
+                                    <label class="btn btn-outline-warning text-dark" for="filter-dups">Dups</label>
+                                </div>
+                            </div>
+
+                            <!-- Scrollable List -->
+                            <div class="list-group list-group-flush flex-grow-1 overflow-auto custom-scrollbar"
+                                id="triagem-list">
+                                <!-- Items injected by JS -->
+                                <div class="text-center p-4 text-muted">
+                                    <i class="bi bi-upload fs-1 d-block mb-2"></i>
+                                    Carregue inva arquivo para começar
+                                </div>
+                            </div>
+                            <div class="p-2 border-top bg-light small text-center text-muted" id="triagem-status-bar">
+                                Total: <strong id="triagem-total">0</strong> | CSV: <span
+                                    id="triagem-total-csv">0</span>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COLUMN: Details / Edit Form -->
+                        <div class="col-md-9 bg-light h-100 overflow-auto">
+                            <div class="p-4" id="triagem-detail-container" style="display:none;">
+
+                                <!-- Status Badge & Actions -->
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <div id="triagem-badge-container">
+                                        <span class="badge bg-secondary p-2 px-3 rounded-pill">Selecione um item</span>
+                                    </div>
+                                    <div class="text-end text-muted small">
+                                        ID Temp: <span id="view-triagem-id">--</span>
+                                    </div>
+                                </div>
+
+                                <!-- Form -->
+                                <div class="card border-0 shadow-sm">
+                                    <div
+                                        class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                        <span class="fw-bold text-primary"><i
+                                                class="bi bi-person-lines-fill me-2"></i>Dados do Beneficiário</span>
+                                        <div id="triagem-toolbar" style="display:none;">
+                                            <button type="button" class="btn btn-sm btn-outline-danger me-1"
+                                                id="btn-triagem-remove" title="Remover da Lista"
+                                                onclick="removerItemTriagem()">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-primary fw-bold"
+                                                id="btn-triagem-save-single" title="Importar Apenas Este"
+                                                onclick="confirmarImportacaoUnica()">
+                                                <i class="bi bi-save me-1"></i> Importar Este
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <form id="form-triagem-edit">
+                                            <div class="row g-3">
+                                                <!-- Status First -->
+                                                <div class="col-sm-4">
+                                                    <label class="form-label fw-bold">Situação Cadastral</label>
+                                                    <select class="form-select" id="input-triagem-status">
+                                                        <option value="EM CADASTRO">EM CADASTRO</option>
+                                                        <option value="CADASTRADO">CADASTRADO</option>
+                                                        <option value="A CONSTRUIR">A CONSTRUIR</option>
+                                                        <option value="CONSTRUÍDA">CONSTRUÍDA</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-sm-8">
+                                                    <label class="form-label fw-bold">Nome Completo <span
+                                                            class="text-danger">*</span></label>
+                                                    <input type="text" class="form-control" id="input-triagem-nome">
+                                                </div>
+
+                                                <div class="col-sm-6">
+                                                    <label class="form-label fw-bold">CPF <span
+                                                            class="text-danger">*</span></label>
+                                                    <input type="text" class="form-control" id="input-triagem-cpf"
+                                                        maxlength="14">
+                                                </div>
+
+                                                <div class="col-sm-6">
+                                                    <label class="form-label">NIS</label>
+                                                    <input type="text" class="form-control" id="input-triagem-nis">
+                                                </div>
+
+                                                <div class="col-sm-12">
+                                                    <label class="form-label">Comunidade</label>
+                                                    <input type="text" class="form-control"
+                                                        id="input-triagem-comunidade">
+                                                </div>
+
+                                                <div class="col-sm-6">
+                                                    <label class="form-label">Latitude</label>
+                                                    <input type="text" class="form-control" id="input-triagem-lat">
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <label class="form-label">Longitude</label>
+                                                    <input type="text" class="form-control" id="input-triagem-lon">
+                                                </div>
+
+                                                <!-- Alert Area for Diffs -->
+                                                <div class="col-12 mt-4" id="alert-diffs-container"
+                                                    style="display:none;">
+                                                    <div class="alert alert-warning border-warning shadow-sm">
+                                                        <h6 class="alert-heading fw-bold"><i
+                                                                class="bi bi-exclamation-triangle-fill me-2"></i>Diferenças
+                                                            Encontradas com o Banco</h6>
+                                                        <p class="mb-2 small">O registro no banco possui dados
+                                                            diferentes do que está sendo importado. Revise abaixo:</p>
+                                                        <ul class="mb-0 small" id="list-diffs"></ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    <div class="card-footer bg-white text-end py-3">
+                                        <small class="text-muted d-block mb-2">As alterações são salvas na lista
+                                            temporária.</small>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Empty State for Right Column -->
+                            <div class="h-100 d-flex flex-column justify-content-center align-items-center text-muted"
+                                id="triagem-empty-state">
+                                <i class="bi bi-arrow-left-circle fs-1 mb-3 opacity-25"></i>
+                                <p class="lead">Selecione um beneficiário à esquerda</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div>
+                    <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Verifique os dados antes de
+                        confirmar.</span>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success fw-bold" id="btnConfirmarImportacao">
+                        <i class="bi bi-check-lg me-1"></i> Confirmar Importação
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    MODAL: Gerador de Relatórios Customizados
+    ID: #modalGerarRelatorio
+    Uso: Seleção de colunas para exportação e análise IA.
+-->
+<div class="modal fade" id="modalGerarRelatorio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Exportar & Analisar Dados</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Selecione as colunas desejadas para o relatório.</p>
+                <form id="formGerarRelatorio">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="numero_ordem" id="colOrdem" checked>
+                                <label class="form-check-label fw-bold" for="colOrdem">Nº</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="nome_familiar" id="colNome" checked>
+                                <label class="form-check-label" for="colNome">Nome</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="cpf_familiar" id="colCPF" checked>
+                                <label class="form-check-label" for="colCPF">CPF</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="nis" id="colNIS" checked>
+                                <label class="form-check-label" for="colNIS">NIS</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="municipio" id="colMun" checked>
+                                <label class="form-check-label" for="colMun">Município</label>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="comunidade" id="colCom" checked>
+                                <label class="form-check-label" for="colCom">Comunidade</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="status" id="colStatus" checked>
+                                <label class="form-check-label" for="colStatus">Status</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="tecnico_agua_que_alimenta" id="colTec" checked>
+                                <label class="form-check-label" for="colTec">Técnico</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="doc_status" id="colDoc" checked>
+                                <label class="form-check-label" for="colDoc">Documento</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="grh" id="colGRH" checked>
+                                <label class="form-check-label" for="colGRH">GRH</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="relatorioEmail" class="form-label fw-bold small">E-mail para envio (Opcional)</label>
+                        <input type="email" class="form-control form-control-sm" id="relatorioEmail" placeholder="exemplo@email.com">
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" id="btnBaixarExcel" class="btn btn-outline-success">
+                            <i class="bi bi-download me-2"></i>Baixar Planilha (.xlsx)
+                        </button>
+                        <button type="button" id="btnAnalisarIA" class="btn btn-primary">
+                            <i class="bi bi-cpu me-2"></i>Gerar Análise IA
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Área de Resultado da IA -->
+                <div id="resultadoIAContainer" class="mt-4 p-3 bg-light rounded border" style="display: none; max-height: 400px; overflow-y: auto;">
+                    <h6 class="fw-bold text-primary mb-2"><i class="bi bi-robot me-2"></i>Resultado da Análise</h6>
+                    <div id="loadingIA" class="text-center py-3">
+                        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                        <span class="ms-2 small">Gemini analisando dados...</span>
+                    </div>
+                    <div id="textoIA" class="markdown-content small"></div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light p-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    MODAL: Filtros de Mapa (MANTIDO para compatibilidade de sistema, embora o botão principal tenha mudado)
+    ID: #modalFiltrosMapa
+-->
+<div class="modal fade" id="modalFiltrosMapa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2 text-primary"></i>Sincronizar com Mapa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Selecione os filtros para sincronizar beneficiários como pontos no Mapa
+                    principal.</p>
+                <form id="formFiltrosMapa">
+                    <div class="mb-3">
+                        <label for="filtroMapaMunicipio" class="form-label">Município</label>
+                        <select class="form-select" id="filtroMapaMunicipio">
+                            <option value="">Todos</option>
+                            <option value="ABARE" selected>ABARÉ</option>
+                            <option value="CHORROCHO">CHORROCHÓ</option>
+                            <option value="MACURURE">MACURURÉ</option>
+                            <option value="RODELAS">RODELAS</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filtroMapaStatus" class="form-label">Status</label>
+                        <select class="form-select" id="filtroMapaStatus">
+                            <option value="">Todos</option>
+                            <option value="IMPORTADO" selected>IMPORTADO (Novos)</option>
+                            <option value="CADASTRADO">CADASTRADO</option>
+                            <option value="A CONSTRUIR">A CONSTRUIR</option>
+                            <option value="CONSTRUÍDA">CONSTRUÍDA</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filtroMapaComunidade" class="form-label">Comunidade (Opcional)</label>
+                        <input type="text" class="form-control" id="filtroMapaComunidade" placeholder="Ex: Aldeia X">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold" onclick="enviarParaMapa()" id="btnEnviarMapa">
+                    <i class="bi bi-map-fill me-2"></i>Enviar para Mapa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script type="module" src="/static/js/pages/beneficiarios.js?v=2.3"></script>
+{% endblock %}

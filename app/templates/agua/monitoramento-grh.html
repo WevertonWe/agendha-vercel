@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Monitoramento GRH{% endblock %}
+
+{% block content %}
+
+<style>
+    .tabela-grh th,
+    .tabela-grh td {
+        vertical-align: middle;
+    }
+
+    .tabela-grh .col-documento {
+        width: 100px;
+        text-align: center;
+    }
+
+    .tabela-grh .col-realizado {
+        width: 100px;
+        text-align: center;
+    }
+
+    .tabela-grh .col-acoes {
+        width: 120px;
+        text-align: center;
+    }
+
+    .tabela-grh .col-data {
+        width: 130px;
+    }
+
+    .tabela-grh .col-observacao {
+        max-width: 300px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .tabela-grh .col-municipio {
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .tabela-grh td.col-observacao,
+    .tabela-grh td.col-municipio {
+        cursor: default;
+    }
+
+    /* * CORREÇÃO FINAL (CSS):
+    * Remove a borda superior da tabela que cria a linha branca.
+    */
+    .card-body.p-0 .table-responsive .tabela-grh {
+        border-top: none;
+    }
+</style>
+
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h2">Monitoramento de Eventos (GRH)</h1>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEvento">
+            <i class="bi bi-plus-circle-fill"></i> Adicionar Novo Evento
+        </button>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover align-middle tabela-grh mb-0">
+                    <thead class="bg-light text-secondary text-uppercase small fw-bold text-center align-middle">
+                        <tr>
+                            <th class="col-municipio">Município / Comunidade</th>
+                            <th class="col-data">Data Prevista</th>
+                            <th class="col-observacao text-start">Observação</th>
+                            <th class="col-documento">Documento</th>
+                            <th class="col-realizado">Realizado?</th>
+                            <th class="col-acoes">Ações</th>
+                        </tr>
+                    </thead>
+                    <!--
+                        TBODY EVENTOS
+                        ID: #tbody-eventos
+                        Preenchimento: Via JS (carregarEventos).
+                        Exibe linhas com eventos GRH monitorados.
+                    -->
+                    <tbody id="tbody-eventos" class="text-center align-middle">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--
+    MODAL: Evento GRH
+    ID: #modalEvento
+    Uso: Criação ou Edição de evento de monitoramento.
+-->
+<div class="modal fade" id="modalEvento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEventoLabel">Adicionar Novo Evento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="form-evento">
+                <div class="modal-body">
+                    <input type="hidden" id="evento-id" name="id">
+                    <div class="mb-3">
+                        <label for="municipio_comunidade" class="form-label">Município / Comunidade</label>
+                        <input type="text" class="form-control" id="municipio_comunidade" name="municipio_comunidade"
+                            required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dia_previsto" class="form-label">Data Prevista</label>
+                        <input type="text" class="form-control" id="dia_previsto" name="dia_previsto" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacao" class="form-label">Observação</label>
+                        <textarea class="form-control" id="observacao" name="observacao" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="arquivo" class="form-label">Anexar Lista de Presença(PDF)</label>
+                        <input class="form-control" type="file" id="arquivo" name="arquivo"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,image/*">
+                        <div id="arquivo-existente-info" class="form-text mt-2 d-none"></div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/monitoramento.js"></script>
+{% endblock %}

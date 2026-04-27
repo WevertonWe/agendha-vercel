@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Processar Beneficiário{% endblock %}
+{% block styles %}
+{% endblock %}
+{% block content %}
+
+<style>
+    /* Scanner UI Styles */
+    .scanner-dropzone {
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        background-color: #f8fafc;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        min-height: 250px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .scanner-dropzone:hover,
+    .scanner-dropzone.drag-active {
+        border-color: #3b82f6;
+        background-color: #eff6ff;
+        transform: scale(1.01);
+    }
+
+    .scanner-icon {
+        font-size: 3rem;
+        color: #94a3b8;
+        margin-bottom: 1rem;
+    }
+
+    .results-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .result-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        transition: transform 0.2s;
+    }
+
+    .result-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .card-thumb {
+        height: 140px;
+        background-color: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .card-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .card-content {
+        padding: 1rem;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 9999px;
+        font-weight: 600;
+    }
+</style>
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 fw-bold text-gray-800"><i class="bi bi-qr-code-scan me-2"></i>Scanner Inteligente</h1>
+            <p class="text-muted">Digitalize fichas de cadastro usando IA</p>
+        </div>
+        <a href="/fila-validacao" class="btn btn-outline-primary">
+            <i class="bi bi-list-check me-2"></i>Fila de Validação
+        </a>
+    </div>
+
+    <!-- Dropzone Area -->
+    <div class="scanner-dropzone mb-4" id="dropzone">
+        <input type="file" id="fileInput" name="files" multiple class="d-none" accept="image/*,application/pdf" aria-label="Upload Ficheiros de Análise">
+        <i class="bi bi-cloud-arrow-up scanner-icon"></i>
+        <h4 class="h5 fw-bold text-secondary">Arraste arquivos aqui</h4>
+        <p class="text-muted small mb-3">ou clique para selecionar do computador</p>
+        <button class="btn btn-primary px-4 rounded-pill" onclick="document.getElementById('fileInput').click()">
+            Selecionar Arquivos
+        </button>
+    </div>
+
+    <!-- Overall Progress -->
+    <div id="progressContainer" class="d-none mb-4">
+        <div class="d-flex justify-content-between small fw-bold text-muted mb-1">
+            <span>Processando arquivos...</span>
+            <span id="progressText">0%</span>
+        </div>
+        <div class="progress" style="height: 10px; border-radius: 5px;">
+            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                role="progressbar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Results Grid -->
+    <div id="resultsGrid" class="results-grid">
+        <!-- Cards serão inseridos aqui via JS -->
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/pages/processar.js"></script>
+{% endblock %}

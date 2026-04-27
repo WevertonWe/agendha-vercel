@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Cotações{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Módulo de Cotações</h1>
+        <!-- Button Global de Leitura -->
+        <button class="btn btn-info text-white me-2" onclick="document.getElementById('input-global-pdf').click()">
+            <i class="bi bi-file-earmark-text"></i> Ler PDF de Fornecedor
+        </button>
+        <input type="file" id="input-global-pdf" accept=".pdf, .jpg, .png, .jpeg" class="d-none"
+            onchange="analisarPropostaGlobal(this)">
+
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCriarMaster">
+            <i class="bi bi-plus-circle-fill"></i> Criar Nova Cotação Mestra
+        </button>
+    </div>
+
+    <!-- 
+        ACCORDION DE COTAÇÕES
+        ID: #accordion-cotacoes
+        Preenchimento: Via JS (renderCotacoes).
+        Conteúdo: Lista de Cotações Mestras e suas propostas.
+    -->
+    <div class="accordion" id="accordion-cotacoes">
+    </div>
+</div>
+
+<!-- 
+    MODAL: Revisão de Importação Global (Split Screen)
+    ID: #modalRevisaoGlobal
+    Uso: Interface Lado-a-Lado (PDF Preview vs Dados Extraídos pela IA).
+    Acionado por: Upload de arquivo no input #input-global-pdf.
+-->
+<div class="modal fade" id="modalRevisaoGlobal" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 95vw; height: 90vh;">
+        <div class="modal-content h-100">
+            <div class="modal-header bg-info text-white py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <h5 class="modal-title mb-0 fs-6"><i class="bi bi-robot"></i> Revisão Inteligente (Gemini 2.0)</h5>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <div class="row g-0 h-100">
+                    <!-- Coluna Esquerda: Documento (Preview) -->
+                    <div class="col-lg-6 bg-dark border-end d-flex flex-column h-100">
+                        <div
+                            class="p-2 bg-secondary text-white d-flex justify-content-between align-items-center small">
+                            <span><i class="bi bi-file-earmark-text me-1"></i> Visualizador de Documento</span>
+                            <a id="btn-ver-documento-global" href="#" target="_blank"
+                                class="text-white text-decoration-none">
+                                <i class="bi bi-box-arrow-up-right"></i> Expandir
+                            </a>
+                        </div>
+                        <div
+                            class="flex-grow-1 bg-dark d-flex align-items-center justify-content-center overflow-hidden position-relative w-100">
+                            <iframe id="iframePreview" src="" class="w-100 h-100 border-0"
+                                style="background: #333;"></iframe>
+                            <!-- Fallback Text -->
+                            <div id="preview-placeholder" class="text-white-50 text-center position-absolute"
+                                style="z-index: 0; pointer-events: none;">
+                                <i class="bi bi-file-earmark-pdf display-1 d-block mb-3"></i>
+                                <span class="fs-5">Carregando visualização...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Direita: Formulário -->
+                    <div class="col-lg-6 h-100" style="overflow-y: auto;">
+                        <div class="p-4">
+                            <h6 class="text-primary fw-bold mb-3 border-bottom pb-2">1. Vínculo da Cotação</h6>
+                            <div class="mb-4">
+                                <div id="match-cotacao-container" class="alert alert-success d-none mb-2 py-2 small">
+                                    <i class="bi bi-check-circle-fill"></i> Encontrado:
+                                    <strong id="match-cotacao-texto">#001 - Reforma</strong>
+                                </div>
+                                <div id="select-cotacao-container">
+                                    <label class="form-label small text-muted">Selecione a Cotação Mestra</label>
+                                    <select id="select-global-cotacao" class="form-select">
+                                        <option value="">Selecione...</option>
+                                        <!-- Populated via JS -->
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h6 class="text-primary fw-bold mb-3 border-bottom pb-2">2. Dados do Fornecedor</h6>
+                            <div class="mb-4">
+                                <div id="match-fornecedor-container" class="alert alert-success d-none mb-2 py-2 small">
+                                    <i class="bi bi-check-circle-fill"></i> Reconhecido: <span
+                                        id="match-fornecedor-texto">Fornecedor X</span>
+                                </div>
+                                <label class="form-label small text-muted">Nome do Fornecedor / Empresa</label>
+                                <input type="text" class="form-control mb-2" id="input-global-fornecedor-nome"
+                                    placeholder="Digite o nome se necessário...">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="check-novo-fornecedor">
+                                    <label class="form-check-label small" for="check-novo-fornecedor">
+                                        Cadastrar este fornecedor como Novo no sistema
+                                    </label>
+                                </div>
+                            </div>
+
+                            <h6 class="text-primary fw-bold mb-3 border-bottom pb-2">3. Resumo & Valores</h6>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted">Observações Importadas</label>
+                                <textarea class="form-control" id="input-global-obs" rows="3"></textarea>
+                            </div>
+
+                            <div
+                                class="d-flex justify-content-between align-items-center mb-3 bg-light p-3 rounded border">
+                                <span class="fw-bold text-dark">Valor Total da Proposta</span>
+                                <div class="input-group w-50">
+                                    <span class="input-group-text fw-bold">R$</span>
+                                    <input type="number" step="0.01"
+                                        class="form-control text-end fw-bold fs-5 text-primary"
+                                        id="input-global-valor-total">
+                                </div>
+                            </div>
+
+                            <div class="table-responsive border rounded" style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0 small">
+                                    <thead class="table-secondary sticky-top">
+                                        <tr>
+                                            <th>Item Detectado</th>
+                                            <th class="text-center" style="width: 50px;">Qtd</th>
+                                            <th class="text-end" style="width: 80px;">R$ Unit.</th>
+                                            <th class="text-end" style="width: 80px;">R$ Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-global-itens">
+                                        <!-- Items via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div
+                                class="alert alert-warning small mt-2 py-1 mb-0 border-0 bg-warning-subtle text-warning-emphasis">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i> Confira os valores com o PDF ao
+                                lado.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer bg-light border-top py-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Descartar</button>
+                <button type="button" class="btn btn-success fw-bold px-4" onclick="confirmarImportacaoGlobal()">
+                    <i class="bi bi-check-lg"></i> Confirmar e Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    MODAL: Criar Cotação Mestra
+    ID: #modalCriarMaster
+    Uso: Formulário para criar nova solicitação de cotação (Título, Descrição, Itens).
+-->
+<div class="modal fade" id="modalCriarMaster" tabindex="-1" aria-labelledby="modalCriarMasterLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCriarMasterLabel">Nova Cotação Mestra</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formCriarMaster">
+                <div class="modal-body">
+                    <input type="hidden" id="input-master-id" name="id">
+
+                    <!-- Cabeçalho da Cotação -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="input-master-codigo" class="form-label">Código (ex: 001)</label>
+                            <input type="text" class="form-control" id="input-master-codigo" name="codigo_cotacao"
+                                required>
+                        </div>
+                        <div class="col-md-8">
+                            <label for="input-master-titulo" class="form-label">Título da Cotação</label>
+                            <input type="text" class="form-control" id="input-master-titulo" name="titulo" required
+                                placeholder="Ex: Reforma do Banheiro">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="input-master-descricao" class="form-label">Observações Gerais</label>
+                        <textarea class="form-control" id="input-master-descricao" name="descricao" rows="2"></textarea>
+                    </div>
+
+                    <hr>
+
+                    <!-- Área de Itens -->
+                    <h6 class="mb-3"><i class="bi bi-cart"></i> Itens da Cotação</h6>
+
+                    <div class="card p-3 bg-light mb-3">
+                        <div class="row align-items-end g-2">
+                            <div class="col-md-7">
+                                <label for="selectMaterial" class="form-label">Material</label>
+                                <select id="selectMaterial" class="form-select">
+                                    <option value="">Selecione um material...</option>
+                                    <!-- Populated via JS -->
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="inputQuantidade" class="form-label">Quantidade</label>
+                                <input type="number" id="inputQuantidade" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100" id="btnAdicionarItem">
+                                    <i class="bi bi-plus-lg"></i> Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="text-primary mt-3 mb-2">Itens Adicionados</h6>
+                    <table class="table table-sm table-bordered table-striped mt-3">
+                        <thead class="bg-light text-dark">
+                            <tr>
+                                <th>Material</th>
+                                <th style="width: 100px;" class="text-center">Qtd</th>
+                                <th style="width: 50px;" class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaItensCotacao">
+                            <!-- Items rendered here -->
+                            <tr id="row-empty-msg">
+                                <td colspan="3" class="text-center text-muted">Nenhum item adicionado.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Cotação Mestra</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 
+    MODAL: Adicionar Nova Proposta
+    ID: #modalAdicionarProposta
+    Uso: Registrar proposta de fornecedor (Manual ou via Upload IA no contexto da modal).
+-->
+<div class="modal fade" id="modalAdicionarProposta" tabindex="-1" aria-labelledby="modalAdicionarPropostaLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarPropostaLabel">Adicionar Nova Proposta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formAdicionarProposta" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <!-- AI AUTO-FILL SECTION -->
+                    <div class="alert alert-soft-info border d-flex flex-column gap-2 mb-4">
+                        <div class="d-flex align-items-center gap-2 text-primary">
+                            <i class="bi bi-robot fs-5"></i>
+                            <span class="fw-bold">Auto-Preenchimento com IA</span>
+                        </div>
+                        <p class="mb-0 small text-muted">Carregue o orçamento (PDF/Imagem) para preencher os campos
+                            abaixo automaticamente.</p>
+
+                        <div class="d-flex gap-2 mt-1">
+                            <input class="form-control form-control-sm" type="file" id="input-ia-arquivo"
+                                accept=".pdf, .jpg, .jpeg, .png">
+                            <button type="button" class="btn btn-sm btn-primary d-flex align-items-center gap-2"
+                                onclick="analisarDocumentoIA()">
+                                <i class="bi bi-magic text-white"></i>
+                                <span>Analisar</span>
+                            </button>
+                        </div>
+
+                        <div id="ia-loading" class="d-none align-items-center gap-2 mt-1 text-info small">
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            <span>A Inteligência Artificial está lendo o documento...</span>
+                        </div>
+                    </div>
+                    <hr class="mt-0 mb-3">
+
+                    <input type="hidden" id="input-proposta-master-id">
+                    <input type="hidden" id="input-proposta-id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="selectFornecedor" class="form-label">Fornecedor</label>
+                            <select id="selectFornecedor" name="fornecedor_id" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                <!-- Populated via JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="input-proposta-tipo" class="form-label">Tipo</label>
+                            <input type="text" class="form-control" id="input-proposta-tipo" name="tipo_fornecedor"
+                                required placeholder="Ex: Material, Serviço">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="input-proposta-data" class="form-label">Data</label>
+                            <input type="date" class="form-control" id="input-proposta-data" name="data_contrato"
+                                required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="input-proposta-valor" class="form-label">Valor Total (R$)</label>
+                            <input type="text" inputmode="decimal" class="form-control" id="input-proposta-valor"
+                                name="valor" required placeholder="Ex: 1500,50">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="input-proposta-status" class="form-label">Status</label>
+                        <select id="input-proposta-status" class="form-select" name="status">
+                            <option value="Ativo">Ativo</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Finalizado">Finalizado</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="input-proposta-arquivos" class="form-label">Anexar Documentos (Proposta
+                            PDF/Img)</label>
+                        <input class="form-control" type="file" id="input-proposta-arquivos" name="arquivos" multiple>
+                    </div>
+                    <div class="mb-3">
+                        <label for="input-proposta-observacao" class="form-label">Observações</label>
+                        <textarea class="form-control" id="input-proposta-observacao" name="observacao"
+                            rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Proposta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEditarProposta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-pencil-alt"></i> Editar Proposta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editPropId">
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Nome do Fornecedor</label>
+                        <input type="text" class="form-control" id="editPropFornecedor" disabled>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Tipo de Serviço/Material</label>
+                        <input type="text" class="form-control" id="editPropTipo">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Data da Proposta</label>
+                        <input type="date" class="form-control" id="editPropData">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Valor (R$)</label>
+                        <input type="number" step="0.01" class="form-control" id="editPropValor">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="editPropStatus">
+                            <option value="Pendente">Pendente</option>
+                            <option value="Ativo">Ativo (Vencedor)</option>
+                            <option value="Rejeitado">Rejeitado</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observações</label>
+                    <textarea class="form-control" id="editPropObs" rows="3"></textarea>
+                </div>
+
+                <div class="alert alert-info py-1">
+                    <small><i class="fas fa-info-circle"></i> Para alterar documentos, exclua e crie a proposta
+                        novamente ou use a gestão de arquivos.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning text-dark fw-bold" onclick="salvarEdicaoProposta()">Salvar
+                    Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script type="module" src="/static/js/pages/cotacoes.js?v=2.1"></script>
+{% endblock %}

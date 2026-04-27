@@ -1,0 +1,403 @@
+/* 
+   THEME.CSS - The 'Gold Standard' UI System 
+   Based on Clean Professional Login Design
+   -------------------------------------------------
+*/
+
+:root {
+    /* Palette */
+    --primary-color: #0984e3;
+    --primary-hover: #0769b5;
+    --bg-color: #f0f2f5;
+    --bg-gradient-start: #f0f2f5;
+    --bg-gradient-end: #dfe6e9;
+    --card-bg: #ffffff;
+    --text-main: #2d3436;
+    --text-muted: #636e72;
+
+    /* Inputs */
+    --input-bg: #f5f6fa;
+    --input-border: transparent;
+    --input-border-focus: #74b9ff;
+    --input-radius: 12px;
+
+    /* Components */
+    --card-radius: 20px;
+    --btn-radius: 12px;
+}
+
+/* === Global Typography === */
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--text-main);
+    background-color: var(--bg-color);
+}
+
+/* === Utility Components === */
+
+/* 1. Card Custom (Layered Depth) */
+.card-custom {
+    background: var(--card-bg);
+    border-radius: var(--card-radius);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.05),
+        0 10px 15px -3px rgba(0, 0, 0, 0.05),
+        0 20px 25px -5px rgba(0, 0, 0, 0.02);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+    overflow: hidden;
+    position: relative;
+}
+
+.card-custom:hover {
+    transform: translateY(-4px);
+    box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.08),
+        0 25px 30px -5px rgba(0, 0, 0, 0.05);
+}
+
+/* Decoration line for special cards */
+.card-custom.decorated::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--primary-color);
+}
+
+/* 2. Form Controls (Tactile) */
+.form-control-custom {
+    padding: 0.85rem 1rem;
+    border-radius: var(--input-radius);
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    transition: all 0.25s ease;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    width: 100%;
+}
+
+.form-control-custom:focus {
+    background-color: #fff;
+    border-color: var(--input-border-focus);
+    box-shadow: 0 0 0 4px rgba(9, 132, 227, 0.15);
+    outline: none;
+}
+
+/* 3. Buttons (Interactive) */
+.btn-custom-primary {
+    background-color: var(--primary-color);
+    background-image: linear-gradient(160deg, #0984e3 0%, #0670c2 100%);
+    border: none;
+    padding: 0.9rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    border-radius: var(--btn-radius);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.3px;
+    position: relative;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-shadow: 0 4px 6px rgba(9, 132, 227, 0.15);
+}
+
+.btn-custom-primary:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(9, 132, 227, 0.25);
+    color: white;
+}
+
+.btn-custom-primary:active {
+    transform: translateY(0);
+}
+
+/* 4. Text Utilities */
+.text-main {
+    color: var(--text-main) !important;
+}
+
+.text-muted-custom {
+    color: var(--text-muted) !important;
+}
+
+.fw-bold-custom {
+    font-weight: 700 !important;
+}
+
+/* 5. Icons in Cards */
+.card-icon-lg {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+/* 6. Page Headers */
+.page-header-title {
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-main);
+}
+
+/* 7. Data Tables (Clean Financial) */
+.table-custom {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    border-radius: var(--btn-radius);
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.table-custom thead {
+    background-color: #f8f9fa;
+}
+
+.table-custom thead th {
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 1rem;
+    border-bottom: 2px solid #e9ecef;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.table-custom tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f3f5;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    transition: background-color 0.2s;
+}
+
+.table-custom tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-custom tbody tr:hover td {
+    background-color: #f8f9fa;
+}
+
+/* 8. Financial Utilities */
+.text-money {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-weight: 600;
+    color: #2d3436;
+    text-align: right;
+}
+
+.text-money.positive {
+    color: #00b894;
+}
+
+.text-money.negative {
+    color: #d63031;
+}
+
+.badge-status {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 700;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+
+/* 9. Project Card Utilities (Linter Friendly) */
+.progress-custom {
+    height: 8px !important;
+    border-radius: 4px !important;
+    background-color: #e9ecef !important;
+}
+
+.progress-bar-custom {
+    width: var(--progress-width, 0%);
+    transition: width 0.6s ease;
+}
+
+.card-status-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    opacity: 0.3;
+}
+
+/* 10. Navigation Cards (Portal) */
+.card-nav {
+    background: var(--card-bg);
+    border-radius: var(--card-radius);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: block;
+    text-decoration: none !important;
+}
+
+.card-nav:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.card-nav .card-title {
+    color: var(--text-main);
+    transition: color 0.2s ease;
+}
+
+.card-nav:hover .card-title {
+    color: var(--primary-color);
+}
+
+.card-icon-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    font-size: 2.5rem;
+    transition: all 0.3s ease;
+}
+
+.card-nav:hover .card-icon-circle {
+    transform: scale(1.1);
+}
+
+/* Color variations for icon circles */
+.bg-soft-primary {
+    background-color: rgba(9, 132, 227, 0.1);
+    color: var(--primary-color);
+}
+
+.bg-soft-success {
+    background-color: rgba(0, 184, 148, 0.1);
+    color: #00b894;
+}
+
+.bg-soft-warning {
+    background-color: rgba(253, 203, 110, 0.1);
+    color: #e17055;
+}
+
+/* Orange-ish for better contrast */
+.bg-soft-danger {
+    background-color: rgba(214, 48, 49, 0.1);
+    color: #d63031;
+}
+
+.bg-soft-info {
+    background-color: rgba(0, 206, 201, 0.1);
+    color: #00cec9;
+}
+
+.bg-soft-secondary {
+    background-color: rgba(99, 110, 114, 0.1);
+    color: #636e72;
+}
+
+.bg-soft-dark {
+    background-color: rgba(45, 52, 54, 0.1);
+    color: #2d3436;
+}
+
+.bg-soft-teal {
+    background-color: rgba(108, 92, 231, 0.1);
+    color: #6c5ce7;
+}
+
+/* 11. Section Dividers */
+.section-divider {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+    margin: 2rem 0;
+}
+
+.section-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.1);
+    margin-left: 1rem;
+}
+
+/* 12. KPI Cards (Dashboard) */
+.card-kpi {
+    background: var(--card-bg);
+    border-radius: var(--card-radius);
+    border: none;
+    /* Reset default border */
+    border-left: 5px solid transparent;
+    /* Placeholder for accent */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+
+.card-kpi:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    /* Slightly deeper shadow on hover */
+}
+
+.card-kpi .kpi-number {
+    font-size: 2rem;
+    font-weight: 800;
+    /* Extra bold */
+    color: var(--text-main);
+    line-height: 1.2;
+    letter-spacing: -1px;
+}
+
+.card-kpi .kpi-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.card-kpi .kpi-icon {
+    font-size: 2.5rem;
+    opacity: 0.4;
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* KPI Color Accents */
+.card-kpi.border-primary {
+    border-left-color: var(--primary-color) !important;
+}
+
+.card-kpi.border-success {
+    border-left-color: #00b894 !important;
+}
+
+.card-kpi.border-warning {
+    border-left-color: #fdcb6e !important;
+}
+
+.card-kpi.border-danger {
+    border-left-color: #d63031 !important;
+}

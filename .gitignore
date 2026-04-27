@@ -1,0 +1,26 @@
+# --- Python & Ambiente ---
+__pycache__/
+*.pyc
+venv/
+venv_broken/
+.env
+.venv
+
+# --- Dados Sensíveis e Segredos (NUNCA SUBIR) ---
+*.db
+*.sqlite3
+google_credentials.json
+historico.json
+app/uploads/
+app/templates/uploads/
+
+# --- Logs e Temporários ---
+logs/
+temp/
+temp_downloads/
+backups/
+prints_erros/
+
+# --- IDEs ---
+.vscode/
+.idea/

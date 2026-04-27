@@ -1,0 +1,477 @@
+/* ==========================================================================
+   Map Module Styles
+   Extracted from: app/templates/mapa/index.html
+   ========================================================================== */
+
+/* --- Layout & Responsiveness --- */
+body {
+    overflow: hidden;
+    /* Prevent body scroll to ensure map app feel */
+}
+
+/* Force Header Z-Index for Mobile Menu Overlap */
+.navbar,
+header {
+    z-index: 2100 !important;
+    /* Highest Priority */
+}
+
+/* Fullscreen Wrapper */
+#mapa-wrapper {
+    position: relative;
+    width: 100%;
+    /* Desktop Height Fix: Header is approx 80px */
+    height: calc(100vh - 80px);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    background: white;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+#mapa-wrapper:fullscreen {
+    height: 100vh;
+    width: 100vw;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+}
+
+#map {
+    height: 100% !important;
+    width: 100% !important;
+    border-radius: inherit;
+    box-shadow: none;
+    margin-bottom: 0;
+    z-index: 1;
+    /* Base Layer */
+}
+
+/* --- Mobile Specifics --- */
+@media (max-width: 768px) {
+
+    /* Full Viewport on Mobile */
+    .map-full-container,
+    #mapa-wrapper {
+        width: 100vw !important;
+        height: 100dvh !important;
+        /* Dynamic Viewport Height */
+        margin: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+    }
+
+    .container-fluid {
+        padding: 0 !important;
+    }
+
+    /* HIDE Desktop Controls completely on Mobile */
+    .leaflet-right,
+    .leaflet-top.leaflet-right,
+    .leaflet-bottom.leaflet-right,
+    .leaflet-control-layers {
+        display: none !important;
+    }
+
+    /* Reposition Zoom Controls */
+    .leaflet-top.leaflet-left {
+        top: 60px;
+        /* Below Search */
+    }
+
+    /* FAB Filter Button */
+    .fab-filter {
+        position: fixed;
+        bottom: 20px !important;
+        right: 20px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000 !important;
+        background: #0d6efd !important;
+        color: white !important;
+        border: 2px solid white !important;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        font-size: 24px;
+    }
+
+    /* Search Container Mobile Adjustment */
+    .search-container {
+        flex-grow: 1;
+        margin-right: 10px;
+        top: auto !important;
+        left: auto !important;
+        width: auto !important;
+        right: auto !important;
+    }
+
+    /* Search Results Mobile Adjustment */
+    #searchResults {
+        max-height: 40vh !important;
+    }
+}
+
+/* --- Desktop Controls Visibility --- */
+@media (min-width: 769px) {
+    .leaflet-control-layers {
+        display: block !important;
+    }
+
+    .fab-filter {
+        display: none !important;
+    }
+}
+
+/* --- Floating Toolbar --- */
+.map-floating-toolbar {
+    position: absolute;
+    top: 20px;
+    left: 70px !important;
+    /* Move right to avoid overlapping Zoom Controls */
+    z-index: 1000;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    pointer-events: none;
+    /* Let clicks pass through gaps */
+}
+
+.map-floating-toolbar .btn-group,
+.map-floating-toolbar .btn {
+    pointer-events: auto;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(4px);
+}
+
+.btn-glass {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #333;
+    font-weight: 600;
+    border-radius: 50px;
+}
+
+.btn-glass:hover {
+    background: #fff;
+    color: #000;
+}
+
+/* --- Top Bar Layout --- */
+.map-top-bar {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    /* Aligned Right on Desktop */
+    left: auto;
+    transform: none;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 15px;
+    width: auto;
+    max-width: 90%;
+}
+
+@media (max-width: 768px) {
+    .map-top-bar {
+        top: 10px !important;
+        left: 55px !important;
+        /* Espaço exato para contornar os botões de Zoom (+/-) */
+        width: calc(100% - 65px) !important;
+        display: flex !important;
+        align-items: center !important;
+        transform: none !important;
+        justify-content: flex-start !important;
+    }
+}
+
+/* Search Container - Adjusted */
+.search-container {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 300px;
+    max-width: 70vw;
+    /* Responsive limiter */
+    transition: width 0.3s ease;
+}
+
+/* --- Custom Layer Control (Glassmorphism) --- */
+.custom-layer-control {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 220px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.custom-layer-control.collapsed {
+    min-width: unset;
+    width: 45px;
+    height: 45px;
+    overflow: hidden;
+    border-radius: 50%;
+    cursor: pointer;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.custom-layer-control:not(.collapsed) {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.btn-layer-toggle {
+    background: none;
+    border: none;
+    color: #444;
+    font-size: 20px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.custom-layer-control:not(.collapsed) .btn-layer-toggle {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+    display: none;
+    /* Hide toggle when open, click outside to close implemented? Or toggle button logic */
+}
+
+/* Better: make the collapsed state purely a button, expanded state a panel. 
+   Clicking collapsed opens. clicking outside closes.
+*/
+
+.layer-menu-content {
+    display: block;
+    opacity: 1;
+    transition: opacity 0.3s delay 0.1s;
+}
+
+.custom-layer-control.collapsed .layer-menu-content {
+    display: none;
+    opacity: 0;
+}
+
+.layer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.layer-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.layer-item.active {
+    background: rgba(13, 110, 253, 0.1);
+    font-weight: 500;
+}
+
+.indicator-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* FAB Action (Blue +) */
+.fab-action {
+    position: fixed;
+    bottom: 90px;
+    /* Above Filter FAB */
+    right: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    background: #0d6efd;
+    color: white;
+    border: 2px solid white;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    font-size: 28px;
+    transition: transform 0.2s;
+}
+
+.fab-action:active {
+    transform: scale(0.95);
+}
+
+/* Modal Safety Offset (Navbar Fix) */
+.modal-dialog {
+    padding-top: 80px;
+}
+
+#searchBeneficiario:focus {
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* Search Results - Smart */
+#searchResults {
+    max-height: auto;
+    /* Let JS limit items */
+    overflow: hidden;
+    /* No scroll */
+    position: absolute;
+    width: 100%;
+    margin-top: 5px;
+}
+
+/* Fullscreen Button - Adjusted for Flex */
+.btn-fullscreen {
+    position: relative;
+    /* Reset absolute */
+    top: auto;
+    left: auto;
+    right: auto;
+    background: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #444;
+}
+
+.btn-fullscreen:hover {
+    color: #000;
+    transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+    .map-top-bar {
+        top: 20px;
+        /* Safe area? */
+        left: 50%;
+        transform: translateX(-50%);
+        right: auto;
+        width: 90%;
+        justify-content: center;
+    }
+
+    .search-container {
+        width: 100%;
+        /* Fill available space */
+        flex-grow: 1;
+    }
+
+    /* Offcanvas Rounded Top */
+    .offcanvas-bottom {
+        border-top-left-radius: 20px !important;
+        border-top-right-radius: 20px !important;
+        max-height: 80vh;
+    }
+
+    .bottom-sheet-content {
+        padding-bottom: 80px;
+        /* Space for FAB/Bottom Nav if any */
+    }
+}
+
+
+/* --- Popup Styling --- */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    padding: 0;
+    overflow: hidden;
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    width: 280px !important;
+}
+
+.popup-card-header {
+    padding: 12px 15px;
+    color: white;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.popup-card-body {
+    padding: 15px;
+}
+
+.popup-card-footer {
+    background: #f8f9fa;
+    padding: 10px 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+}
+
+.popup-thumb {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background-color: #eee;
+}
+
+.popup-meta {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+
+/* --- Map Labels --- */
+.map-label-fixed {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-size: 10px;
+    font-weight: 600;
+    color: #333;
+    padding: 1px 5px;
+}
+
+.leaflet-tooltip-bottom:before {
+    display: none;
+}
+
+
+/* --- Misc --- */
+.cursor-crosshair {
+    cursor: crosshair !important;
+}

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Fornecedores{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <!-- Header e Tabela unificados em Card -->
+    <div class="card shadow mb-4 card-custom">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center bg-white border-bottom-0">
+            <h4 class="m-0 font-weight-bold text-primary fw-bold">Lista de Fornecedores</h4>
+            <button class="btn btn-custom-primary btn-sm" onclick="openModal()">
+                <i class="bi bi-plus-lg me-2"></i>Novo Fornecedor
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="tabelaFornecedores"
+                    class="table table-bordered table-striped table-hover table-custom w-100 align-middle"
+                    cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th class="text-center" width="5%">ID</th>
+                            <th width="30%">Razão Social</th>
+                            <th width="20%">CNPJ/CPF</th>
+                            <th width="20%">Telefone</th>
+                            <th width="25%">Endereço</th>
+                            <th class="text-end" width="15%">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Cadastro/Edição -->
+<div class="modal fade" id="modalFornecedor" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content card-custom border-0">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalTitle">Novo Fornecedor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-4">
+                <form id="formFornecedor">
+                    <input type="hidden" id="fornecedorId">
+
+                    <div class="row g-3">
+                        <!-- Razão Social -->
+                        <div class="col-md-6">
+                            <label for="razaoSocial" class="form-label fw-bold text-muted small text-uppercase">Razão
+                                Social *</label>
+                            <input type="text" class="form-control form-control-custom" id="razaoSocial" required>
+                        </div>
+
+                        <!-- Nome Fantasia -->
+                        <div class="col-md-6">
+                            <label for="nomeFantasia" class="form-label fw-bold text-muted small text-uppercase">Nome
+                                Fantasia</label>
+                            <input type="text" class="form-control form-control-custom" id="nomeFantasia">
+                        </div>
+
+                        <!-- CNPJ/CPF -->
+                        <div class="col-md-6">
+                            <label for="documento" class="form-label fw-bold text-muted small text-uppercase">CNPJ / CPF
+                                *</label>
+                            <input type="text" class="form-control form-control-custom" id="documento" required
+                                placeholder="00.000.000/0000-00">
+                        </div>
+
+                        <!-- Email -->
+                        <div class="col-md-6">
+                            <label for="email" class="form-label fw-bold text-muted small text-uppercase">Email</label>
+                            <input type="email" class="form-control form-control-custom" id="email"
+                                placeholder="contato@empresa.com">
+                        </div>
+
+                        <!-- Telefone -->
+                        <div class="col-md-6">
+                            <label for="telefone"
+                                class="form-label fw-bold text-muted small text-uppercase">Telefone</label>
+                            <input type="text" class="form-control form-control-custom" id="telefone"
+                                placeholder="(00) 00000-0000">
+                        </div>
+
+                        <!-- CEP e Número -->
+                        <div class="col-md-4">
+                            <label for="cep" class="form-label fw-bold text-muted small text-uppercase">CEP</label>
+                            <input type="text" class="form-control form-control-custom" id="cep"
+                                placeholder="00000-000">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="numero"
+                                class="form-label fw-bold text-muted small text-uppercase">Número</label>
+                            <input type="text" class="form-control form-control-custom" id="numero">
+                        </div>
+
+                        <!-- Endereço -->
+                        <div class="col-12">
+                            <label for="endereco" class="form-label fw-bold text-muted small text-uppercase">Endereço
+                                Completo</label>
+                            <textarea class="form-control form-control-custom" id="endereco" rows="2"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-top-0 pt-0 pb-4 pe-4">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-custom-primary rounded-pill px-4" onclick="salvarFornecedor()">
+                    <i class="bi bi-check-lg me-2"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- DataTables -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+
+<!-- Input Mask (Optional but recommended) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+
+<!-- Page Script -->
+<script src="/static/js/pages/fornecedores.js"></script>
+
+<style>
+    .table-bordered td,
+    .table-bordered th {
+        border: 1px solid #dee2e6 !important;
+    }
+</style>
+{% endblock %}

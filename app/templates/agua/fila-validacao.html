@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Fila de Validação{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="display-6">Fila de Validação</h1>
+        <button class="btn btn-secondary" onclick="location.reload();">
+            <i class="bi bi-arrow-clockwise"></i> Atualizar
+        </button>
+    </div>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="card-title">Formulários Pendentes</h5>
+            <p class="card-text text-muted">
+                Abaixo estão os formulários importados que aguardam validação humana. Clique em "Validar" para rever e
+                aprovar os dados extraídos.
+            </p>
+            <div class="table-responsive">
+                <table id="tabela-validacao" class="table table-striped table-hover" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome do Arquivo</th>
+                            <th>Status</th>
+                            <th>Data de Importação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="/static/js/pages/fila-validacao.js"></script>
+{% endblock %}

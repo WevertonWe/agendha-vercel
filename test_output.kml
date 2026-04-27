@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<name>Beneficiarios_ABARE</name>
+<Style id="beneficiario">
+<IconStyle>
+<scale>1.2</scale>
+<Icon><href>http://maps.google.com/mapfiles/kml/shapes/man.png</href></Icon>
+</IconStyle>
+</Style>
+<Placemark>
+<name>CLAUDEANE SOUZA OLIVEIRA</name>
+<description><![CDATA[<b>Comunidade:</b> LAGOA DO JOSE ALVES<br/><b>CPF:</b> 07582717511<br/><b>Município:</b> ABARE]]></description>
+<styleUrl>#beneficiario</styleUrl>
+<Point>
+<coordinates>-39.36495,-8.97078,0</coordinates>
+</Point>
+</Placemark>
+</Document>
+</kml>

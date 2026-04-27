@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Conferência de Dados{% endblock %}
+{% block styles %}
+<style>
+    /* Estilo para a área de drop de ficheiro */
+    #drop-area {
+        border: 2px dashed #0d6efd;
+        border-radius: .375rem;
+        padding: 40px;
+        text-align: center;
+        background-color: #f8f9fa;
+        transition: background-color 0.2s ease-in-out;
+    }
+
+    #drop-area.highlight {
+        background-color: #e9ecef;
+        border-color: #0b5ed7;
+    }
+
+    .file-label {
+        cursor: pointer;
+        color: #0d6efd;
+        font-weight: bold;
+    }
+
+    .file-label:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<main class="container-fluid px-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-6">Conferência de Beneficiários</h1>
+            <p class="lead text-muted mb-0">Auditoria e gestão de conformidade (AGENDHA vs Governo).</p>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm" onclick="window.location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Nova Conferência
+        </button>
+    </div>
+
+    <div class="row">
+        <!-- Sidebar Histórico -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow-sm sticky-top" style="top: 20px; z-index: 0;">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Histórico Recente</h6>
+                    <small class="text-muted" style="cursor: pointer;" onclick="carregarHistorico()"><i
+                            class="bi bi-arrow-repeat"></i></small>
+                </div>
+                <div class="list-group list-group-flush small" id="lista-historico"
+                    style="max-height: 70vh; overflow-y: auto;">
+                    <div class="text-center p-3 text-muted">Carregando...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Área Principal -->
+        <div class="col-lg-9">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">1. Upload e Parâmetros</h2>
+                </div>
+                <div class="card-body">
+                    <!--
+                        FORMULÁRIO DE CONFERÊNCIA
+                        ID: #form-conferencia
+                        Entradas: Select Município + Input Arquivo Excel (Drag & Drop).
+                        Ação: POST /api/conferencia/verificar via JS.
+                    -->
+                    <form id="form-conferencia">
+                        <div class="mb-3">
+                            <label for="select-municipio" class="form-label fw-bold">Selecione o Município (Escopo da
+                                Conferência):</label>
+                            <select class="form-select" id="select-municipio" name="municipio_id" required>
+                                <option value="" selected disabled>Selecione o Município...</option>
+                                <option value="ABARE">Abaré</option>
+                                <option value="CHORROCHO">Chorrochó</option>
+                                <option value="GLORIA">Glória</option>
+                                <option value="MACURURE">Macururé</option>
+                                <option value="PAULO_AFONSO">Paulo Afonso</option>
+                                <option value="RODELAS">Rodelas</option>
+                            </select>
+                        </div>
+                        <div id="drop-area">
+                            <input type="file" id="input-excel" name="arquivo_excel" class="d-none" accept=".xls,.xlsx">
+                            <i class="bi bi-cloud-arrow-up-fill" style="font-size: 3rem; color: #0d6efd;"></i>
+                            <h5 class="mt-3">Arraste e solte o ficheiro Excel aqui</h5>
+                            <p class="text-muted">ou</p>
+                            <label for="input-excel" class="file-label">Selecione um ficheiro do seu computador</label>
+                            <p id="file-info" class="mt-3 text-muted"></p>
+                        </div>
+                        <button type="submit" id="btn-verificar" class="btn btn-primary mt-3 w-100">
+                            <i class="bi bi-search"></i> Iniciar Verificação
+                        </button>
+                        <div class="spinner-border text-primary ms-2 d-none" role="status" id="loading-spinner">
+                            <span class="visually-hidden">A processar...</span>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm" id="card-resultados">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="h5 mb-0">2. Painel de Conformidade</h2>
+                    <!--
+                        STATS CONTAINER
+                        ID: #stats-container
+                        Conteúdo: Barras de progresso e contadores (OK, Falta Gov, Erro GRH).
+                        Preenchido por: renderizarResultados() no JS.
+                    -->
+                    <div id="stats-container" class="text-muted small"></div>
+                </div>
+                <div class="card-body">
+                    <div id="area-resultados" class="table-responsive">
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-clipboard-data display-1 opacity-25"></i>
+                            <p class="mt-3">Aguardando dados... faça upload ou selecione um histórico.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/pages/conferencia.js"></script>
+{% endblock %}

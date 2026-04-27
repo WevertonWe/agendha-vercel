@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Mapa de Projetos - Água que Alimenta{% endblock %}
+
+{% block styles %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+    crossorigin="anonymous" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"
+    crossorigin="anonymous" />
+<link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"
+    crossorigin="anonymous" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+    crossorigin="anonymous" />
+
+<!-- Page Specific CSS -->
+<link rel="stylesheet" href="{{ url_for('static', path='css/pages/mapa.css') }}?v=1.3">
+{% endblock %}
+
+{% block content %}
+<div class="map-full-container" data-contexto="{{ contexto|default('geral') }}">
+
+    <div id="mapa-wrapper">
+        <!-- Top Bar Container (Search + Fullscreen) -->
+        <div class="map-top-bar">
+            <!-- Search Bar -->
+            <div class="search-container position-relative">
+                <div class="input-group overflow-hidden bg-white shadow-sm" style="border-radius: 20px;">
+                    <span class="input-group-text bg-white border-0 ps-3"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control border-0 shadow-none" id="searchBeneficiario"
+                        placeholder="Buscar..." autocomplete="off">
+                </div>
+                <!-- Results Dropdown -->
+                <ul class="dropdown-menu w-100 mt-2 border-0 shadow-lg" id="searchResults"
+                    style="z-index: 2000; overflow: hidden; display: none;"></ul>
+            </div>
+
+            <button class="btn-fullscreen shadow-sm" onclick="toggleFullScreen()" title="Tela Cheia">
+                <i class="bi bi-arrows-fullscreen" id="iconFullscreen"></i>
+            </button>
+        </div>
+
+        <!-- Floating Toolbar (Desktop) -->
+        <div class="map-floating-toolbar d-none d-md-flex">
+            <!-- Stats -->
+            <button class="btn btn-glass shadow-sm"
+                onclick="new bootstrap.Modal(document.getElementById('modalStats')).show()">
+                <i class="bi bi-pie-chart-fill me-2 text-primary"></i>Estatísticas
+            </button>
+
+            <!-- Actions -->
+            <div class="btn-group shadow-sm bg-white rounded-pill" role="group">
+                <button class="btn btn-light rounded-pill-start border-0 fw-bold text-primary px-3"
+                    onclick="openModalManual()" title="Adicionar Ponto">
+                    <i class="bi bi-geo-alt-fill me-1"></i> Adicionar
+                </button>
+                <div class="vr my-2"></div>
+                <button class="btn btn-light border-0 px-3"
+                    onclick="new bootstrap.Modal(document.getElementById('modalImport')).show()" title="Importar">
+                    <i class="bi bi-cloud-upload-fill"></i>
+                </button>
+                <div class="vr my-2"></div>
+                <a href="/gestao/mapa/categorias" class="btn btn-light rounded-pill-end border-0 px-3"
+                    title="Categorias">
+                    <i class="bi bi-gear-fill"></i>
+                </a>
+            </div>
+
+            <!-- Draw Tools -->
+            <div class="btn-group shadow-sm bg-white rounded-pill ms-2" role="group">
+                <button class="btn btn-light rounded-pill-start border-0 text-dark px-3" onclick="startPolygonDraw()"
+                    title="Desenhar Área">
+                    <i class="bi bi-pentagon"></i>
+                </button>
+                <button class="btn btn-light border-0 text-dark px-3" onclick="startRectangleDraw()"
+                    title="Desenhar Retângulo">
+                    <i class="bi bi-square"></i>
+                </button>
+                <button class="btn btn-light rounded-pill-end border-0 text-warning px-3" onclick="startPolylineDraw()"
+                    title="Desenhar Linha">
+                    <i class="bi bi-lightning-fill"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="map"></div>
+
+        <!-- Bottom Sheet Container (Mobile) -->
+        <div id="mobileBottomSheet" class="bottom-sheet d-md-none">
+            <div class="bottom-sheet-handle-bar" onclick="closeBottomSheet()">
+                <div class="bottom-sheet-handle"></div>
+            </div>
+            <!-- Close Button for Bottom Sheet -->
+            <button type="button" class="btn-close position-absolute top-0 end-0 m-3" aria-label="Close"
+                onclick="closeBottomSheet()"></button>
+
+            <div class="bottom-sheet-content" id="bottomSheetBody">
+                <!-- Content Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Action Hub FAB (Blue +) -->
+        <button class="fab-action shadow-lg" onclick="openActionHub()">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+
+        <!-- Action Hub Offcanvas (Bottom) -->
+        <div class="offcanvas offcanvas-bottom h-auto rounded-top-4" tabindex="-1" id="offcanvasActionHub"
+            style="z-index: 2050;">
+            <div class="offcanvas-header border-bottom">
+                <h5 class="offcanvas-title fw-bold">Ações Rápidas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+            </div>
+            <div class="offcanvas-body p-3">
+                <div class="d-grid gap-3">
+                    <button class="btn btn-primary btn-lg d-flex align-items-center justify-content-center gap-2"
+                        onclick="openModalManual()">
+                        <i class="bi bi-geo-alt-fill"></i> Adicionar Ponto
+                    </button>
+                    <button
+                        class="btn btn-outline-primary btn-lg d-flex align-items-center justify-content-center gap-2"
+                        onclick="openModalImport()">
+                        <i class="bi bi-cloud-upload-fill"></i> Importar Excel
+                    </button>
+                    <a href="/gestao/mapa/categorias"
+                        class="btn btn-outline-secondary btn-lg d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi bi-gear-fill"></i> Categorias
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Button (Mobile Trigger) -->
+        <button class="fab-filter" onclick="openFilterOffcanvas()">
+            <i class="bi bi-filter"></i>
+        </button>
+
+        <!-- Filter Offcanvas (Mobile) -->
+        <div class="offcanvas offcanvas-bottom h-50 rounded-top-4" tabindex="-1" id="offcanvasFilters"
+            aria-labelledby="offcanvasFiltersLabel">
+            <div class="offcanvas-header border-bottom">
+                <h5 class="offcanvas-title fw-bold" id="offcanvasFiltersLabel">Filtros</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body" id="mobileFilterBody">
+                <!-- Injected via JS -->
+            </div>
+            <div class="offcanvas-footer p-3 border-top">
+                <button class="btn btn-primary w-100 btn-lg" onclick="confirmFilters()">Aplicar Filtros</button>
+            </div>
+        </div>
+
+        <!-- Point Details Offcanvas (Mobile) -->
+        <div class="offcanvas offcanvas-bottom h-auto rounded-top-4" tabindex="-1" id="offcanvasPoint"
+            style="z-index: 2050;">
+            <div class="offcanvas-header border-bottom">
+                <h5 class="offcanvas-title fw-bold" id="offcanvasPointTitle">Detalhes do Ponto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-3" id="offcanvasPointBody">
+                <!-- JS Injects Buttons Here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Ponto/Área -->
+<div class="modal fade" id="modalNovoPonto" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Novo Ponto no Mapa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- GPS Alert Container -->
+                <div id="gpsAlertContainer"></div>
+
+                <form id="formNovoPonto" onsubmit="salvarPonto(event)">
+                    <input type="hidden" id="hidden_id" name="id">
+                    <input type="hidden" id="hidden_poligono" name="poligono">
+
+                    <div class="row align-items-end mb-3">
+                        <div class="col-md-5">
+                            <label for="lat" class="form-label">Latitude</label>
+                            <input type="number" step="any" class="form-control" id="lat" name="latitude" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="lng" class="form-label">Longitude</label>
+                            <input type="number" step="any" class="form-control" id="lng" name="longitude" required>
+                        </div>
+                        <div class="col-md-2 d-flex gap-1 mt-2 mt-md-0">
+                            <button type="button" class="btn btn-outline-primary flex-grow-1"
+                                onclick="getCurrentLocation()" title="Usar GPS Atual">
+                                <i class="bi bi-crosshair"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary flex-grow-1"
+                                onclick="window.captureOnMap()" title="Clicar no mapa">
+                                <i class="bi bi-map"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="area_calc" class="form-label">Dimensão Calculada</label>
+                            <input type="text" class="form-control" id="area_calc" readonly placeholder="N/A">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="cor" class="form-label">Cor do Marcador/Área</label>
+                            <input type="color" class="form-control form-control-color w-100" id="cor" name="cor"
+                                value="#3388ff" title="Escolha a cor">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome do Local</label>
+                        <input type="text" class="form-control" id="nome" required
+                            placeholder="Ex: Cisterna da Dona Maria">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tipo" class="form-label">Tipo</label>
+                        <select class="form-select" id="tipo" required>
+                            <!-- Populated via JS -->
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" rows="3"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fotoInput" class="form-label">Foto do Local</label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="fotoInput" accept="image/*">
+                            <span class="input-group-text d-none" id="uploadStatus">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                            </span>
+                        </div>
+                        <input type="hidden" id="fotoUrlHidden">
+                        <small class="text-muted">A imagem será carregada automaticamente ao selecionar.</small>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary" id="btnSalvar">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importação -->
+<div class="modal fade" id="modalImport" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Importar Pontos (Excel/CSV)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <label class="form-label m-0">Selecione o arquivo (.xlsx ou .csv)</label>
+                    <a href="/api/mapa/modelo-importacao" class="btn btn-sm btn-outline-secondary" download>
+                        <i class="bi bi-download me-1"></i>Baixar Modelo Padrão
+                    </a>
+                </div>
+                <div class="mb-3">
+                    <input type="file" class="form-control" id="fileImport" accept=".csv, .xlsx, .xls">
+                </div>
+                <div class="d-grid mb-3">
+                    <button class="btn btn-primary" onclick="uploadPreview()">
+                        <i class="bi bi-cloud-upload me-2"></i>Carregar Prévia
+                    </button>
+                </div>
+
+                <div id="previewContainer" style="display:none;" class="border-top pt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="text-primary m-0">Pontos Encontrados: <span id="previewCount"
+                                class="badge bg-primary">0</span></h6>
+                    </div>
+
+                    <div class="table-responsive border rounded mb-3" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-sm table-striped m-0" style="font-size: 0.9em;">
+                            <thead class="table-dark sticky-top">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Lat</th>
+                                    <th>Lng</th>
+                                    <th>Tipo</th>
+                                    <th>Responsável</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-grid">
+                        <button class="btn btn-success" onclick="confirmImport()">
+                            <i class="bi bi-check-circle-fill me-2"></i>Confirmar Importação
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Estatísticas -->
+<div class="modal fade" id="modalStats" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Estatísticas Territoriais</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <canvas id="statsChart"></canvas>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-center">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Qtd</th>
+                                </tr>
+                            </thead>
+                            <tbody id="statsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Vendor Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"
+    crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"
+    crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+<!-- Page Script -->
+<script src="{{ url_for('static', path='js/pages/mapa.js') }}?v=1.3" defer></script>
+{% endblock %}

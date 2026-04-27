@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Portal - Água que Alimenta{% endblock %}
+{% block styles %}
+<style>
+    /* Verifique se o seu base.html já tem um 'padding-top' para o body.
+       Se o conteúdo ficar atrás do header, avise-me.
+    */
+    .card {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Seção Geral -->
+    <div class="row g-4 justify-content-center mb-5">
+        <div class="col-lg-3 col-md-4">
+            <a href="/consolidado" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-primary">
+                    <i class="bi bi-table"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Consolidado</h5>
+                <p class="text-muted small">Ver tabelas de resumo e KPIs.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/graficos" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-warning">
+                    <i class="bi bi-bar-chart-line-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Gráficos</h5>
+                <p class="text-muted small">Analisar dados de forma visual.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/beneficiarios" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-success">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Beneficiários</h5>
+                <p class="text-muted small">Pesquisar e visualizar os dados.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/api/mapa/geral" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-secondary">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Mapa Geral</h5>
+                <p class="text-muted small">Visualização pública geográfica.</p>
+            </a>
+        </div>
+        {% if user_username == 'fgermino' %}
+        <div class="col-lg-3 col-md-4">
+            <a href="/api/mapa/privado" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-danger">
+                    <i class="bi bi-map-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Mapa Coordenação</h5>
+                <p class="text-muted small">Visualização estratégica restrita.</p>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if is_admin %}
+    <div class="section-divider">Gestão Administrativa</div>
+    <div class="row g-4 justify-content-center">
+        <div class="col-lg-3 col-md-4">
+            <a href="/processar" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-primary">
+                    <i class="bi bi-person-plus-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Adicionar Beneficiário</h5>
+                <p class="text-muted small">Cadastro rápido via OCR.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/cotacoes" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-danger">
+                    <i class="bi bi-receipt-cutoff"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Cotações</h5>
+                <p class="text-muted small">Gerenciar contratos e fornecedores.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/documentacao" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-dark">
+                    <i class="bi bi-folder-fill"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Documentação</h5>
+                <p class="text-muted small">Gerenciar arquivos do projeto.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/monitoramento-grh" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-info">
+                    <i class="bi bi-calendar-check"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Monitoramento GRH</h5>
+                <p class="text-muted small">Acompanhar e editar eventos.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/planejamento" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-teal">
+                    <i class="bi bi-list-task"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Planejamento</h5>
+                <p class="text-muted small">Gestão detalhada de metas e execução física.</p>
+            </a>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <a href="/fila-validacao" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-info">
+                    <i class="bi bi-list-check"></i>
+                </div>
+                <h5 class="card-title fw-bold-custom">Fila de Validação</h5>
+                <p class="text-muted small">Rever e aprovar formulários importados.</p>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<!-- Scripts específicos do portal se necessário -->
+{% endblock %}

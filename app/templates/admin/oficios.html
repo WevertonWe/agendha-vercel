@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Controle de Ofícios - Agendha{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-envelope-paper-fill me-2"></i>Controle de Ofícios</h1>
+        <a href="/hub" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Voltar ao Hub
+        </a>
+    </div>
+
+    <!-- Card Principal -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-list-columns-reverse me-1"></i> Histórico de Envios
+            </h6>
+            <button class="btn btn-primary btn-sm shadow-sm" onclick="abrirModalNovoOficio()">
+                <i class="bi bi-plus-circle-fill me-1"></i> Novo Ofício
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover align-middle w-100 mb-0">
+                    <thead class="bg-light text-secondary text-uppercase small fw-bold">
+                        <tr>
+                            <th class="text-center" style="width: 5%;">ID</th>
+                            <th style="width: 10%;">Nº Ofício</th>
+                            <th>Destinatário</th>
+                            <th class="text-center" style="width: 10%;">Data</th>
+                            <th>Motivo/Assunto</th>
+                            <th class="text-center" style="width: 5%;">Doc</th>
+                            <th class="text-center" style="width: 10%;">Resp.</th>
+                            <th class="text-center" style="width: 12%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for oficio in oficios %}
+                        <tr>
+                            <td class="text-center fw-bold text-muted">{{ oficio.id }}</td>
+                            <td>{{ oficio.numero_oficio or '-' }}</td>
+                            <td class="fw-bold text-dark">{{ oficio.destinatario }}</td>
+                            <td class="text-center">{{ oficio.data_envio | date_br }}</td>
+                            <td>{{ oficio.motivo_descricao }}</td>
+                            <td class="text-center">
+                                {% if oficio.caminho_arquivo %}
+                                <a href="/oficios/download/{{ oficio.caminho_arquivo }}" target="_blank"
+                                    class="btn btn-sm btn-outline-danger border-0" title="Baixar PDF">
+                                    <i class="bi bi-file-earmark-pdf-fill fs-5"></i>
+                                </a>
+                                {% else %}
+                                <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center"><span class="badge bg-light text-dark border">{{ oficio.criado_por
+                                    }}</span></td>
+                            <td class="text-center text-nowrap">
+                                <button class="btn btn-warning btn-sm shadow-sm me-1" data-id="{{ oficio.id }}"
+                                    data-numero="{{ oficio.numero_oficio or '' }}"
+                                    data-destinatario="{{ oficio.destinatario }}" data-data="{{ oficio.data_envio }}"
+                                    data-motivo="{{ oficio.motivo_descricao }}" onclick="abrirModalEdicaoOficio(this)"
+                                    title="Editar">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm shadow-sm"
+                                    onclick="excluirOficio('{{ oficio.id }}')" title="Excluir">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted fst-italic">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                Nenhum ofício registrado ainda.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ofício (Criação/Edição) -->
+<div class="modal fade" id="modalOficio" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalTitulo">
+                    <i class="bi bi-file-earmark-plus-fill me-2"></i><span>Novo Ofício</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formOficio" class="needs-validation" novalidate enctype="multipart/form-data">
+                    <input type="hidden" id="oficio_id" name="id">
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="numero_oficio" class="form-label small text-muted text-uppercase fw-bold">Nº
+                                Ofício (Opcional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-hash"></i></span>
+                                <input type="text" class="form-control" id="numero_oficio" name="numero_oficio"
+                                    placeholder="Ex: 001/2025">
+                            </div>
+                        </div>
+
+                        <div class="col-md-8 mb-3">
+                            <label for="destinatario"
+                                class="form-label small text-muted text-uppercase fw-bold">Destinatário</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
+                                <input type="text" class="form-control" id="destinatario" name="destinatario" required
+                                    placeholder="Ex: Prefeitura Municipal">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="data_envio" class="form-label small text-muted text-uppercase fw-bold">Data de
+                                Envio</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-calendar-event"></i></span>
+                                <input type="date" class="form-control" id="data_envio" name="data_envio" required>
+                            </div>
+                        </div>
+
+                        <div class="col-md-8 mb-3">
+                            <label for="motivo_descricao"
+                                class="form-label small text-muted text-uppercase fw-bold">Assunto / Motivo</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-card-text"></i></span>
+                                <input type="text" class="form-control" id="motivo_descricao" name="motivo_descricao"
+                                    required placeholder="Ex: Solicitação de Apoio">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="arquivo" class="form-label small text-muted text-uppercase fw-bold">Anexo
+                            (PDF/Imagem)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-paperclip"></i></span>
+                            <input type="file" class="form-control" id="arquivo" name="arquivo">
+                        </div>
+                        <div class="form-text small">Selecione apenas se desejar enviar/alterar o arquivo.</div>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer bg-light px-4 py-3 border-top-0 d-flex justify-content-between">
+                <div></div>
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary fw-bold shadow-sm px-4"
+                        onclick="document.getElementById('formOficio').dispatchEvent(new Event('submit', {cancelable: true}))">
+                        <i class="bi bi-send-fill me-1"></i> Registrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/oficios.js"></script>
+{% endblock %}

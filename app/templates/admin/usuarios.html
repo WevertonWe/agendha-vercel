@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Gerenciamento de Usuários - Agendha{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-people-fill me-2"></i>Gerenciamento de Usuários</h1>
+        <a href="/hub" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Voltar ao Hub
+        </a>
+    </div>
+
+    <!-- Tabela em Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-person-badge-fill me-1"></i> Usuários do Sistema
+            </h6>
+            <button id="btn-novo-usuario" class="btn btn-primary btn-sm shadow-sm">
+                <i class="bi bi-person-plus-fill me-1"></i> Adicionar Usuário
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover align-middle w-100 mb-0">
+                    <thead class="bg-light text-secondary text-uppercase small fw-bold">
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Nome Completo</th>
+                            <th class="text-center">Perfil</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center" style="width: 12%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-usuarios">
+                        <!-- JS Render -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Usuário (Criação/Edição) -->
+<div class="modal fade" id="modalUsuario" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="modalTitulo">
+                    <i class="bi bi-person-plus-fill me-2"></i><span>Novo Usuário</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="form-usuario" class="needs-validation" novalidate>
+                    <input type="hidden" id="usuario_id"> <!-- Guarda o username original na edição -->
+
+                    <div class="mb-3">
+                        <label for="username" class="form-label small text-muted text-uppercase fw-bold">Usuário
+                            (Login)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="username" name="username" required
+                                placeholder="Ex: joao.silva">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label small text-muted text-uppercase fw-bold">Senha</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                            <input type="password" class="form-control" id="password" name="password"
+                                placeholder="Mínimo 6 caracteres">
+                        </div>
+                        <div class="form-text small">Deixe em branco para manter a senha atual (apenas na edição).</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label small text-muted text-uppercase fw-bold">Nome
+                            Completo</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-card-text"></i></span>
+                            <input type="text" class="form-control" id="full_name" name="full_name" required
+                                placeholder="Ex: João da Silva">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="role" class="form-label small text-muted text-uppercase fw-bold">Perfil de
+                            Acesso</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-shield-lock"></i></span>
+                            <select class="form-select" id="role" name="role">
+                                <option value="user">Usuário Padrão</option>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="is_active" checked>
+                        <label class="form-check-label fw-bold" for="is_active">Usuário Ativo</label>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer bg-light px-4 py-3 border-top-0 d-flex justify-content-between">
+                <div></div> <!-- Spacer -->
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary fw-bold shadow-sm px-4"
+                        onclick="document.getElementById('form-usuario').dispatchEvent(new Event('submit', {cancelable: true}))">
+                        <i class="bi bi-save me-1"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/usuarios.js"></script>
+{% endblock %}

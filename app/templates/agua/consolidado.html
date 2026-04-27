@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Consolidado{% endblock %}
+{% block styles %}
+<style>
+    /* Table Legibility Enhancements */
+    #tbody-consolidado td {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    #tbody-consolidado td:first-child {
+        text-align: left;
+        font-weight: 500;
+    }
+
+    /* Ensure table headers are centered */
+    .table thead th {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .table thead th:first-child {
+        text-align: left;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<main class="container mb-5 pt-4">
+    <!-- Header Padronizado -->
+    <div class="d-flex align-items-center mb-4 border-bottom pb-3">
+        <h1 class="h2 page-header-title mb-0">
+            <i class="bi bi-grid-1x2-fill me-2 text-primary"></i>Dashboard Consolidado
+        </h1>
+    </div>
+
+    <!-- KPI Cards Section -->
+    <div class="row g-4 mb-5">
+        <div class="col-lg-3 col-md-6">
+            <div class="card-kpi h-100 p-4 position-relative border-primary">
+                <div class="card-body p-0">
+                    <h3 class="kpi-number text-primary" id="kpi-total-beneficiarios">...</h3>
+                    <p class="kpi-label">Beneficiários Totais</p>
+                    <i class="bi bi-people kpi-icon text-primary"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card-kpi h-100 p-4 position-relative border-success">
+                <div class="card-body p-0">
+                    <h3 class="kpi-number text-success" id="kpi-cadastrados">...</h3>
+                    <p class="kpi-label">Status "Cadastrado"</p>
+                    <i class="bi bi-check-circle kpi-icon text-success"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card-kpi h-100 p-4 position-relative border-warning">
+                <div class="card-body p-0">
+                    <h3 class="kpi-number text-warning" id="kpi-em-cadastro">...</h3>
+                    <p class="kpi-label">Status "Em Cadastro"</p>
+                    <i class="bi bi-pencil-square kpi-icon text-warning"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card-kpi h-100 p-4 position-relative border-danger">
+                <div class="card-body p-0">
+                    <h3 class="kpi-number text-danger" id="kpi-outros-status">...</h3>
+                    <p class="kpi-label">Com Outros Status</p>
+                    <i class="bi bi-exclamation-circle kpi-icon text-danger"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Consolidada -->
+    <div class="card-custom border-0 shadow-sm">
+        <div class="card-body p-4">
+            <h4 class="mb-4 text-secondary pb-2 border-bottom">
+                <i class="bi bi-table me-2"></i>Consolidado por Município
+            </h4>
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered table-striped align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="py-3 text-muted text-uppercase small fw-bold">Município</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">Total Benef.</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">Em Cadastro</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">Cadastrado</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">A Construir</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">Construída</th>
+                            <th class="py-3 text-muted text-uppercase small fw-bold text-center">Outros Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-consolidado">
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <span class="spinner-border spinner-border-sm text-primary me-2"></span>Carregando
+                                dados...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/pages/consolidado.js?v=2.0"></script>
+{% endblock %}

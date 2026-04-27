@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="fa fa-user-circle"></i> Perfil do Beneficiário
+            </h4>
+            <a href="/beneficiarios" class="btn btn-light btn-sm">
+                <i class="fa fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <h2 class="text-primary">{{ beneficiario.nome_completo or 'Não Informado' }}</h2>
+                    <p class="text-muted"><i class="fa fa-id-card"></i> CPF: {{ beneficiario.cpf or '-' }}</p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6 mb-3">
+                            <label class="fw-bold">Município</label>
+                            <div class="p-2 bg-light border rounded">{{ beneficiario.municipio or '-' }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="fw-bold">Comunidade</label>
+                            <div class="p-2 bg-light border rounded">{{ beneficiario.comunidade or '-' }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="fw-bold">Data de Nascimento</label>
+                            <div class="p-2 bg-light border rounded">{{ beneficiario.data_nascimento or '-' }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="fw-bold">NIS</label>
+                            <div class="p-2 bg-light border rounded">{{ beneficiario.nis or '-' }}</div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h5>Status do Processo</h5>
+                    {% if beneficiario.status == 'Aprovado' %}
+                        <span class="badge bg-success fs-5">Aprovado</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark fs-5">{{ beneficiario.status }}</span>
+                    {% endif %}
+                </div>
+                
+                <div class="col-md-4 text-center border-start">
+                    <h5 class="mb-3">Documentação</h5>
+
+                    <!-- Debug Temporário -->
+                    <div class="alert alert-warning p-1 text-start" style="font-size: 10px;">
+                        <b>Debug Info:</b><br>
+                        ID: {{ beneficiario.id }}<br>
+                        Doc (caminho_documento): {{ beneficiario.caminho_documento }}<br>
+                        Doc (arquivo_caminho): {{ beneficiario.arquivo_caminho }}<br>
+                        Doc (documento): {{ beneficiario.documento }}
+                    </div>
+                    
+                    {% if beneficiario.caminho_documento or beneficiario.arquivo_caminho %}
+                        <i class="fa fa-file-pdf-o fa-5x text-danger mb-3"></i>
+                        <br>
+                        <h6 class="text-truncate px-3">{{ beneficiario.caminho_documento or beneficiario.arquivo_caminho }}</h6>
+                        
+                        <a href="/api/beneficiarios/download/{{ beneficiario.id }}" target="_blank" class="btn btn-primary w-100 mb-2">
+                            <i class="fa fa-eye"></i> Visualizar / Baixar
+                        </a>
+                    {% else %}
+                        <i class="fa fa-file-o fa-5x text-muted mb-3"></i>
+                        <br>
+                        <div class="alert alert-secondary">Nenhum documento anexado.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
