@@ -19,3 +19,4 @@ pytz
 reportlab
 openpyxl
 pymupdf
+pdfplumber
