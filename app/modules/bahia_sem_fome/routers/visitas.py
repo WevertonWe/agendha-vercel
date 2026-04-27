@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import sqlite3
-import pandas as pd
+# import pandas as pd
 import io
 from datetime import datetime
 from app.core.database import get_db_connection

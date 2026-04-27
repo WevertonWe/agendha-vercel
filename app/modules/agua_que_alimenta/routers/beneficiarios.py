@@ -3,7 +3,7 @@ import uuid
 import logging
 import sqlite3
 import datetime
-import pandas as pd
+# import pandas as pd
 import io
 import json
 import asyncio

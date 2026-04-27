@@ -1,0 +1,7 @@
+*.db
+*.sql
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+app/uploads/
+docs/

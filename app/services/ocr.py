@@ -1,16 +1,16 @@
 import logging
 import asyncio
 from typing import Dict, Any
-import cv2
-import numpy as np
-import pytesseract
-from PIL import Image
-from app.config import settings
 import json
+# import cv2
+# import numpy as np
+# import pytesseract
+# from PIL import Image
+from app.config import settings
 
 # --- Configuração de Ferramentas Externas ---
 # Configura o caminho do Tesseract a partir das settings
-pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+# pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
 
 # ==============================================================================
 # CONFIGURAÇÕES DE OCR (ROIs)

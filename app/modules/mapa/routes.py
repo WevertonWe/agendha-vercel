@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Request, HTTPException, Depends, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-import pandas as pd
+# import pandas as pd
 import io
 
 from app.config import settings

@@ -3,7 +3,7 @@ import logging
 import zipfile
 import os
 import tempfile
-import pandas as pd
+# import pandas as pd
 import win32com.client
 import pythoncom
 from pathlib import Path
