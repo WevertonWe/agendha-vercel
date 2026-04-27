@@ -1,5 +1,5 @@
-
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import os
 import logging
@@ -9,12 +9,11 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-def configure_gemini():
+def get_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key)
-        return True
-    return False
+        return genai.Client(api_key=api_key)
+    return None
 
 async def extrair_lista_presenca(file_content: bytes, mime_type: str) -> str:
     """
@@ -25,15 +24,11 @@ async def extrair_lista_presenca(file_content: bytes, mime_type: str) -> str:
     - Trata rechamada (retries) em caso de erro 429 (Quota).
     - Limpa e retorna o JSON bruto da resposta.
     """
-    """
-    Analisa uma Lista de Presença ou documento similar e extrai nomes e CPFs via Gemini.
-    """
-    if not configure_gemini():
+    client = get_gemini_client()
+    if not client:
         return json.dumps({"erro": "Configuração da API inválida"})
 
-    nome_modelo = "gemini-flash-latest" 
-    
-    dados_arquivo = {"mime_type": mime_type, "data": file_content}
+    nome_modelo = "gemini-2.5-flash" 
     
     prompt = """
     Analise este documento (Lista de Presença, Assinatura ou Cadastro).
@@ -61,8 +56,16 @@ async def extrair_lista_presenca(file_content: bytes, mime_type: str) -> str:
     for attempt in range(max_retries):
         try:
             logger.info(f"GRH Scan: Tentativa {attempt+1}/{max_retries} com modelo: {nome_modelo}")
-            model = genai.GenerativeModel(nome_modelo)
-            response = await asyncio.to_thread(model.generate_content, [prompt, dados_arquivo])
+            part_arquivo = types.Part.from_bytes(data=file_content, mime_type=mime_type)
+            
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=nome_modelo,
+                contents=[prompt, part_arquivo],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
             
             texto = response.text.replace("```json", "").replace("```", "").strip()
             if "{" in texto:
@@ -74,10 +77,10 @@ async def extrair_lista_presenca(file_content: bytes, mime_type: str) -> str:
 
         except Exception as e:
             last_error = e
-            error_str = str(e)
-            logger.warning(f"Erro na tentativa {attempt+1}: {error_str}")
+            error_str = str(e).lower()
+            logger.warning(f"Erro na tentativa {attempt+1}: {e}")
 
-            if ("429" in error_str or "quota" in error_str.lower()) and attempt < max_retries - 1:
+            if ("429" in error_str or "quota" in error_str) and attempt < max_retries - 1:
                 time.sleep(5)
                 continue
             
