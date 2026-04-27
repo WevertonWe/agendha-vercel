@@ -1139,10 +1139,13 @@ async def gerar_analise_ia(data: RelatorioRequest, db: sqlite3.Connection = Depe
         """
 
         # Reutilizando a lógica de configuração e chamada do Gemini
-        if ai_vision.configure_gemini():
-            import google.generativeai as genai
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            response = await asyncio.to_thread(model.generate_content, prompt)
+        client = ai_vision.get_gemini_client()
+        if client:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=[prompt]
+            )
             analise_texto = response.text
             
             if data.email:

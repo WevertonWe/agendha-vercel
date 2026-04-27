@@ -1,5 +1,5 @@
 import os
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv(".env")
@@ -9,12 +9,13 @@ if not api_key:
     print("No GOOGLE_API_KEY found.")
     exit(1)
 
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
 try:
-    models = genai.list_models()
-    for m in models:
+    # No novo SDK, a listagem de modelos é feita via client.models.list()
+    for m in client.models.list():
+        # Verificamos se o modelo suporta geração de conteúdo
         if "generateContent" in m.supported_generation_methods:
-            print(m.name)
+            print(f"Modelo: {m.name} | Display: {m.display_name}")
 except Exception as e:
     print("Error:", e)

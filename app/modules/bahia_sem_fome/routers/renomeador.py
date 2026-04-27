@@ -7,7 +7,8 @@ import asyncio
 from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 import fitz # PyMuPDF
 import pdfplumber
@@ -22,11 +23,11 @@ class RenameInfo(BaseModel):
 
 MODELOS_PERMITIDOS = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
 
-def configure_genai():
+def get_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY não configurada.")
-    genai.configure(api_key=api_key)
+    if api_key:
+        return genai.Client(api_key=api_key)
+    return None
 
 def extrair_local_regex(texto: str):
     nome, tipo = None, None
@@ -122,7 +123,11 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
             return new_name
 
         # 3. TENTATIVA: IA Gemini (Fallback se as locais falharem)
-        # Extração básica para o prompt (usando bytes para o Gemini se necessário, ou texto do FitZ como base)
+        client = get_gemini_client()
+        if not client:
+             logger.warning("API do Gemini não configurada. IA indisponível.")
+             return filename
+
         text_for_ai = ""
         try:
             with fitz.open(stream=file_content, filetype="pdf") as pdf:
@@ -135,7 +140,6 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
             logger.warning(f"Texto não extraído de {filename}. IA não terá contexto.")
             return filename
 
-        configure_genai()
         prompt = (
             "Analise o texto abaixo extraído de um documento do projeto Bahia Sem Fome. "
             "Extraia o nome do beneficiário (geralmente após 'NOME DO BENEFICIÁRIO') "
@@ -148,12 +152,12 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
         for nome_modelo in MODELOS_PERMITIDOS:
             try:
                 logger.info(f"Tentando renomear '{filename}' com o modelo: {nome_modelo}")
-                model = genai.GenerativeModel(nome_modelo)
                 
                 response = await asyncio.to_thread(
-                    model.generate_content,
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
+                    client.models.generate_content,
+                    model=nome_modelo,
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=RenameInfo
                     )

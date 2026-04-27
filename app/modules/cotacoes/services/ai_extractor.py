@@ -1,34 +1,29 @@
-
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import os
 import logging
 import asyncio
 from dotenv import load_dotenv
 
-# Reusing configuration if possible, or re-implementing
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-def configure_gemini():
+def get_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key)
-        return True
-    return False
+        return genai.Client(api_key=api_key)
+    return None
 
 async def extrair_dados_proposta(file_content: bytes, mime_type: str) -> str:
     """
     Analisa uma proposta/orçamento e extrai dados estruturados via Gemini.
     """
-    if not configure_gemini():
+    client = get_gemini_client()
+    if not client:
         return json.dumps({"erro": "Configuração da API inválida"})
 
-    # --- Configuração Simplificada (One Model Strategy) ---
-    # Usamos o modelo mais estável/rápido definido.
-    nome_modelo = "gemini-flash-latest" 
-    
-    dados_arquivo = {"mime_type": mime_type, "data": file_content}
+    nome_modelo = "gemini-2.5-flash" 
     
     prompt = """
     Analise este documento de orçamento/proposta comercial.
@@ -52,8 +47,17 @@ async def extrair_dados_proposta(file_content: bytes, mime_type: str) -> str:
     for attempt in range(max_retries):
         try:
             logger.info(f"Tentativa {attempt+1}/{max_retries} com modelo: {nome_modelo}")
-            model = genai.GenerativeModel(nome_modelo)
-            response = await asyncio.to_thread(model.generate_content, [prompt, dados_arquivo])
+            
+            part_arquivo = types.Part.from_bytes(data=file_content, mime_type=mime_type)
+            
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=nome_modelo,
+                contents=[prompt, part_arquivo],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
             
             texto = response.text.replace("```json", "").replace("```", "").strip()
             if "{" in texto:
@@ -65,18 +69,14 @@ async def extrair_dados_proposta(file_content: bytes, mime_type: str) -> str:
 
         except Exception as e:
             last_error = e
-            error_str = str(e)
+            error_str = str(e).lower()
             logger.warning(f"Erro na tentativa {attempt+1}: {error_str}")
 
-            # Se for Rate Limit (429), espera e tenta de novo (apenas 1 retry extra)
-            if ("429" in error_str or "quota" in error_str.lower() or "resource exhausted" in error_str.lower()) and attempt < max_retries - 1:
+            if ("429" in error_str or "quota" in error_str or "resource exhausted" in error_str) and attempt < max_retries - 1:
                 logger.warning("Rate Limit detectado. Aguardando 5s...")
                 time.sleep(5)
                 continue
             
-            # Se for outro erro ou acabou as tentativas, sai do loop
             break
-
-
 
     return json.dumps({"erro": "Falha na análise IA.", "details": f"Modelo {nome_modelo} falhou após tentativas. Erro: {str(last_error)}"})
