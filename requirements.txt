@@ -22,3 +22,4 @@ pydantic-settings
 reportlab
 psycopg2-binary
 supabase
+google-generativeai
