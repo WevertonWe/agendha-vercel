@@ -7,7 +7,6 @@ import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from google.api_core import exceptions as google_exceptions
 
 # --- Schema Pydantic para Estruturação da IA ---
 class BeneficiarioExtraido(BaseModel):
@@ -84,7 +83,6 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
     # Loop de Fallback entre Modelos
     for nome_modelo in modelos_para_tentar:
         print(f"Buscando modelo: {nome_modelo}...")
-        model = genai.GenerativeModel(nome_modelo)
         
         # Loop Interno de Smart Retry (Max 2 retentativas por modelo)
         max_retries = 2
@@ -114,18 +112,18 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
                 
                 return texto_limpo
 
-            except google_exceptions.ResourceExhausted:
-                # Erro 429: Quota Exceeded
-                msg = f"⚠️ Rate limit (429) atingido no modelo {nome_modelo}. "
-                if attempt < max_retries:
-                    logger.warning(f"{msg} Pausando 30s antes da tentativa {attempt + 2}/{max_retries + 1}...")
-                    await asyncio.sleep(30)
-                    continue # Tenta o MESMO modelo novamente
-                else:
-                    logger.error(f"{msg} Máximo de retentativas atingido. Pulando para fallback...")
-                    break # Sai do loop de retry e tenta o próximo modelo
-
             except Exception as e:
+                erro_str = str(e).lower()
+                if "429" in erro_str or "quota" in erro_str or "exhausted" in erro_str:
+                    msg = f"⚠️ Rate limit (429) atingido no modelo {nome_modelo}."
+                    if attempt < max_retries:
+                        logger.warning(f"{msg} Pausando 30s antes da tentativa {attempt + 2}/{max_retries + 1}...")
+                        await asyncio.sleep(30)
+                        continue
+                    else:
+                        logger.error(f"{msg} Máximo de retentativas atingido. Pulando para fallback...")
+                        break
+                
                 print(f"⚠️ Falha técnica no modelo {nome_modelo}: {e}")
                 ultimo_erro = str(e)
                 break # Erro não relacionado à cota (ex: schema), tenta próximo modelo

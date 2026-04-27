@@ -14,3 +14,4 @@ jinja2
 psycopg2-binary
 supabase
 google-genai
+google-api-core
