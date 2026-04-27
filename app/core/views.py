@@ -7,7 +7,11 @@ import logging
 from app.config import settings
 
 router = APIRouter(tags=["Core Views"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+# Força o caminho limpo e tenta desativar o cache (se a versão da Starlette aceitar kwargs para o env)
+try:
+    templates = Jinja2Templates(directory="app/templates", **{"env_options": {"cache_size": 0}})
+except TypeError:
+    templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/", response_class=HTMLResponse, summary="Página Portal")
 async def get_portal_page(request: Request):
@@ -17,58 +21,21 @@ async def get_portal_page(request: Request):
 
 @router.get("/portal", response_class=HTMLResponse)
 async def get_real_portal_page(request: Request):
-    # Tenta obter o usuário do cookie (lógica simplificada para não quebrar se falhar)
-    is_admin = False
-    username = ""
-    token = request.cookies.get("access_token")
-    if token:
-        try:
-            # Remover 'Bearer ' se existir
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-            
-            from app.core.auth.utils import SECRET_KEY, ALGORITHM
-            from jose import jwt
-            
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            role = payload.get("role")
-            username = payload.get("sub", "")
-            if role in ['admin', 'diretoria']:
-                is_admin = True
-        except Exception as e:
-            logging.error(f"Erro ao validar token no portal: {e}")
-
     return templates.TemplateResponse("agua/portal.html", {
         "request": request, 
         "current_page": "portal", 
-        "is_admin": is_admin,
-        "user_username": username,
+        "is_admin": False,
+        "user_username": "Anônimo",
         "context_project": "agua"
     })
 
 @router.get("/hub", response_class=HTMLResponse)
 async def get_admin_hub_page(request: Request):
-    # Decodificar token para obter role e username
-    role = "user"
-    username = ""
-    token = request.cookies.get("access_token")
-    if token:
-        try:
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-            from app.core.auth.utils import SECRET_KEY, ALGORITHM
-            from jose import jwt
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            role = payload.get("role", "user")
-            username = payload.get("sub", "")
-        except:  # noqa: E722
-            pass
-            
     return templates.TemplateResponse("admin/admin_hub.html", {
         "request": request, 
         "current_page": "hub",
-        "user_role": role,
-        "user_username": username
+        "user_role": "user",
+        "user_username": "Anônimo"
     })
 
 @router.get("/login", response_class=HTMLResponse)

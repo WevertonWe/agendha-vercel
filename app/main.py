@@ -55,7 +55,7 @@ from app.modules.fornecedores.routers import fornecedores as fornecedores_router
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER, **{"cache_size": 0} if "cache_size" in Jinja2Templates.__init__.__code__.co_varnames else {})
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -151,13 +151,13 @@ async def internal_server_error_handler(request: Request, exc: Exception):
             status_code=500,
             content={"detail": "Erro interno do servidor. Contate o suporte."}
         )
-    return templates.TemplateResponse("errors/500.html", {"request": request}, status_code=500)
+    return HTMLResponse(content="<h1>Erro Interno 500</h1>", status_code=500)
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     if "application/json" in request.headers.get("accept", ""):
         return JSONResponse(status_code=404, content={"detail": "Não encontrado"})
-    return templates.TemplateResponse("errors/404.html", {"request": request}, status_code=404)
+    return HTMLResponse(content="<h1>Erro 404 - Não encontrado</h1>", status_code=404)
 
 
 # --- Montagem de Arquivos Estáticos ---
