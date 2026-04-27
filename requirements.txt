@@ -18,3 +18,4 @@ google-api-core
 pytz
 reportlab
 openpyxl
+pymupdf
