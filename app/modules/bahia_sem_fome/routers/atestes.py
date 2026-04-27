@@ -4,8 +4,8 @@ import zipfile
 import os
 import tempfile
 # import pandas as pd
-import win32com.client
-import pythoncom
+# import win32com.client
+# import pythoncom
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
@@ -21,19 +21,10 @@ TEMPLATE_PATH = settings.BASE_DIR / "app" / "modules" / "bahia_sem_fome" / "asse
 
 def converter_para_pdf(word_app, docx_path: Path, pdf_path: Path):
     """
-    Converte um arquivo DOCX para PDF usando o Microsoft Word instalado.
+    Fallback para ambientes sem Word (Linux/Vercel).
     """
-    try:
-        # Abre o documento (Caminho DEVE ser absoluto no Windows)
-        doc = word_app.Documents.Open(str(docx_path))
-        # wdFormatPDF = 17
-        doc.SaveAs(str(pdf_path), FileFormat=17)
-        doc.Close()
-        logger.info(f"Conversão Word -> PDF concluída: {pdf_path.name}")
-        return True
-    except Exception as e:
-        logger.error(f"Falha na conversão para PDF via Word: {e}")
-        return False
+    logger.warning("Conversão Word -> PDF ignorada (Ambiente Linux). Use LibreOffice fallback.")
+    return False
 
 @router.post("/gerar-atestes")
 async def gerar_atestes(file: UploadFile = File(...)):
@@ -49,17 +40,25 @@ async def gerar_atestes(file: UploadFile = File(...)):
         df = None
 
         if file.filename.lower().endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python')
-            df.columns = df.columns.astype(str).str.strip()
+            # Fallback para ambientes sem pandas (Vercel)
+            try:
+                import pandas as pd
+                df = pd.read_csv(io.BytesIO(content), sep=None, engine='python')
+                df.columns = df.columns.astype(str).str.strip()
+            except ImportError:
+                raise HTTPException(status_code=501, detail="Processamento de planilhas desativado neste ambiente (Pandas missing).")
         else:
-            planilhas = pd.read_excel(io.BytesIO(content), sheet_name=None)
-            
-            for _, aba_df in planilhas.items():
-                aba_df.columns = aba_df.columns.astype(str).str.strip()
-                colunas_up = [str(c).upper() for c in aba_df.columns]
-                if any("DADOS DO GRUPO FAMILIAR > NOME" in c for c in colunas_up):
-                    df = aba_df
-                    break
+            try:
+                import pandas as pd
+                planilhas = pd.read_excel(io.BytesIO(content), sheet_name=None)
+                for _, aba_df in planilhas.items():
+                    aba_df.columns = aba_df.columns.astype(str).str.strip()
+                    colunas_up = [str(c).upper() for c in aba_df.columns]
+                    if any("DADOS DO GRUPO FAMILIAR > NOME" in c for c in colunas_up):
+                        df = aba_df
+                        break
+            except ImportError:
+                raise HTTPException(status_code=501, detail="Processamento de Excel desativado neste ambiente (Pandas missing).")
 
         if df is None or df.empty:
             raise HTTPException(status_code=400, detail="Planilha inválida. Aba de dados não encontrada.")
@@ -84,13 +83,13 @@ async def gerar_atestes(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Template DOCX não encontrado.")
 
     # 1. Preparar ambiente para conversão via Word (Opção B)
-    pythoncom.CoInitialize()
+    # pythoncom.CoInitialize()
     word_app = None
     
     try:
         # Inicia instância silenciosa do Word
-        word_app = win32com.client.Dispatch("Word.Application")
-        word_app.Visible = False
+        # word_app = win32com.client.Dispatch("Word.Application")
+        # word_app.Visible = False
         
         zip_buffer = io.BytesIO()
         arquivos_gerados = 0
@@ -110,7 +109,10 @@ async def gerar_atestes(file: UploadFile = File(...)):
                     
                     # Extração e Limpeza
                     def limpar_valor(val):
-                        v = str(val).strip() if pd.notna(val) and str(val).lower() != 'nan' else ""
+                        # Proteção contra pandas não instalado
+                        if val is None or str(val).lower() == 'nan':
+                             return ""
+                        v = str(val).strip()
                         if v.endswith(".0"): 
                             v = v[:-2]
                         return v
@@ -161,7 +163,7 @@ async def gerar_atestes(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error(f"Erro na geração dos atestes: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro interno no motor de conversão: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno no motor de conversão (Vercel Limit): {str(e)}")
     
     finally:
         # Garante o fechamento do Word e limpeza do COM
@@ -170,4 +172,4 @@ async def gerar_atestes(file: UploadFile = File(...)):
                 word_app.Quit()
             except Exception:
                 pass
-        pythoncom.CoUninitialize()
+        # pythoncom.CoUninitialize()
