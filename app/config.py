@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS_JSON: str | None = None
     AUTH_BEARER_PREFIX: str = "Bearer"
     
+    # Supabase (Cloud Database)
+    SUPABASE_URL: str | None = None
+    SUPABASE_KEY: str | None = None
+    
     # Automation Credentials
     MDS_USER: str | None = None
     MDS_PASSWORD: str | None = None

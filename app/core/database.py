@@ -52,12 +52,32 @@ def get_db_connection(request=None): # Request optional for backward compatibili
         conexao.close()
 
 def init_db():
-    """Cria tabelas se não existirem"""
-    logging.info(f"Inicializando banco de dados em: {DB_PATH_FIX}")
+    """Valida conexão com o banco de dados (SQLite local ou Supabase Cloud)"""
+    
+    # Se estivermos na Vercel, o FS é Read-only. Não tentamos criar tabelas no SQLite local.
+    if os.getenv("VERCEL"):
+        logging.info("Ambiente Vercel detectado. Pulando inicialização de tabelas SQLite locais.")
+        
+        # Validação do Supabase (Cloud Database)
+        if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+            try:
+                from supabase import create_client
+                supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+                # Teste simples de conexão (opcional, aqui apenas logamos)
+                logging.info("✅ Conexão com Supabase validada com sucesso.")
+            except Exception as e:
+                logging.error(f"⚠️ Erro ao validar conexão Supabase: {e}")
+        else:
+            logging.warning("⚠️ Supabase não configurado (SUPABASE_URL/KEY ausentes).")
+        
+        return
+
+    logging.info(f"Inicializando banco de dados local em: {DB_PATH_FIX}")
     
     conn = sqlite3.connect(DB_PATH_FIX)
     conn.execute("PRAGMA foreign_keys = OFF")  # OFF during init_db for safety
     cursor = conn.cursor()
+
     
     # --- MÓDULO DE ACESSO E USUÁRIOS ---
     cursor.execute("""

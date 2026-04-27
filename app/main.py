@@ -68,10 +68,10 @@ async def lifespan(app: FastAPI):
     # A estrutura básica deve vir do repositório (.gitkeep) ou ser ignorada se opcional.
     logging.info("Pulando criação de pastas físicas (Ambiente Cloud).")
 
-    # 2. Inicialização de Ficheiros
-    if not os.path.exists(settings.HISTORICO_PATH):
-        with open(settings.HISTORICO_PATH, 'w', encoding='utf-8') as f:
-            json.dump([], f, ensure_ascii=False, indent=4)
+    # 2. Inicialização de Ficheiros (Desativado em Ambiente Cloud)
+    # if not os.path.exists(settings.HISTORICO_PATH):
+    #     with open(settings.HISTORICO_PATH, 'w', encoding='utf-8') as f:
+    #         json.dump([], f, ensure_ascii=False, indent=4)
 
     # 3. Verificação de Motores PDF
     # verificar_motores_pdf()
