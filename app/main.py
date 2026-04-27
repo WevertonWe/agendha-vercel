@@ -175,7 +175,9 @@ async def log_navigation(request: Request, call_next):
     # O Wrapper pega INSERT/UPDATE/DELETE. Aqui focamos em ACESSO (Leitura/Navegação).
     if request.method == "GET" and not path.startswith("/api"):
         try:
-            # Usa conexão dedicada para não interferir na thread principal
+            # Na Vercel, settings.DB_PATH pode ser Read-only ou inexistente.
+            # O sistema deve continuar funcionando mesmo se o log falhar.
+            import sqlite3
             conn = sqlite3.connect(settings.DB_PATH)
             cursor = conn.cursor()
             
@@ -191,7 +193,8 @@ async def log_navigation(request: Request, call_next):
             conn.commit()
             conn.close()
         except Exception as e:
-            logging.error(f"Erro ao registrar Audit de Navegação: {e}")
+            # Erro silencioso para não derrubar o site em produção
+            print(f"⚠️ Erro silencioso de auditoria (Log de Navegação): {e}")
             
     return response
 
@@ -204,13 +207,23 @@ async def internal_server_error_handler(request: Request, exc: Exception):
             status_code=500,
             content={"detail": "Erro interno do servidor. Contate o suporte."}
         )
-    return templates.TemplateResponse("errors/500.html", {"request": request}, status_code=500)
+    return templates.TemplateResponse(
+        request=request, 
+        name="errors/500.html", 
+        context={"request": request}, 
+        status_code=500
+    )
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     if "application/json" in request.headers.get("accept", ""):
         return JSONResponse(status_code=404, content={"detail": "Não encontrado"})
-    return templates.TemplateResponse("errors/404.html", {"request": request}, status_code=404)
+    return templates.TemplateResponse(
+        request=request, 
+        name="errors/404.html", 
+        context={"request": request}, 
+        status_code=404
+    )
 
 
 # --- Montagem de Arquivos Estáticos ---

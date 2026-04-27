@@ -38,13 +38,17 @@ async def get_real_portal_page(request: Request):
         except Exception as e:
             logging.error(f"Erro ao validar token no portal: {e}")
 
-    return templates.TemplateResponse("agua/portal.html", {
-        "request": request, 
-        "current_page": "portal", 
-        "is_admin": is_admin,
-        "user_username": username,
-        "context_project": "agua"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="agua/portal.html",
+        context={
+            "request": request, 
+            "current_page": "portal", 
+            "is_admin": is_admin,
+            "user_username": username,
+            "context_project": "agua"
+        }
+    )
 
 @router.get("/hub", response_class=HTMLResponse)
 async def get_admin_hub_page(request: Request):
@@ -64,20 +68,24 @@ async def get_admin_hub_page(request: Request):
         except:  # noqa: E722
             pass
             
-    return templates.TemplateResponse("admin/admin_hub.html", {
-        "request": request, 
-        "current_page": "hub",
-        "user_role": role,
-        "user_username": username
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/admin_hub.html",
+        context={
+            "request": request, 
+            "current_page": "hub",
+            "user_role": role,
+            "user_username": username
+        }
+    )
 
 @router.get("/login", response_class=HTMLResponse)
 async def get_login_page(request: Request):
-    return templates.TemplateResponse("auth/login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="auth/login.html", context={"request": request})
 
 @router.get("/admin/users", response_class=HTMLResponse)
 async def get_admin_users_page(request: Request):
-    return templates.TemplateResponse("admin/usuarios.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="admin/usuarios.html", context={"request": request})
 
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
