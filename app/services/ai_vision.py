@@ -1,4 +1,5 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import os
 import logging
@@ -25,27 +26,21 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def configure_gemini():
+def get_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY")
     if api_key:
-        genai.configure(api_key=api_key)
-        return True
+        return genai.Client(api_key=api_key)
     else:
         print("⚠️ AVISO: GOOGLE_API_KEY não encontrada no .env")
-        return False
+        return None
 
-# --- Debug ao Iniciar: Listar Modelos ---
 print("--- INICIANDO AI VISION ---")
 try:
-    if configure_gemini():
-        print("Verificando modelos disponíveis...")
-        # Apenas lista para debug, não trava o sistema se falhar
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                 # print(f"✅ Modelo: {m.name}")
-                 pass
+    client = get_gemini_client()
+    if client:
+        print("SDK google.genai configurado com sucesso.")
 except Exception as e:
-    print(f"⚠️ Erro ao listar modelos (ignorado): {e}")
+    print(f"⚠️ Erro ao configurar genai: {e}")
 print("---------------------------")
 
 async def processar_imagem_gemini(caminho_arquivo: str) -> str:
@@ -53,7 +48,8 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
     Envia um arquivo (PDF ou Imagem) para o Gemini e retorna apenas o JSON extraído.
     Implementa Smart Retry (Backoff 30s) e Fallback de modelos para Free Tier.
     """
-    if not configure_gemini():
+    client = get_gemini_client()
+    if not client:
         return json.dumps({"erro": "Configuração da API inválida"})
 
     # Lista de modelos Free Tier (Ajustada para cota real do usuário)
@@ -94,10 +90,17 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
+                # Na nova API, enviamos os bytes encapsulados em Part
+                part_arquivo = types.Part.from_bytes(
+                    data=file_bytes,
+                    mime_type=mime_type,
+                )
+                
                 response = await asyncio.to_thread(
-                    model.generate_content, 
-                    [prompt, dados_arquivo],
-                    generation_config=genai.types.GenerationConfig(
+                    client.models.generate_content,
+                    model=nome_modelo,
+                    contents=[prompt, part_arquivo],
+                    config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=BeneficiarioExtraido,
                     )
@@ -107,7 +110,6 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
                 print(f"✅ SUCESSO com {nome_modelo}")
                 
                 # --- RATE LIMIT PREVENTIVO (Respeitar 5 RPM -> 12s delay) ---
-                # Aumenta estabilidade ao evitar disparos sequenciais muito rápidos
                 await asyncio.sleep(12) 
                 
                 return texto_limpo
