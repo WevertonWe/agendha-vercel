@@ -20,7 +20,59 @@ router = APIRouter(tags=["Autenticação"])
 
 @router.post("/api/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # Conexão manual para garantir o uso do banco na raiz
+    import os
+    
+    # 1. Tentar Supabase (Ambiente Cloud/Vercel)
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    if os.getenv("VERCEL") and supabase_url and supabase_key:
+        try:
+            print(f"Conectando ao Supabase: {supabase_url[:10]}...")
+            from supabase import create_client
+            supabase = create_client(supabase_url, supabase_key)
+            
+            # Substituindo query do banco local pela consulta na tabela Supabase
+            res = supabase.table('users').select('*').eq('username', form_data.username).execute()
+            
+            if not res.data:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Usuário ou senha incorretos",
+                    headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
+                )
+            
+            user_dict = res.data[0]
+            
+            if not pwd_context.verify(form_data.password, user_dict['password_hash']):
+                 raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Usuário ou senha incorretos",
+                    headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
+                )
+                
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            role = user_dict.get('role', 'user')
+            
+            access_token = create_access_token(
+                data={"sub": user_dict['username'], "role": role},
+                expires_delta=access_token_expires
+            )
+            
+            redirect_url = "/hub"
+            
+            response = JSONResponse(content={"access_token": access_token, "token_type": "bearer", "redirect_url": redirect_url})
+            response.set_cookie(key="access_token", value=f"{settings.AUTH_BEARER_PREFIX} {access_token}", httponly=True)
+            return response
+            
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            print(f"Erro no login Supabase: {e}")
+            # Em vez de crashar e cair no HTML de 500, garantimos retorno JSON
+            raise HTTPException(status_code=500, detail="Erro ao conectar ao Supabase")
+
+    # 2. Fallback para Banco SQLite (Ambiente Local)
     conn = sqlite3.connect(settings.DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()

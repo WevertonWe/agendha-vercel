@@ -138,65 +138,9 @@ app = FastAPI(
 
 # --- Middleware de Log de Acesso ---
 # --- Middleware de Log de Navegação (AuditLogs) ---
-@app.middleware("http")
-async def log_navigation(request: Request, call_next):
-    # 1. Processa a requisição
-    response = await call_next(request)
-    
-    # 2. Filtros: Ignorar estáticos, API (exceto se importante), e favicon
-    path = request.url.path
-    if (path.startswith("/static") or 
-        path.startswith("/favicon.ico") or 
-        request.method == "OPTIONS"):
-        return response
-
-    # 3. Extração do Usuário
-    username = "Anônimo"
-    try:
-        # Tenta pegar do state (se auth middleware rodou antes)
-        if hasattr(request.state, "user"):
-             user = request.state.user
-             username = user.get("username", "Anônimo") if isinstance(user, dict) else getattr(user, "username", "Anônimo")
-        else:
-            # Fallback: Decodificar Token Manualmente
-            token = request.cookies.get("access_token")
-            if token:
-                if token.startswith("Bearer "):
-                    token = token.split(" ")[1]
-                
-                from app.core.auth.utils import SECRET_KEY, ALGORITHM
-                from jose import jwt
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-                username = payload.get("sub", "Anônimo")
-    except Exception:
-        pass # Mantém Anônimo em falha de decode
-
-    # 4. Registrar apenas GETs de Páginas (Navegação) ou Ações de Escrita não capturadas pelo Wrapper?
-    # O Wrapper pega INSERT/UPDATE/DELETE. Aqui focamos em ACESSO (Leitura/Navegação).
-    if request.method == "GET" and not path.startswith("/api"):
-        try:
-            # Na Vercel, settings.DB_PATH pode ser Read-only ou inexistente.
-            # O sistema deve continuar funcionando mesmo se o log falhar.
-            import sqlite3
-            conn = sqlite3.connect(settings.DB_PATH)
-            cursor = conn.cursor()
-            
-            from app.core.time_utils import get_bahia_time_str
-            # Detalhes do Acesso
-            detalhes = f"Acessou: {path}"
-            
-            cursor.execute("""
-                INSERT INTO audit_logs (usuario_id, tabela, operacao, detalhes, valor_antigo, valor_novo, data_hora)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (username, "N/A", "ACESSO", detalhes, None, None, get_bahia_time_str()))
-            
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            # Erro silencioso para não derrubar o site em produção
-            print(f"⚠️ Erro silencioso de auditoria (Log de Navegação): {e}")
-            
-    return response
+# @app.middleware("http")
+# async def log_navigation(request: Request, call_next):
+#     return await call_next(request)
 
 # --- Exception Handlers Globais ---
 @app.exception_handler(500)
@@ -207,23 +151,13 @@ async def internal_server_error_handler(request: Request, exc: Exception):
             status_code=500,
             content={"detail": "Erro interno do servidor. Contate o suporte."}
         )
-    return templates.TemplateResponse(
-        request=request, 
-        name="errors/500.html", 
-        context={"request": request}, 
-        status_code=500
-    )
+    return templates.TemplateResponse("errors/500.html", {"request": request}, status_code=500)
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     if "application/json" in request.headers.get("accept", ""):
         return JSONResponse(status_code=404, content={"detail": "Não encontrado"})
-    return templates.TemplateResponse(
-        request=request, 
-        name="errors/404.html", 
-        context={"request": request}, 
-        status_code=404
-    )
+    return templates.TemplateResponse("errors/404.html", {"request": request}, status_code=404)
 
 
 # --- Montagem de Arquivos Estáticos ---

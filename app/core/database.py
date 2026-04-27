@@ -59,10 +59,13 @@ def init_db():
         logging.info("Ambiente Vercel detectado. Pulando inicialização de tabelas SQLite locais.")
         
         # Validação do Supabase (Cloud Database)
-        if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        
+        if supabase_url and supabase_key:
             try:
                 from supabase import create_client
-                supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+                supabase = create_client(supabase_url, supabase_key)
                 # Teste simples de conexão (opcional, aqui apenas logamos)
                 logging.info("✅ Conexão com Supabase validada com sucesso.")
             except Exception as e:
