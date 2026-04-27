@@ -228,12 +228,7 @@ async def not_found_handler(request: Request, exc: Exception):
 
 # --- Montagem de Arquivos Estáticos ---
 app.mount("/static", StaticFiles(directory=settings.STATIC_FOLDER), name="static")
-
-# Garantir que a pasta de uploads existe (necessário para Vercel se ignorada no git)
-upload_path = settings.UPLOAD_FOLDER
-if not os.path.exists(upload_path):
-    os.makedirs(upload_path, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_FOLDER), name="uploads")
 
 # --- Inclusão de Rotas (Routers) ---
 # Core
