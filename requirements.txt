@@ -20,3 +20,4 @@ reportlab
 openpyxl
 pymupdf
 pdfplumber
+docxtpl
