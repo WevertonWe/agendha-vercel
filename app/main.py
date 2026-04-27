@@ -64,22 +64,9 @@ async def lifespan(app: FastAPI):
     """
     logging.info("Servidor a arrancar...")
     
-    # 1. Criação das Pastas Necessárias
-    pastas_a_criar = [
-        settings.STATIC_FOLDER,
-        settings.TEMPLATES_FOLDER,
-        settings.UPLOAD_FOLDER,
-        settings.PRINT_FOLDER,
-        settings.DOCUMENTOS_FOLDER,
-        settings.COTACOES_FOLDER,
-        settings.GRH_FOLDER,
-        settings.BENEFICIARIOS_DOCS_FOLDER,
-        settings.TEMP_FOLDER,
-        settings.UPLOAD_FOLDER / "temp",
-        settings.TEMPLATES_FOLDER / "excel"
-    ]
-    for pasta in pastas_a_criar:
-        os.makedirs(pasta, exist_ok=True)
+    # Na Vercel, a criação de pastas em tempo de execução é proibida (Read-only FS).
+    # A estrutura básica deve vir do repositório (.gitkeep) ou ser ignorada se opcional.
+    logging.info("Pulando criação de pastas físicas (Ambiente Cloud).")
 
     # 2. Inicialização de Ficheiros
     if not os.path.exists(settings.HISTORICO_PATH):
@@ -228,7 +215,14 @@ async def not_found_handler(request: Request, exc: Exception):
 
 # --- Montagem de Arquivos Estáticos ---
 app.mount("/static", StaticFiles(directory=settings.STATIC_FOLDER), name="static")
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_FOLDER), name="uploads")
+
+# Verificação de existência da pasta para evitar o RuntimeError da Starlette
+upload_path = settings.UPLOAD_FOLDER
+if os.path.exists(upload_path):
+    app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
+else:
+    # Na Vercel, se a pasta não subir no deploy, o app não deve crashar
+    print(f"⚠️ Alerta de Boot: Diretório {upload_path} não encontrado. Ignorando mount de estáticos.")
 
 # --- Inclusão de Rotas (Routers) ---
 # Core
