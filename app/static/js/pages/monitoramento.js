@@ -28,12 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 let dataFormatada = evento.dia_previsto;
                 if (evento.dia_previsto && evento.dia_previsto.includes('T')) {
                     dataFormatada = new Date(evento.dia_previsto).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                } else if (evento.dia_previsto && evento.dia_previsto.includes('-')) {
+                } else if (evento.dia_previsto && String(evento.dia_previsto).includes('-')) {
                     // Converte AAAA-MM-DD para DD/MM/AAAA
-                    const partes = evento.dia_previsto.split('-');
-                    if (partes.length === 3) {
-                        dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
-                    }
+                    try {
+                        const partes = String(evento.dia_previsto).substring(0, 10).split('-');
+                        if (partes.length === 3) {
+                            dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                        }
+                    } catch (e) { }
                 }
 
                 let hrefDocumento = '';

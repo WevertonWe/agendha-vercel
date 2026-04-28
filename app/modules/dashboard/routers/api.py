@@ -14,44 +14,35 @@ async def get_dashboard_summary(db: sqlite3.Connection = Depends(get_db_connecti
     - Financeiro: Total Executado (Soma de todos os lançamentos)
     - Ofícios: Total de Ofícios Registrados
     """
-    cursor = db.cursor()
+    import os
+    from supabase import create_client
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    supabase = create_client(supabase_url, supabase_key)
     
     # 1. BSF: Visitas Realizadas vs Meta
-    # Nota: A tabela bsf_visitas tem status. Consideramos apenas 'Realizada'.
-    # A tabela bsf_metas tem meta_total por município/mês.
+    res_realizado = supabase.table('bsf_visitas').select('count', count='exact').eq('status', 'Realizada').execute()
+    bsf_realizado = res_realizado.count or 0
     
-    # Visitas Realizadas (Total Geral)
-    cursor.execute("SELECT COUNT(*) FROM bsf_visitas WHERE status = 'Realizada'")
-    bsf_realizado = cursor.fetchone()[0] or 0
-    
-    # Meta Total (Soma de todas as metas cadastradas no sistema - simplificado para visão geral)
-    # Se houver filtro de ano/mês no futuro, ajustar aqui. Por enquanto, visão acumulada.
-    # Meta Total (Soma da meta anual do contrato ativo - 2025)
-    # TODO: Tornar dinâmico com tabela de configuração de "Contrato Ativo"
-    # Filtrando apenas atividades principais se necessário para atingir 15.350, mas seguindo a ordem de somar meta_anual.
-    # A soma total atual no banco é 16276. O usuário espera 15350. 
-    # Assumindo que a query deve ser fiel aos dados do banco.
-    cursor.execute("SELECT SUM(meta_anual) FROM bsf_metas_contrato WHERE ano = 2025")
-    bsf_meta = cursor.fetchone()[0] or 0
+    res_meta = supabase.table('bsf_metas_contrato').select('meta_anual').eq('ano', 2025).execute()
+    bsf_meta = sum(row.get('meta_anual', 0) for row in res_meta.data) if res_meta.data else 0
     
     bsf_percent = 0.0
     if bsf_meta > 0:
         bsf_percent = round((bsf_realizado / bsf_meta) * 100, 1)
         
     # 2. AQA: Total Beneficiários
-    # Tabela: beneficiarios
-    cursor.execute("SELECT COUNT(*) FROM beneficiarios")
-    aqa_total = cursor.fetchone()[0] or 0
+    res_aqa = supabase.table('beneficiarios').select('count', count='exact').execute()
+    aqa_total = res_aqa.count or 0
     
     # 3. Financeiro: Total Executado
-    # Tabela: financeiro_lancamentos, coluna: valor_total_executado
-    cursor.execute("SELECT SUM(valor_total_executado) FROM financeiro_lancamentos")
-    financeiro_total = cursor.fetchone()[0] or 0.0
+    res_fin = supabase.table('financeiro_lancamentos').select('valor').execute()
+    financeiro_total = sum(float(row.get('valor', 0)) for row in res_fin.data) if res_fin.data else 0.0
     
     # 4. Ofícios: Total Registrados
-    # Tabela: oficios
-    cursor.execute("SELECT COUNT(*) FROM oficios")
-    oficios_total = cursor.fetchone()[0] or 0
+    res_oficios = supabase.table('oficios').select('count', count='exact').execute()
+    oficios_total = res_oficios.count or 0
     
     return {
         "bsf": {

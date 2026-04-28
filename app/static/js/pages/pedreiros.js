@@ -63,7 +63,7 @@ function initDataTable() {
                     if (!data) return '<span class="text-muted">-</span>';
                     // Format Date YYYY-MM-DD to DD/MM/YYYY
                     try {
-                        const [y, m, d] = data.split('-');
+                        const [y, m, d] = String(data).substring(0, 10).split('-');
                         return `${d}/${m}/${y}`;
                     } catch (e) { return data; }
                 }
@@ -145,7 +145,7 @@ window.verProducao = async function (id) {
             // Data format
             let dataConclusao = '-';
             if (item.data_conclusao) {
-                try { const [y, m, d] = item.data_conclusao.split('-'); dataConclusao = `${d}/${m}/${y}`; } catch (e) { }
+                try { const [y, m, d] = String(item.data_conclusao).substring(0, 10).split('-'); dataConclusao = `${d}/${m}/${y}`; } catch (e) { }
             }
 
             const tr = `
@@ -404,7 +404,7 @@ window.carregarPendentesFaturamento = async function () {
             // Format dates simply
             let dataStr = '-';
             if (item.data_conclusao) {
-                try { const [y, m, d] = item.data_conclusao.split('-'); dataStr = `${d}/${m}/${y}`; } catch (e) { }
+                try { const [y, m, d] = String(item.data_conclusao).substring(0, 10).split('-'); dataStr = `${d}/${m}/${y}`; } catch (e) { }
             }
 
             const valorSugerido = item.valor_sugerido || 1000.00;

@@ -29,9 +29,12 @@ print(f"BANCO DE DADOS CARREGADO EM: {DB_PATH_FIX}") # Log forçado no terminal
 from app.database.wrapper import AuditConnection  # noqa: E402
 
 def get_db_connection(request=None): # Request optional for backward compatibility
-    """Conexão por requisição com Auditoria"""
-    # Use AuditConnection factory
-    # Note: check_same_thread=False is needed for FastAPI threaded behavior
+    """Conexão por requisição com Auditoria (DEPRECATED)"""
+    import os
+    if os.getenv("VERCEL"):
+        raise RuntimeError("O uso do SQLite local (agendha.db) está desativado na Vercel. Utilize o cliente Supabase diretamente!")
+        
+    # Mantém fallback apenas para desenvolvimento local
     conexao = AuditConnection(DB_PATH_FIX, check_same_thread=False)
     conexao.execute("PRAGMA foreign_keys = ON") # Enable Foreign Keys
     conexao.row_factory = sqlite3.Row

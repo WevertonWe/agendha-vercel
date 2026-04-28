@@ -17,8 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatarDataParaExibicao(dataStr) {
         if (!dataStr) return '';
-        const [ano, mes, dia] = dataStr.split('-');
-        return `${dia}/${mes}/${ano}`;
+        try {
+            const [ano, mes, dia] = String(dataStr).substring(0, 10).split('-');
+            return `${dia}/${mes}/${ano}`;
+        } catch (e) {
+            return dataStr;
+        }
     }
 
     function getStatusBadgeClass(status) {

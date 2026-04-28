@@ -1,65 +1,47 @@
-import sqlite3
+import os
+from supabase import create_client
 
-def get_all_oficios(db: sqlite3.Connection):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM oficios ORDER BY id DESC")
-    return cursor.fetchall()
+def get_supabase():
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    return create_client(supabase_url, supabase_key)
 
-def create_oficio(db: sqlite3.Connection, dados: dict):
-    cursor = db.cursor()
-    cursor.execute("""
-        INSERT INTO oficios (numero_oficio, destinatario, data_envio, motivo_descricao, criado_por, caminho_arquivo)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        dados.get('numero_oficio'),
-        dados.get('destinatario'),
-        dados.get('data_envio'),
-        dados.get('motivo_descricao'),
-        dados.get('criado_por'),
-        dados.get('caminho_arquivo')
-    ))
-    db.commit()
-    return cursor.lastrowid
+def get_all_oficios(db=None):
+    supabase = get_supabase()
+    res = supabase.table('oficios').select('*').order('id', desc=True).execute()
+    return res.data
 
-def update_oficio(db: sqlite3.Connection, oficio_id: int, dados: dict):
-    cursor = db.cursor()
+def create_oficio(db, dados: dict):
+    supabase = get_supabase()
+    payload = {
+        "numero_oficio": dados.get('numero_oficio'),
+        "destinatario": dados.get('destinatario'),
+        "data_envio": dados.get('data_envio'),
+        "motivo_descricao": dados.get('motivo_descricao'),
+        "criado_por": dados.get('criado_por'),
+        "caminho_arquivo": dados.get('caminho_arquivo')
+    }
+    res = supabase.table('oficios').insert(payload).execute()
+    if res.data:
+        return res.data[0].get('id')
+    return None
+
+def update_oficio(db, oficio_id: int, dados: dict):
+    supabase = get_supabase()
+    payload = {}
     
-    # Construir query dinâmica
-    campos = []
-    valores = []
-    
-    if 'numero_oficio' in dados:
-        campos.append("numero_oficio = ?")
-        valores.append(dados['numero_oficio'])
-        
-    if 'destinatario' in dados:
-        campos.append("destinatario = ?")
-        valores.append(dados['destinatario'])
-        
-    if 'data_envio' in dados:
-        campos.append("data_envio = ?")
-        valores.append(dados['data_envio'])
-        
-    if 'motivo_descricao' in dados:
-        campos.append("motivo_descricao = ?")
-        valores.append(dados['motivo_descricao'])
-
-    if 'caminho_arquivo' in dados:
-        campos.append("caminho_arquivo = ?")
-        valores.append(dados['caminho_arquivo'])
-        
-    if not campos:
+    for key in ['numero_oficio', 'destinatario', 'data_envio', 'motivo_descricao', 'caminho_arquivo']:
+        if key in dados:
+            payload[key] = dados[key]
+            
+    if not payload:
         return False
         
-    valores.append(oficio_id)
-    query = f"UPDATE oficios SET {', '.join(campos)} WHERE id = ?"  # nosec
-    
-    cursor.execute(query, valores)
-    db.commit()
-    return cursor.rowcount > 0
+    res = supabase.table('oficios').update(payload).eq('id', oficio_id).execute()
+    return len(res.data) > 0
 
-def delete_oficio(db: sqlite3.Connection, oficio_id: int):
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM oficios WHERE id = ?", (oficio_id,))
-    db.commit()
-    return cursor.rowcount > 0
+def delete_oficio(db, oficio_id: int):
+    supabase = get_supabase()
+    res = supabase.table('oficios').delete().eq('id', oficio_id).execute()
+    return len(res.data) > 0
+
