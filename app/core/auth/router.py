@@ -22,18 +22,6 @@ router = APIRouter(tags=["Autenticação"])
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     import os
     
-    # BYPASS DE EMERGÊNCIA
-    if form_data.username == "admin" and form_data.password == "agendha2024":
-        print("DEBUG: Bypass de emergência ativado (banco ignorado para usuário admin)")
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": "admin", "role": "admin"},
-            expires_delta=access_token_expires
-        )
-        response = JSONResponse(content={"access_token": access_token, "token_type": "bearer", "redirect_url": "/hub"})
-        response.set_cookie(key="access_token", value=f"{settings.AUTH_BEARER_PREFIX} {access_token}", httponly=True)
-        return response
-
     # 1. Tentar Supabase (Ambiente Cloud/Vercel)
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
@@ -192,6 +180,28 @@ async def list_users(
     current_user: UserInDB = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db_connection)
 ):
+    import os
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    if os.getenv("VERCEL") and supabase_url and supabase_key:
+        from supabase import create_client
+        supabase = create_client(supabase_url, supabase_key)
+        
+        users_res = supabase.table('users').select('*').execute()
+        
+        users = []
+        for user_dict in users_res.data:
+            users.append(User(
+                username=user_dict.get('username'),
+                full_name=user_dict.get('full_name', ''),
+                role=user_dict.get('role', 'user'),
+                is_active=bool(user_dict.get('is_active', True)),
+                project_roles=[]
+            ))
+        return users
+
+    # Fallback para Banco SQLite (Ambiente Local)
     cursor = db.cursor()
     cursor.execute("SELECT * FROM users")
     users = []
@@ -200,14 +210,7 @@ async def list_users(
         # Fetch roles for each user
         cursor.execute("SELECT project_id, role FROM user_project_roles WHERE user_id = ?", (user_dict['id'],))
         roles_rows = cursor.fetchall()
-        # We need to construct the User object carefully
-        # Note: User model expects 'project_roles', but DB row doesn't have it.
-        # We need to manually add it.
-        # Also, password_hash is not in User model, so it's fine.
         
-        # However, User model requires 'role' which is in DB.
-        
-        # Let's create a helper or just dict comprehension
         project_roles = [{"project_id": r['project_id'], "role": r['role']} for r in roles_rows]
         
         users.append(User(

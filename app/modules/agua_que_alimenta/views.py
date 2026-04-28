@@ -4,7 +4,9 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 
 router = APIRouter(tags=["Água que Alimenta Views"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 @router.get("/consolidado", response_class=HTMLResponse)
 async def get_consolidado_page(request: Request):

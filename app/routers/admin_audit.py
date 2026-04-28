@@ -7,7 +7,9 @@ import logging
 from app.dependencies import get_db
 
 router = APIRouter(prefix="/admin/auditoria", tags=["Admin Audit"])
-templates = Jinja2Templates(directory="app/templates")
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 logger = logging.getLogger(__name__)
 
 # Mock auth dependency - In real app, import get_current_user and check role="admin"

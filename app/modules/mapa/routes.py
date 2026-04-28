@@ -17,7 +17,9 @@ from app.services.utils import remover_acentos
 router = APIRouter(prefix="/api/mapa", tags=["Mapa"])
 view_router = APIRouter(include_in_schema=False)
 
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 # --- Auth Helper ---
 def get_user_auth(request: Request) -> Optional[str]:

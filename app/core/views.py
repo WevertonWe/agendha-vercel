@@ -7,8 +7,9 @@ import logging
 from app.config import settings
 
 router = APIRouter(tags=["Core Views"])
-templates = Jinja2Templates(directory="app/templates")
-templates.env.cache = None
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 @router.get("/", response_class=HTMLResponse, summary="Página Portal")
 async def get_portal_page(request: Request):

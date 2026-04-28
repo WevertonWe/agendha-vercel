@@ -30,6 +30,11 @@ def log_change(
         detalhes (str): Optional metadata or comments.
     """
     try:
+        import os
+        if os.getenv("VERCEL"):
+            logger.info("Vercel detected. Bypassing SQLite audit log.")
+            return
+
         from app.core.time_utils import get_bahia_time_str
         
         sql = """

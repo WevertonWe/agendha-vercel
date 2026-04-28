@@ -7,7 +7,9 @@ from datetime import datetime
 import logging
 
 router = APIRouter(prefix="/projetos", tags=["Projetos"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 # Mapping slugs to display names
 PROJECTS_INFO = {

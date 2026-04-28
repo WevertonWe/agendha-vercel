@@ -6,7 +6,9 @@ from app.config import settings
 from app.dependencies import get_db_connection
 
 router = APIRouter(tags=["Cotações Views"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 @router.get("/cotacoes", response_class=HTMLResponse)
 async def get_cotacoes_page(request: Request):

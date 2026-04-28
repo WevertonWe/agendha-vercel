@@ -15,7 +15,9 @@ from app.modules.agua_que_alimenta.models import Pedreiro, PedreiroCreate, Pedre
 from app.config import settings
 
 router = APIRouter(prefix="/api/pedreiros", tags=["Pedreiros"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 @router.get("", response_model=List[Pedreiro])
 def listar_pedreiros(db: sqlite3.Connection = Depends(get_db_connection)):

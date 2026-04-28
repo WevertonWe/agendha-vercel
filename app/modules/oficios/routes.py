@@ -11,7 +11,9 @@ from typing import Optional
 from app.modules.oficios import services
 
 router = APIRouter(prefix="/oficios", tags=["Ofícios"])
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 
 def date_br_filter(value):
     if not value:

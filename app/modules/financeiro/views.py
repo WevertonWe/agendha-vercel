@@ -8,7 +8,9 @@ from app.modules.financeiro.routes import check_financeiro_access
 
 # Adjust path to point to the correct templates directory
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env))
 
 def date_br_filter(value):
     if not value:

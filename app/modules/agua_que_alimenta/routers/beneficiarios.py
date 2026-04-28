@@ -34,7 +34,9 @@ class RelatorioRequest(BaseModel):
     colunas: List[str]
     email: Optional[str] = None
 
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER)
+from jinja2 import Environment, FileSystemLoader
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=_env)
 logger = logging.getLogger(__name__)
 
 @router_root.get("/beneficiarios/perfil/{id}", response_class=HTMLResponse)
