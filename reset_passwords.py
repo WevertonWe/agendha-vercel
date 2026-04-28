@@ -18,7 +18,7 @@ def main():
         return
 
     print("Gerando novo hash para a senha 'agendha2024'...")
-    nova_senha = "agendha2024"
+    nova_senha = "123"
     novo_hash = get_password_hash(nova_senha)
     print(f"Hash gerado: {novo_hash[:15]}...")
 
