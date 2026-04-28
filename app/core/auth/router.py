@@ -43,8 +43,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
                 )
             
             user_dict = res.data[0]
+            print(f"DEBUG: Usuário encontrado: {user_dict.get('username')} | Hash no banco: {str(user_dict.get('password_hash'))[:10]}...")
             
-            if not pwd_context.verify(form_data.password, user_dict['password_hash']):
+            if not pwd_context.verify(form_data.password, user_dict.get('password_hash')):
                  raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Usuário ou senha incorretos",
@@ -89,9 +90,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             )
         
         user_dict = dict(user_row)
+        print(f"DEBUG (Local): Usuário encontrado: {user_dict.get('username')} | Hash no banco: {str(user_dict.get('password_hash'))[:10]}...")
         
         # Verificação direta usando o contexto local configurado corretamente
-        if not pwd_context.verify(form_data.password, user_dict['password_hash']):
+        if not pwd_context.verify(form_data.password, user_dict.get('password_hash')):
              raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Usuário ou senha incorretos",
