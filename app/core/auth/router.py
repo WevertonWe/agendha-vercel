@@ -44,6 +44,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             
             user_dict = res.data[0]
             
+            print(f"LOGIN DEBUG: Usuário={user_dict.get('username')} | Hash no Banco={user_dict.get('password_hash')}")
             if not pwd_context.verify(form_data.password, user_dict.get('password_hash')):
                  raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -91,6 +92,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user_dict = dict(user_row)
         
         # Verificação direta usando o contexto local configurado corretamente
+        print(f"LOGIN DEBUG: Usuário={user_dict.get('username')} | Hash no Banco={user_dict.get('password_hash')}")
         if not pwd_context.verify(form_data.password, user_dict.get('password_hash')):
              raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
