@@ -40,7 +40,8 @@ async def get_admin_hub_page(request: Request):
 
 @router.get("/login")
 async def get_login_page(request: Request):
-    return HTMLResponse(content="<html><body><h1>Agendha - Login</h1><p>Motor de templates em manutenção.</p></body></html>")
+    # Retornamos apenas o essencial para evitar o erro de hash no cache
+    return templates.TemplateResponse("auth/login.html", {"request": request})
 
 @router.get("/admin/users", response_class=HTMLResponse)
 async def get_admin_users_page(request: Request):
