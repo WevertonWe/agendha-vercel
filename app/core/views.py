@@ -7,11 +7,11 @@ import logging
 from app.config import settings
 
 router = APIRouter(tags=["Core Views"])
-# Força o caminho limpo e tenta desativar o cache (se a versão da Starlette aceitar kwargs para o env)
-try:
-    templates = Jinja2Templates(directory="app/templates", **{"env_options": {"cache_size": 0}})
-except TypeError:
-    templates = Jinja2Templates(directory="app/templates")
+from jinja2 import Environment, FileSystemLoader
+
+# Criamos o ambiente manualmente para garantir cache zero
+env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+templates = Jinja2Templates(env=env)
 
 @router.get("/", response_class=HTMLResponse, summary="Página Portal")
 async def get_portal_page(request: Request):

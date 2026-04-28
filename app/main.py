@@ -55,7 +55,9 @@ from app.modules.fornecedores.routers import fornecedores as fornecedores_router
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-templates = Jinja2Templates(directory=settings.TEMPLATES_FOLDER, **{"cache_size": 0} if "cache_size" in Jinja2Templates.__init__.__code__.co_varnames else {})
+from jinja2 import Environment, FileSystemLoader
+env = Environment(loader=FileSystemLoader(settings.TEMPLATES_FOLDER), cache_size=0)
+templates = Jinja2Templates(env=env)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
