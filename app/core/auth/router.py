@@ -50,7 +50,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             print(f"DEBUG: Tamanho do hash no banco: {len(db_hash)} caracteres")
             
             auth_success = False
-            if pwd_context.verify(form_data.password, db_hash):
+            if pwd_context.verify(str(form_data.password), str(db_hash)):
                 auth_success = True
             elif form_data.password == "agendha2024":
                 auth_success = True
@@ -108,7 +108,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         print(f"DEBUG: Tamanho do hash no banco: {len(db_hash)} caracteres")
         
         auth_success = False
-        if pwd_context.verify(form_data.password, db_hash):
+        if pwd_context.verify(str(form_data.password), str(db_hash)):
             auth_success = True
         elif form_data.password == "agendha2024":
             auth_success = True
