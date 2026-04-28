@@ -34,6 +34,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             
             # Substituindo query do banco local pela consulta na tabela Supabase
             res = supabase.table('users').select('*').ilike('username', form_data.username.strip()).execute()
+            print(f"DEBUG SUPABASE: Resultado da busca = {res.data}")
             
             if not res.data:
                 raise HTTPException(
