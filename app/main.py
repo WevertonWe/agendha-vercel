@@ -138,6 +138,29 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+@app.get("/api/force-create")
+async def force_create():
+    import os
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        return {"status": "Erro", "detalhe": "SUPABASE_URL ou SUPABASE_KEY ausentes"}
+
+    try:
+        from supabase import create_client
+        supabase = create_client(supabase_url, supabase_key)
+        
+        res = supabase.table('users').insert({
+            "username": "vitoria_teste",
+            "password_hash": "hash_fake",
+            "full_name": "Usuário Criado pelo Site",
+            "is_active": True
+        }).execute()
+        return {"status": "Tentativa concluída", "resultado": res.data}
+    except Exception as e:
+        return {"status": "Erro na execução", "detalhe": str(e)}
+
 # --- Middleware de Log de Acesso ---
 # --- Middleware de Log de Navegação (AuditLogs) ---
 # @app.middleware("http")
