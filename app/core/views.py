@@ -7,11 +7,8 @@ import logging
 from app.config import settings
 
 router = APIRouter(tags=["Core Views"])
-from jinja2 import Environment, FileSystemLoader
-
-# Criamos o ambiente manualmente para garantir cache zero
-env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
-templates = Jinja2Templates(env=env)
+templates = Jinja2Templates(directory="app/templates")
+templates.env.cache = None
 
 @router.get("/", response_class=HTMLResponse, summary="Página Portal")
 async def get_portal_page(request: Request):
@@ -21,7 +18,7 @@ async def get_portal_page(request: Request):
 
 @router.get("/portal", response_class=HTMLResponse)
 async def get_real_portal_page(request: Request):
-    return templates.TemplateResponse("agua/portal.html", {
+    return templates.TemplateResponse(request=request, name=str("agua/portal.html"), context={
         "request": request, 
         "current_page": "portal", 
         "is_admin": False,
@@ -31,7 +28,7 @@ async def get_real_portal_page(request: Request):
 
 @router.get("/hub", response_class=HTMLResponse)
 async def get_admin_hub_page(request: Request):
-    return templates.TemplateResponse("admin/admin_hub.html", {
+    return templates.TemplateResponse(request=request, name=str("admin/admin_hub.html"), context={
         "request": request, 
         "current_page": "hub",
         "user_role": "user",
@@ -41,11 +38,11 @@ async def get_admin_hub_page(request: Request):
 @router.get("/login")
 async def get_login_page(request: Request):
     # Retornamos apenas o essencial para evitar o erro de hash no cache
-    return templates.TemplateResponse("auth/login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name=str("auth/login.html"), context={"request": request})
 
 @router.get("/admin/users", response_class=HTMLResponse)
 async def get_admin_users_page(request: Request):
-    return templates.TemplateResponse("admin/usuarios.html", {"request": request})
+    return templates.TemplateResponse(request=request, name=str("admin/usuarios.html"), context={"request": request})
 
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
