@@ -52,13 +52,11 @@ def get_user_auth(request: Request) -> Optional[str]:
 
 def get_user_role(username: str) -> Optional[str]:
     try:
-        conn = services.get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT role FROM users WHERE username = ?", (username,))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return row['role']
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('users').select('role').eq('username', username).execute()
+        if res.data:
+            return res.data[0].get('role')
         return None
     except Exception:
         return None
@@ -462,21 +460,18 @@ async def import_confirm(pontos: List[PontoCreate], user: str = Depends(require_
 @router.get("/stats")
 async def get_map_stats(user: str = Depends(require_auth)):
     try:
-        conn = services.get_db_connection()
-        cursor = conn.cursor()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
         
-        # Count by Responsavel
-        cursor.execute("SELECT responsavel, COUNT(*) as total FROM mapa_pontos GROUP BY responsavel")
-        rows = cursor.fetchall()
+        res = supabase.table('mapa_pontos').select('responsavel').execute()
+        rows = res.data if res.data else []
         
-        stats = {row['responsavel'] if row['responsavel'] else 'Sem Dono': row['total'] for row in rows}
-        
-        # Count Total
-        cursor.execute("SELECT COUNT(*) as total FROM mapa_pontos")
-        total = cursor.fetchone()['total']
-        
-        conn.close()
-        
+        stats = {}
+        total = len(rows)
+        for row in rows:
+            resp = row.get('responsavel') or 'Sem Dono'
+            stats[resp] = stats.get(resp, 0) + 1
+            
         return {"total": total, "by_user": stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -567,68 +562,52 @@ async def sincronizar_beneficiarios(data: dict, request: Request):
         raise HTTPException(status_code=400, detail="Município e Status são obrigatórios")
 
     try:
-        conn = services.get_db_connection()
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
 
-        # 1. Query beneficiaries
-        query_ben = """
-            SELECT nome_completo, cpf, comunidade, latitude, longitude, status, verificado_bsf 
-            FROM beneficiarios 
-            WHERE 1=1
-            AND UPPER(municipio) = ?
-            AND UPPER(status) = ?
-            AND latitude IS NOT NULL AND longitude IS NOT NULL
-            AND (latitude != 0 OR longitude != 0)
-        """
-        cursor.execute(query_ben, (municipio.upper(), status.upper()))
-        beneficiarios = cursor.fetchall()
-
+        res_ben = supabase.table('beneficiarios').select('nome_completo, cpf, comunidade, latitude, longitude, status, verificado_bsf').ilike('municipio', municipio).ilike('status', status).not_.is_('latitude', 'null').not_.is_('longitude', 'null').execute()
+        
+        beneficiarios = res_ben.data if res_ben.data else []
+        
         synced_count = 0
         duplicate_count = 0
 
         for b in beneficiarios:
-            nome = b['nome_completo'] or "Sem Nome"
-            cpf = b['cpf'] or "N/I"
-            comunidade = b['comunidade'] or "N/I"
-            lat = b['latitude']
-            lng = b['longitude']
+            nome = b.get('nome_completo') or "Sem Nome"
+            cpf = b.get('cpf') or "N/I"
+            comunidade = b.get('comunidade') or "N/I"
+            lat = b.get('latitude')
+            lng = b.get('longitude')
 
-            # 2. Check overlap (Idempotency) using CPF in description
-            check_query = """
-                SELECT id FROM mapa_pontos 
-                WHERE tipo = 'Beneficiário' 
-                AND descricao LIKE ?
-            """
-            cursor.execute(check_query, (f"%{cpf}%",))
-            exists = cursor.fetchone()
+            if lat == 0 or lng == 0:
+                continue
+
+            res_mapa = supabase.table('mapa_pontos').select('id').eq('tipo', 'Beneficiário').ilike('descricao', f"%{cpf}%").execute()
+            exists = res_mapa.data
 
             ver_bsf = False
-            if b['verificado_bsf'] and str(b['verificado_bsf']).lower() in ['true', '1', 'sim', 'ok']:
+            if b.get('verificado_bsf') and str(b.get('verificado_bsf')).lower() in ['true', '1', 'sim', 'ok']:
                  ver_bsf = True
 
             if not exists:
-                # 3. Insert
-                insert_query = """
-                    INSERT INTO mapa_pontos (nome, tipo, cor, descricao, latitude, longitude, status_beneficiario, verificacao_bsf)
-                    VALUES (?, 'Beneficiário', '#007bff', ?, ?, ?, ?, ?)
-                """
                 descricao = f"CPF: {cpf} - Comunidade: {comunidade}"
-                cursor.execute(insert_query, (nome, descricao, lat, lng, status, ver_bsf))
+                supabase.table('mapa_pontos').insert({
+                    "nome": nome,
+                    "tipo": "Beneficiário",
+                    "cor": "#007bff",
+                    "descricao": descricao,
+                    "latitude": lat,
+                    "longitude": lng,
+                    "status_beneficiario": str(status),
+                    "verificacao_bsf": ver_bsf
+                }).execute()
                 synced_count += 1
             else:
-                # Optional: Update existing point with correct status/bsf?
-                # User asked for Sync. Let's update IF needed to ensure map is fresh.
-                update_query = """
-                    UPDATE mapa_pontos 
-                    SET status_beneficiario = ?, verificacao_bsf = ?
-                    WHERE id = ?
-                """
-                cursor.execute(update_query, (status, ver_bsf, exists['id']))
-                duplicate_count += 1 # Count as skipped for insertion, but updated data
-
-        conn.commit()
-        conn.close()
+                supabase.table('mapa_pontos').update({
+                    "status_beneficiario": str(status),
+                    "verificacao_bsf": ver_bsf
+                }).eq('id', exists[0]['id']).execute()
+                duplicate_count += 1
 
         return JSONResponse({
             "status": "success", 
