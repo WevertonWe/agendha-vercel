@@ -1,30 +1,25 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from typing import Dict, Any
-import sqlite3
 from jose import jwt, JWTError
 
-from app.core.database import get_db_connection
 from app.core.auth.utils import SECRET_KEY, ALGORITHM
 from app.core.auth.models import UserInDB, UserProjectRole
 from app.config import settings
+from app.core.database import get_supabase
 
-async def check_financeiro_access(request: Request, db: sqlite3.Connection = Depends(get_db_connection)):
-    # 1. Tenta pegar o token do cookie ou header
+async def check_financeiro_access(request: Request):
     token = request.cookies.get("access_token")
     if not token:
         auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith(f"{settings.AUTH_BEARER_PREFIX} "):  # nosec
+        if auth_header and auth_header.startswith(f"{settings.AUTH_BEARER_PREFIX} "):
             token = auth_header.split(" ")[1]
 
-    # SE NÃO TIVER TOKEN, BLOQUEIA IMEDIATAMENTE
     if not token:
         print("BLOQUEADO: Acesso anônimo (sem token).")
-        # Levanta exceção para ser capturada no main.py e redirecionar
         raise HTTPException(status_code=401, detail="Acesso não autorizado. Faça login.")
 
     try:
-        # Remove o prefixo se estiver no cookie
-        if token.startswith(f"{settings.AUTH_BEARER_PREFIX} "):  # nosec
+        if token.startswith(f"{settings.AUTH_BEARER_PREFIX} "):
             token = token.split(" ")[1]
             
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -37,20 +32,16 @@ async def check_financeiro_access(request: Request, db: sqlite3.Connection = Dep
         print("BLOQUEADO: Token inválido ou expirado (JWTError).")
         raise HTTPException(status_code=401, detail="Token inválido ou expirado")
 
-    # 2. SE TIVER USUÁRIO, VERIFICA PERMISSÃO
     print(f"AUDITORIA: Usuário '{username}' tentando acessar Financeiro.")
     
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user_row = cursor.fetchone()
+    supabase = get_supabase()
+    res = supabase.table('users').select('*').eq('username', username).execute()
     
-    if user_row is None:
+    if not res.data:
         print(f"BLOQUEADO: Usuário '{username}' não encontrado no banco.")
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
-    user_dict = dict(user_row)
-    
-    # Lista de permitidos
+    user_dict = res.data[0]
     allowed_users = ['admin', 'marilac', 'mauricio', 'fabiano', 'valda']
     
     if user_dict['username'] not in allowed_users:
@@ -59,19 +50,18 @@ async def check_financeiro_access(request: Request, db: sqlite3.Connection = Dep
 
     print(f"LIBERADO: Usuário '{username}' acessou Financeiro.")
 
-    # Retornar objeto UserInDB
-    cursor.execute("SELECT project_id, role FROM user_project_roles WHERE user_id = ?", (user_dict['id'],))
-    roles_rows = cursor.fetchall()
-    project_roles = [UserProjectRole(project_id=row['project_id'], role=row['role']) for row in roles_rows]
+    res_roles = supabase.table('user_project_roles').select('*').eq('user_id', user_dict['id']).execute()
+    project_roles = [UserProjectRole(project_id=row['project_id'], role=row['role']) for row in res_roles.data or []]
 
     return UserInDB(
         username=user_dict['username'],
         full_name=user_dict['full_name'],
         role=user_dict['role'],
         is_active=bool(user_dict['is_active']),
-        hashed_password=user_dict['password_hash'],
+        hashed_password=user_dict.get('password_hash', ''),
         project_roles=project_roles
     )
+
 
 from app.modules.financeiro.models import (  # noqa: E402
     FinanceiroProjetoBase, FinanceiroMetaBase, FinanceiroEtapaBase, FinanceiroRubricaBase, FinanceiroEntidadeBase, FinanceiroLancamentoBase

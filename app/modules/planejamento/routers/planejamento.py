@@ -17,177 +17,126 @@ from app.modules.planejamento.schemas import (
 router = APIRouter(tags=["Planejamento e Cronograma"])
 
 # --- TABELA AUTOMÁTICA & MIGRAÇÃO ---
-def ensure_table_exists(db: sqlite3.Connection):
-    try:
-        cursor = db.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cronograma_execucao (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                municipio TEXT NOT NULL,
-                semana_referencia TEXT NOT NULL,
-                quant_cisternas INTEGER DEFAULT 0,
-                meta_planejada INTEGER DEFAULT 0,
-                qtd_executada INTEGER DEFAULT 0
-            )
-        """)
-        
-        # Tabela de ligação many-to-many (Atualizada)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cronograma_beneficiarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cronograma_id INTEGER NOT NULL,
-                beneficiario_id INTEGER NOT NULL,
-                pedreiro_id INTEGER,
-                data_execucao TEXT,
-                FOREIGN KEY(cronograma_id) REFERENCES cronograma_execucao(id) ON DELETE CASCADE,
-                FOREIGN KEY(beneficiario_id) REFERENCES beneficiarios(id) ON DELETE CASCADE
-            )
-        """)
-        
-        # Migração: Adicionar colunas novas se não existirem
-        try:
-            cursor.execute("SELECT pedreiro_id FROM cronograma_beneficiarios LIMIT 1")
-        except sqlite3.OperationalError:
-            logging.info("Migração: Adicionando colunas de execução em cronograma_beneficiarios")
-            cursor.execute("ALTER TABLE cronograma_beneficiarios ADD COLUMN pedreiro_id INTEGER")
-            cursor.execute("ALTER TABLE cronograma_beneficiarios ADD COLUMN data_execucao TEXT")
-            
-        # Migração: Coluna quant_cisternas (Legado)
-        try:
-            cursor.execute("SELECT quant_cisternas FROM cronograma_execucao LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE cronograma_execucao ADD COLUMN quant_cisternas INTEGER DEFAULT 0")
-            
-        db.commit()
-    except Exception as e:
-        logging.error(f"Erro ao criar/migrar tabela cronograma_execucao: {e}")
-
 # --- ROTAS ---
 
 @router.post("/api/planejamento/item", status_code=201)
 def criar_item_planejamento(
-    dados: CronogramaExecucaoBase,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    dados: CronogramaExecucaoBase
 ):
-    ensure_table_exists(db)
-    cursor = db.cursor()
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     try:
-        cursor.execute("""
-            INSERT INTO cronograma_execucao (municipio, semana_referencia, quant_cisternas, meta_planejada, qtd_executada)
-            VALUES (?, ?, ?, ?, ?)
-        """, (dados.municipio, dados.semana_referencia, dados.quant_cisternas, dados.meta_planejada, dados.qtd_executada))
-        db.commit()
-        return {"message": "Item criado com sucesso", "id": cursor.lastrowid}
+        payload = dados.dict()
+        res = supabase.table('cronograma_execucao').insert(payload).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Erro ao criar item no Supabase.")
+        return {"message": "Item criado com sucesso", "id": res.data[0]['id']}
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao criar item no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao criar item: {e}")
 
 @router.delete("/api/planejamento/item/{id}", status_code=204)
 def excluir_item_planejamento(
-    id: int,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    id: int
 ):
-    cursor = db.cursor()
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     try:
-        cursor.execute("DELETE FROM cronograma_execucao WHERE id = ?", (id,))
-        db.commit()
+        supabase.table('cronograma_execucao').delete().eq('id', id).execute()
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao excluir item no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao excluir item: {e}")
 
 @router.put("/api/planejamento/item/{id}")
 def atualizar_item_planejamento(
     id: int,
-    dados: CronogramaUpdate,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    dados: CronogramaUpdate
 ):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM cronograma_execucao WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Item não encontrado")
-    
-    current = dict(row)
-    
-    # Atualiza apenas os campos enviados
-    new_semana = dados.semana_referencia if dados.semana_referencia is not None else current['semana_referencia']
-    new_quant = dados.quant_cisternas if dados.quant_cisternas is not None else current.get('quant_cisternas', 0)
-    new_meta = dados.meta_planejada if dados.meta_planejada is not None else current['meta_planejada']
-    new_exec = dados.qtd_executada if dados.qtd_executada is not None else current['qtd_executada']
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     
     try:
-        cursor.execute("""
-            UPDATE cronograma_execucao 
-            SET semana_referencia = ?, quant_cisternas = ?, meta_planejada = ?, qtd_executada = ?
-            WHERE id = ?
-        """, (new_semana, new_quant, new_meta, new_exec, id))
-        db.commit()
+        res_current = supabase.table('cronograma_execucao').select('*').eq('id', id).execute()
+        if not res_current.data:
+            raise HTTPException(status_code=404, detail="Item não encontrado")
+            
+        current = res_current.data[0]
+        
+        new_semana = dados.semana_referencia if dados.semana_referencia is not None else current['semana_referencia']
+        new_quant = dados.quant_cisternas if dados.quant_cisternas is not None else current.get('quant_cisternas', 0)
+        new_meta = dados.meta_planejada if dados.meta_planejada is not None else current['meta_planejada']
+        new_exec = dados.qtd_executada if dados.qtd_executada is not None else current['qtd_executada']
+        
+        payload = {
+            "semana_referencia": new_semana,
+            "quant_cisternas": new_quant,
+            "meta_planejada": new_meta,
+            "qtd_executada": new_exec
+        }
+        
+        supabase.table('cronograma_execucao').update(payload).eq('id', id).execute()
         return {"message": "Item atualizado"}
+    except HTTPException:
+        raise
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao atualizar item no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar: {e}")
 
 @router.delete("/api/planejamento/limpar-tudo/{municipio}")
 def limpar_cronograma_municipio(
-    municipio: str,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    municipio: str
 ):
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     try:
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM cronograma_execucao WHERE municipio = ?", (municipio,))
-        db.commit()
+        supabase.table('cronograma_execucao').delete().eq('municipio', municipio).execute()
         return {"message": "Cronograma limpo com sucesso"}
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao limpar cronograma no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao limpar: {e}")
 
 @router.post("/api/planejamento/gerar-automatico/{municipio}")
 def gerar_cronograma_automatico(
     municipio: str,
-    dados: SchemaGeracao,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    dados: SchemaGeracao
 ):
-    ensure_table_exists(db)
-    cursor = db.cursor()
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     
     try:
-        # 1. Limpa o cronograma anterior desse município
-        cursor.execute("DELETE FROM cronograma_execucao WHERE municipio = ?", (municipio,))
+        supabase.table('cronograma_execucao').delete().eq('municipio', municipio).execute()
         
-        # 2. Loop de Geração
         saldo_atual = dados.total_cisternas
         
-        # Parse data string to date object
         try:
             data_atual = datetime.strptime(dados.data_inicio, "%Y-%m-%d").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
             
+        payloads = []
         while saldo_atual > 0:
-            # Se o saldo for menor que a meta (ex: sobrou 3, meta é 10), a meta vira 3.
             meta_real = min(dados.meta_semanal, saldo_atual)
             
-            # Insere
-            # quant_cisternas = saldo no inicio da semana
-            cursor.execute("""
-                INSERT INTO cronograma_execucao (municipio, semana_referencia, quant_cisternas, meta_planejada, qtd_executada)
-                VALUES (?, ?, ?, ?, 0)
-            """, (municipio, data_atual.strftime("%Y-%m-%d"), saldo_atual, meta_real))
+            payloads.append({
+                "municipio": municipio,
+                "semana_referencia": data_atual.strftime("%Y-%m-%d"),
+                "quant_cisternas": saldo_atual,
+                "meta_planejada": meta_real,
+                "qtd_executada": 0
+            })
             
-            # Atualiza para a próxima semana
             saldo_atual -= meta_real
             data_atual += timedelta(days=7)
             
-        db.commit()
+        if payloads:
+            supabase.table('cronograma_execucao').insert(payloads).execute()
+            
         return {"message": "Cronograma gerado com sucesso!"}
         
+    except HTTPException:
+        raise
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao gerar cronograma no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar cronograma: {e}")
 
 # --- BENEFICIÁRIOS LINKING ---
@@ -195,43 +144,39 @@ def gerar_cronograma_automatico(
 @router.get("/api/planejamento/beneficiarios/busca")
 def buscar_beneficiarios_para_vinculo(
     q: str,
-    municipio: Optional[str] = None,
-    db: sqlite3.Connection = Depends(get_db_connection)
+    municipio: Optional[str] = None
 ):
     if not q or len(q) < 3:
         return []
     
-    cursor = db.cursor()
-    # Normalização: Retirar acentos e padronizar pra UPPERCASE (Case-insensitive via Python+DB)
-    termo_limpo = f"%{remover_acentos(q).upper()}%"
-    params = [termo_limpo, termo_limpo]
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     
-    # Obs: SQLite LIKE default é case-insensitive para ASCII, mas sem acentos a precisão sobe.
-    # No SQLITE padrão, manter nome_completo cru às vezes falha pra match de acentos. 
-    # Idealmente removemos no input (como feito) e dependemos de LIKE '%termo%'
-    # Já que o banco SQLite não tem função Unaccent nativa padrão.
-    query = """
-        SELECT id, nome_completo, cpf, status, municipio
-        FROM beneficiarios 
-        WHERE (UPPER(nome_completo) LIKE ? OR cpf LIKE ?)
-    """
-    
-    if municipio:
-        mun_limpo = remover_acentos(municipio).upper()
-        # Usa LIKE no municipio para ignorar case sem falhas de utf-8
-        query += " AND UPPER(municipio) = ?"
-        params.append(mun_limpo)
+    try:
+        import re
+        q_clean = q.strip().upper()
+        q_digits = re.sub(r'[^0-9]', '', q)
         
-    query += " LIMIT 10"
-    
-    cursor.execute(query, params)
-    return [dict(row) for row in cursor.fetchall()]
+        query = supabase.table('beneficiarios').select('id, nome_completo, cpf, status, municipio')
+        
+        if len(q_digits) > 5:
+            query = query.ilike('cpf', f"%{q_digits}%")
+        else:
+            query = query.ilike('nome_completo', f"%{q_clean}%")
+            
+        if municipio:
+            query = query.eq('municipio', remover_acentos(municipio).upper())
+            
+        res = query.limit(10).execute()
+        return res.data or []
+        
+    except Exception as e:
+        logging.error(f"Erro ao buscar beneficiários no Supabase: {e}")
+        return []
 
 @router.post("/api/planejamento/vincular")
 def vincular_beneficiario(
-    dados: dict, # { cronograma_id, beneficiario_id, pedreiro_id, data_execucao }
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    dados: dict
 ):
     cronograma_id = dados.get('cronograma_id')
     beneficiario_id = dados.get('beneficiario_id')
@@ -240,57 +185,48 @@ def vincular_beneficiario(
     
     if not cronograma_id or not beneficiario_id:
         raise HTTPException(status_code=400, detail="IDs obrigatórios")
-    
-    ensure_table_exists(db) # Garante migração se necessário
+        
+    from app.core.database import get_supabase
+    supabase = get_supabase()
 
     try:
-        cursor = db.cursor()
-        # Evitar duplicidade
-        cursor.execute("""
-            SELECT id FROM cronograma_beneficiarios 
-            WHERE cronograma_id = ? AND beneficiario_id = ?
-        """, (cronograma_id, beneficiario_id))
-        
-        if cursor.fetchone():
+        res_dup = supabase.table('cronograma_beneficiarios').select('id').eq('cronograma_id', cronograma_id).eq('beneficiario_id', beneficiario_id).execute()
+        if res_dup.data:
             return {"message": "Já vinculado"}
             
-        cursor.execute("""
-            INSERT INTO cronograma_beneficiarios (cronograma_id, beneficiario_id, pedreiro_id, data_execucao)
-            VALUES (?, ?, ?, ?)
-        """, (cronograma_id, beneficiario_id, pedreiro_id, data_execucao))
+        supabase.table('cronograma_beneficiarios').insert({
+            "cronograma_id": cronograma_id,
+            "beneficiario_id": beneficiario_id,
+            "pedreiro_id": pedreiro_id,
+            "data_execucao": data_execucao
+        }).execute()
         
-        # Opcional: Auto-incrementar qtd_executada
-        cursor.execute("""
-            UPDATE cronograma_execucao 
-            SET qtd_executada = qtd_executada + 1 
-            WHERE id = ?
-        """, (cronograma_id,))
+        supabase.table('beneficiarios').update({
+            "status": 'CONSTRUÍDA',
+            "status_pagamento": 'PENDENTE',
+            "pedreiro_id": pedreiro_id,
+            "data_conclusao": data_execucao
+        }).eq('id', beneficiario_id).execute()
         
-        # Atualização obrigatória na origem (Beneficiários)
-        cursor.execute("""
-            UPDATE beneficiarios 
-            SET status = 'CONSTRUÍDA', 
-                status_pagamento = 'PENDENTE', 
-                pedreiro_id = ?, 
-                data_conclusao = ? 
-            WHERE id = ?
-        """, (pedreiro_id, data_execucao, beneficiario_id))
-        
-        db.commit()
         return {"message": "Vínculo criado"}
         
     except Exception as e:
-        db.rollback()
+        logging.error(f"Erro ao vincular no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao vincular: {e}")
 
 @router.delete("/api/planejamento/desvincular")
 def desvincular_beneficiario(
     cronograma_id: int, 
-    beneficiario_id: int,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    beneficiario_id: int
 ):
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     try:
+        supabase.table('cronograma_beneficiarios').delete().eq('cronograma_id', cronograma_id).eq('beneficiario_id', beneficiario_id).execute()
+        return {"message": "Vínculo removido"}
+    except Exception as e:
+        logging.error(f"Erro ao desvincular no Supabase: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao desvincular: {e}")
         cursor = db.cursor()
         cursor.execute("""
             DELETE FROM cronograma_beneficiarios 
@@ -306,74 +242,56 @@ def desvincular_beneficiario(
 
 @router.get("/api/planejamento/{municipio}")
 def listar_planejamento(
-    municipio: str,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    municipio: str
 ):
-    ensure_table_exists(db)
-    cursor = db.cursor()
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     
-    # Busca itens do cronograma
     try:
-        cursor.execute("""
-            SELECT * FROM cronograma_execucao 
-            WHERE municipio = ? 
-            ORDER BY semana_referencia ASC
-        """, (municipio,))
-        itens = [dict(row) for row in cursor.fetchall()]
+        res_itens = supabase.table('cronograma_execucao').select('*').eq('municipio', municipio).order('semana_referencia', desc=False).execute()
+        itens = res_itens.data or []
 
         if not itens:
             return []
 
-        # Busca beneficiários vinculados
         ids_cronograma = [item['id'] for item in itens]
         mapa_benefs = {}
         
         if ids_cronograma:
-            placeholders = ",".join("?" * len(ids_cronograma))
-            # Usando doc_status que sabemos que existe no modelo/banco
-            # INNER JOIN já filtra beneficiários inexistentes
-            query_benefs = f"""
-                SELECT cb.cronograma_id, b.id, b.nome_completo, b.status, b.doc_status
-                FROM cronograma_beneficiarios cb
-                JOIN beneficiarios b ON cb.beneficiario_id = b.id
-                WHERE cb.cronograma_id IN ({placeholders})
-            """
-            cursor.execute(query_benefs, ids_cronograma)
-            todos_vinculos = cursor.fetchall()
+            res_vinculos = supabase.table('cronograma_beneficiarios').select('cronograma_id, beneficiario_id, pedreiro_id').in_('cronograma_id', ids_cronograma).execute()
+            vinculos = res_vinculos.data or []
             
-            for row in todos_vinculos:
-                cid = row['cronograma_id']
-                # Mapeia doc_status para caminho_documento para o frontend funcionar
-                doc_path = row['doc_status']
+            if vinculos:
+                ids_benefs = [v['beneficiario_id'] for v in vinculos]
+                res_benefs = supabase.table('beneficiarios').select('id, nome_completo, status, doc_status').in_('id', ids_benefs).execute()
+                benefs_dict = {b['id']: b for b in res_benefs.data} if res_benefs.data else {}
                 
-                benef = {
-                    "id": row['id'], 
-                    "nome_completo": row['nome_completo'], 
-                    "status": row['status'],
-                    "caminho_documento": doc_path, 
-                    "arquivo_caminho": doc_path 
-                }
-                
-                if cid not in mapa_benefs:
-                    mapa_benefs[cid] = []
-                mapa_benefs[cid].append(benef)
+                for v in vinculos:
+                    cid = v['cronograma_id']
+                    bid = v['beneficiario_id']
+                    benef_data = benefs_dict.get(bid)
+                    
+                    if benef_data:
+                        doc_path = benef_data.get('doc_status', 'PENDENTE')
+                        benef = {
+                            "id": bid,
+                            "nome_completo": benef_data.get('nome_completo', 'Não informado'),
+                            "status": benef_data.get('status', 'IMPORTADO'),
+                            "caminho_documento": doc_path,
+                            "arquivo_caminho": doc_path
+                        }
+                        if cid not in mapa_benefs:
+                            mapa_benefs[cid] = []
+                        mapa_benefs[cid].append(benef)
 
-        # Anexa aos itens
         for item in itens:
             item['beneficiarios'] = mapa_benefs.get(item['id'], [])
+            quant = item.get('quant_cisternas') or 0
+            meta = item.get('meta_planejada') or 0
+            item['saldo_acumulado'] = quant - meta
+
+        return itens
             
     except Exception as e:
-        # Loga mas não trava - retorna lista vazia em último caso
-        logging.error(f"Erro ao listar cronograma (Fail-safe): {e}")
-        print(f"ERRO CRÍTICO NO PLANEJAMENTO: {e}")
+        logging.error(f"Erro ao listar planejamento no Supabase: {e}")
         return []
-    
-    # Calcula saldos acumulados (Local para cada linha agora)
-    for item in itens:
-        # Garante valores numéricos
-        quant = item.get('quant_cisternas') or 0
-        meta = item.get('meta_planejada') or 0
-        item['saldo_acumulado'] = quant - meta
-
-    return itens

@@ -61,6 +61,28 @@ def get_user_role(username: str) -> Optional[str]:
     except Exception:
         return None
 
+async def get_map_user_context(request: Request):
+    is_admin = False
+    user_username = "Anônimo"
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            if token.startswith("Bearer "):
+                token = token.split(" ")[1]
+            from jose import jwt
+            from app.core.auth.utils import SECRET_KEY, ALGORITHM
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_username = payload.get("sub", "Anônimo")
+            
+            from app.core.database import get_supabase
+            supabase = get_supabase()
+            res_user = supabase.table('users').select('role').eq('username', user_username).execute()
+            if res_user.data and res_user.data[0].get('role') == 'admin':
+                is_admin = True
+        except Exception:
+            pass
+    return {"is_admin": is_admin, "user_username": user_username}
+
 # --- Views ---
 
 @view_router.get("/mapa", response_class=HTMLResponse)
@@ -68,36 +90,30 @@ async def get_map_page(request: Request):
     user = get_user_auth(request)
     if not user:
         return RedirectResponse("/login")
-    return templates.TemplateResponse("mapa/index.html", {"request": request})
+    ctx = await get_map_user_context(request)
+    return templates.TemplateResponse(request=request, name="mapa/index.html", context={"current_page": "mapa", **ctx})
 
 @router.get("/geral", response_class=HTMLResponse)
 async def mapa_geral(request: Request):
     user = get_user_auth(request)
     if not user:
         return RedirectResponse("/login")
-        
-    return templates.TemplateResponse("mapa/index.html", {
-        "request": request, 
-        "contexto": "geral"
-    })
+    ctx = await get_map_user_context(request)
+    return templates.TemplateResponse(request=request, name="mapa/index.html", context={"current_page": "mapa", "contexto": "geral", **ctx})
 
 @router.get("/privado", response_class=HTMLResponse)
 async def mapa_privado(request: Request):
     user = get_user_auth(request)
-    
     if not user:
         return RedirectResponse("/login")
         
     if user != "fgermino":
-        return templates.TemplateResponse("errors/error.html", {
-            "request": request,
+        return templates.TemplateResponse(request=request, name="errors/error.html", context={
             "message": "Acesso Restrito à Coordenação. Você não tem permissão para visualizar esta página."
         }, status_code=403)
 
-    return templates.TemplateResponse("mapa/index.html", {
-        "request": request, 
-        "contexto": "privado"
-    })
+    ctx = await get_map_user_context(request)
+    return templates.TemplateResponse(request=request, name="mapa/index.html", context={"current_page": "mapa", "contexto": "privado", **ctx})
 
 # --- API ---
 

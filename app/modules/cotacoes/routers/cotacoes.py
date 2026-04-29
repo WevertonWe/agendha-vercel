@@ -97,16 +97,33 @@ async def criar_proposta_para_cotacao(
 
     caminho_zip_relativo = None
     if arquivos and arquivos[0].filename:
+        import tempfile
+        import zipfile
         nome_zip_unico = f"proposta_{master_id}_{uuid.uuid4().hex[:8]}.zip"
-        caminho_zip_absoluto = settings.COTACOES_FOLDER / nome_zip_unico
+        temp_zip_dir = Path(tempfile.gettempdir())
+        caminho_zip_absoluto = temp_zip_dir / nome_zip_unico
         try:
             with zipfile.ZipFile(caminho_zip_absoluto, 'w') as zipf:
                 for arquivo in arquivos:
                     conteudo = await arquivo.read()
                     zipf.writestr(arquivo.filename, conteudo)
-            caminho_zip_relativo = f"uploads/cotacoes/{nome_zip_unico}"
+            
+            with open(caminho_zip_absoluto, "rb") as f:
+                zip_bytes = f.read()
+                
+            supabase.storage.from_('agendha-uploads').upload(
+                path=f"cotacoes/{nome_zip_unico}",
+                file=zip_bytes,
+                file_options={"content-type": "application/zip"}
+            )
+            
+            caminho_zip_relativo = supabase.storage.from_('agendha-uploads').get_public_url(f"cotacoes/{nome_zip_unico}")
+            
+            if caminho_zip_absoluto.exists():
+                os.remove(caminho_zip_absoluto)
+                
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Erro ao criar o ficheiro ZIP: {e}")
+            raise HTTPException(status_code=500, detail=f"Erro ao criar o ficheiro ZIP e enviar ao Supabase: {e}")
 
     try:
         dados_proposta = {

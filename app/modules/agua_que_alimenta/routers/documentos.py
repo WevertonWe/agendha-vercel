@@ -1,68 +1,66 @@
 import os
-import shutil
 import uuid
-import sqlite3
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from app.dependencies import get_db_connection
+from fastapi.responses import RedirectResponse
 from app.core.auth.dependencies import get_current_user
 from app.modules.agua_que_alimenta.models import Documento
 from app.config import settings
+from app.core.database import get_supabase
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])
+logger = logging.getLogger(__name__)
 
 @router.get("", response_model=List[Documento])
-def listar_documentos(db: sqlite3.Connection = Depends(get_db_connection)):
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        SELECT id, nome_documento, descricao, nome_arquivo,
-               caminho_arquivo, data_upload
-        FROM documentos ORDER BY id DESC
-        """
-    )
-    registros = cursor.fetchall()
-    return [Documento(**registro) for registro in registros]
-
+def listar_documentos():
+    try:
+        supabase = get_supabase()
+        res = supabase.table('documentos').select('*').order('id', desc=True).execute()
+        docs = []
+        for row in res.data:
+            docs.append(Documento(**row))
+        return docs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar documentos: {e}")
 
 @router.post("", response_model=Documento, status_code=201)
 async def criar_documento(
     nome_documento: str = Form(...),
     descricao: str | None = Form(None),
     arquivo: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
-    """
-    Upload de documento para repositório central.
-    Gera nome único (UUID prefix) para evitar colisão de arquivos.
-    """
     nome_arquivo_unico = f"{uuid.uuid4().hex[:8]}_{arquivo.filename}"
-    caminho_absoluto_salvo = settings.DOCUMENTOS_FOLDER / nome_arquivo_unico
-
-    with open(caminho_absoluto_salvo, "wb") as buffer:
-        shutil.copyfileobj(arquivo.file, buffer)
-
     caminho_web_relativo = f"uploads/documentos/{nome_arquivo_unico}"
 
-    cursor = db.cursor()
-    cursor.execute(
-        """
-        INSERT INTO documentos (nome_documento, descricao, nome_arquivo, caminho_arquivo)
-        VALUES (?, ?, ?, ?)
-        """,
-        (nome_documento, descricao, arquivo.filename, caminho_web_relativo)
-    )
-    novo_id = cursor.lastrowid
-    db.commit()
+    try:
+        content = await arquivo.read()
+        supabase = get_supabase()
+        
+        supabase.storage.from_('agendha-uploads').upload(
+            path=caminho_web_relativo,
+            file=content,
+            file_options={"content-type": arquivo.content_type}
+        )
+    except Exception as e:
+        logger.error(f"Erro upload documento: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar arquivo no Storage: {e}")
 
-    cursor.execute("SELECT * FROM documentos WHERE id = ?", (novo_id,))
-    novo_documento = cursor.fetchone()
-    return Documento(**novo_documento)
+    try:
+        res = supabase.table('documentos').insert({
+            "nome_documento": nome_documento,
+            "descricao": descricao or "",
+            "nome_arquivo": arquivo.filename,
+            "caminho_arquivo": caminho_web_relativo
+        }).execute()
 
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Erro ao salvar documento no banco.")
 
-
-
+        return Documento(**res.data[0])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar documento no banco: {e}")
 
 @router.put("/{documento_id}", response_model=Documento)
 async def atualizar_documento(
@@ -70,74 +68,89 @@ async def atualizar_documento(
     nome_documento: str = Form(...),
     descricao: str | None = Form(None),
     arquivo: UploadFile | None = File(None),
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM documentos WHERE id = ?", (documento_id,))
-    doc_existente = cursor.fetchone()
+    try:
+        supabase = get_supabase()
+        res_old = supabase.table('documentos').select('*').eq('id', documento_id).execute()
 
-    if not doc_existente:
-        raise HTTPException(status_code=404, detail="Documento não encontrado")
+        if not res_old.data:
+            raise HTTPException(status_code=404, detail="Documento não encontrado")
 
-    nome_arquivo_novo = doc_existente["nome_arquivo"]
-    caminho_web_novo = doc_existente["caminho_arquivo"]
+        doc_existente = res_old.data[0]
+        nome_arquivo_novo = doc_existente["nome_arquivo"]
+        caminho_web_novo = doc_existente["caminho_arquivo"]
 
-    # Se enviou novo arquivo, substitui o antigo
-    if arquivo:
-        # Remover arquivo antigo
-        caminho_antigo_abs = settings.BASE_DIR / doc_existente["caminho_arquivo"]
-        if os.path.exists(caminho_antigo_abs):
+        if arquivo and arquivo.filename:
             try:
-                os.remove(caminho_antigo_abs)
-            except OSError:
-                pass # Ignora erro se não conseguir deletar antigo
+                if caminho_web_novo:
+                    try:
+                        supabase.storage.from_('agendha-uploads').remove([caminho_web_novo])
+                    except Exception:
+                        pass
 
-        # Salvar novo arquivo
-        nome_unico = f"{uuid.uuid4().hex[:8]}_{arquivo.filename}"
-        caminho_salvar = settings.DOCUMENTOS_FOLDER / nome_unico
-        
-        with open(caminho_salvar, "wb") as buffer:
-            shutil.copyfileobj(arquivo.file, buffer)
-            
-        nome_arquivo_novo = arquivo.filename
-        caminho_web_novo = f"uploads/documentos/{nome_unico}"
+                nome_unico = f"{uuid.uuid4().hex[:8]}_{arquivo.filename}"
+                content = await arquivo.read()
+                
+                caminho_web_novo = f"uploads/documentos/{nome_unico}"
+                supabase.storage.from_('agendha-uploads').upload(
+                    path=caminho_web_novo,
+                    file=content,
+                    file_options={"content-type": arquivo.content_type}
+                )
+                nome_arquivo_novo = arquivo.filename
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Erro no upload do arquivo: {e}")
 
-    cursor.execute(
-        """
-        UPDATE documentos
-        SET nome_documento = ?, descricao = ?, nome_arquivo = ?, caminho_arquivo = ?
-        WHERE id = ?
-        """,
-        (nome_documento, descricao, nome_arquivo_novo, caminho_web_novo, documento_id)
-    )
-    db.commit()
+        res_up = supabase.table('documentos').update({
+            "nome_documento": nome_documento,
+            "descricao": descricao or "",
+            "nome_arquivo": nome_arquivo_novo,
+            "caminho_arquivo": caminho_web_novo
+        }).eq('id', documento_id).execute()
 
-    cursor.execute("SELECT * FROM documentos WHERE id = ?", (documento_id,))
-    doc_atualizado = cursor.fetchone()
-    return Documento(**doc_atualizado)
+        if not res_up.data:
+            raise HTTPException(status_code=500, detail="Erro ao atualizar documento no banco.")
 
+        return Documento(**res_up.data[0])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar documento: {e}")
 
 @router.delete("/{documento_id}", status_code=204)
 def deletar_documento(
     documento_id: int,
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT caminho_arquivo FROM documentos WHERE id = ?", (documento_id,)
-    )
-    resultado = cursor.fetchone()
-    if not resultado:
-        raise HTTPException(status_code=404, detail="Documento não encontrado")
+    try:
+        supabase = get_supabase()
+        res_old = supabase.table('documentos').select('caminho_arquivo').eq('id', documento_id).execute()
+        
+        if not res_old.data:
+            raise HTTPException(status_code=404, detail="Documento não encontrado")
 
-    caminho_arquivo = resultado["caminho_arquivo"]
-    if caminho_arquivo:
-        caminho_abs = settings.BASE_DIR / caminho_arquivo
-        if os.path.exists(caminho_abs):
-            os.remove(caminho_abs)
+        caminho_arquivo = res_old.data[0]["caminho_arquivo"]
+        if caminho_arquivo:
+            try:
+                supabase.storage.from_('agendha-uploads').remove([caminho_arquivo])
+            except Exception:
+                pass
 
-    cursor.execute("DELETE FROM documentos WHERE id = ?", (documento_id,))
-    db.commit()
-    return
+        supabase.table('documentos').delete().eq('id', documento_id).execute()
+        return
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar documento: {e}")
+
+@router.get("/download/{documento_id}")
+def download_documento(documento_id: int):
+    try:
+        supabase = get_supabase()
+        res = supabase.table('documentos').select('caminho_arquivo').eq('id', documento_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Documento não encontrado")
+        
+        caminho = res.data[0].get('caminho_arquivo')
+        url = supabase.storage.from_('agendha-uploads').get_public_url(caminho)
+        return RedirectResponse(url=url)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Erro ao gerar link do documento.")
+
