@@ -57,6 +57,13 @@ logging.basicConfig(level=logging.INFO,
 
 from jinja2 import Environment, FileSystemLoader
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+
+def safely_split(value, delimiter='-'):
+    if isinstance(value, dict):
+        return []
+    return str(value).split(delimiter)
+
+_env.filters['safely_split'] = safely_split
 templates = Jinja2Templates(env=_env)
 
 @asynccontextmanager

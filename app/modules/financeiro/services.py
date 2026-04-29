@@ -82,7 +82,15 @@ def get_projeto_completo(projeto_id: int) -> Dict[str, Any]:
 def list_entidades(limit: int = 5) -> List[Dict[str, Any]]:
     supabase = get_supabase()
     res = supabase.table('financeiro_entidades').select('*').order('id', desc=True).limit(limit).execute()
-    return res.data
+    
+    data = res.data if res.data else []
+    for row in data:
+        for k in row.keys():
+            if 'data' in k or 'created' in k or 'status' in k:
+                row[k] = str(row[k]) if row[k] is not None else ''
+            elif row[k] is None:
+                row[k] = ''
+    return data
 
 def get_all_entidades() -> List[Dict[str, Any]]:
     supabase = get_supabase()

@@ -1,9 +1,15 @@
 from app.core.database import get_supabase, fetch_all
 
 def get_all_oficios(db=None):
-    # Usando fetch_all para garantir a leitura total com paginação
     data = fetch_all('oficios')
-    # Mantendo a ordenação por ID decrescente
+    
+    for row in data:
+        for k in row.keys():
+            if 'data' in k or 'created' in k or 'status' in k:
+                row[k] = str(row[k]) if row[k] is not None else ''
+            elif row[k] is None:
+                row[k] = ''
+                
     data.sort(key=lambda x: x.get('id', 0), reverse=True)
     return data
 
