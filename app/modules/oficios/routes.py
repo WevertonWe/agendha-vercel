@@ -35,7 +35,7 @@ class OficioUpdate(BaseModel):
 @router.get("/", response_class=HTMLResponse)
 async def list_oficios(request: Request):
     oficios = services.get_all_oficios()
-    return templates.TemplateResponse("admin/oficios.html", {"request": request, "oficios": oficios})
+    return templates.TemplateResponse(request=request, name="admin/oficios.html", context={"oficios": oficios})
 
 @router.get("/download/{filename}")
 async def download_file(filename: str):
