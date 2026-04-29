@@ -140,6 +140,10 @@ def list_lancamentos(limit: int = 5) -> List[Dict[str, Any]]:
     for row in res.data:
         row['nome_razao_social'] = entidades_map.get(row.get('entidade_id'), 'Desconhecido')
         row['rubrica_descricao'] = rubricas_map.get(row.get('rubrica_id'), 'Desconhecido')
+        # Forçando tipos para evitar erros no template
+        row['data_lancamento'] = str(row.get('data_lancamento') or '')
+        row['status'] = str(row.get('status') or '')
+        row['valor'] = float(row.get('valor') or 0.0)
         
     return res.data
 
@@ -150,6 +154,11 @@ def get_lancamento(lancamento_id: int) -> Dict[str, Any]:
         return None
     
     lancamento = res.data[0]
+    
+    # Forçando tipos para evitar erros no template
+    lancamento['data_lancamento'] = str(lancamento.get('data_lancamento') or '')
+    lancamento['status'] = str(lancamento.get('status') or '')
+    lancamento['valor'] = float(lancamento.get('valor') or 0.0)
     
     if lancamento.get('entidade_id'):
         res_ent = supabase.table('financeiro_entidades').select('*').eq('id', lancamento['entidade_id']).execute()
@@ -239,6 +248,10 @@ def get_extrato_projeto(projeto_id: int) -> List[Dict[str, Any]]:
         rubrica = rubricas_map.get(row.get('rubrica_id'), {})
         row['rubrica_codigo'] = rubrica.get('codigo', 'N/A')
         row['rubrica_descricao'] = rubrica.get('descricao', 'Desconhecido')
+        # Forçando tipos para evitar erros no template
+        row['data_lancamento'] = str(row.get('data_lancamento') or '')
+        row['status'] = str(row.get('status') or '')
+        row['valor'] = float(row.get('valor') or 0.0)
         
     return res.data
 

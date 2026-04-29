@@ -1,15 +1,12 @@
-import os
-from supabase import create_client
-
-def get_supabase():
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
-    return create_client(supabase_url, supabase_key)
+from app.core.database import get_supabase, fetch_all
 
 def get_all_oficios(db=None):
-    supabase = get_supabase()
-    res = supabase.table('oficios').select('*').order('id', desc=True).execute()
-    return res.data
+    # Usando fetch_all para garantir a leitura total com paginação
+    data = fetch_all('oficios')
+    # Mantendo a ordenação por ID decrescente
+    data.sort(key=lambda x: x.get('id', 0), reverse=True)
+    return data
+
 
 def create_oficio(db, dados: dict):
     supabase = get_supabase()

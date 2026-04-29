@@ -1,49 +1,60 @@
-from fastapi import APIRouter, Depends
-from app.core.database import get_db_connection
-import sqlite3
+from fastapi import APIRouter
 from typing import Dict, Any
+from app.core.database import get_supabase, fetch_all
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 @router.get("/resumo", response_model=Dict[str, Any])
-async def get_dashboard_summary(db: sqlite3.Connection = Depends(get_db_connection)):
+async def get_dashboard_summary():
     """
     Retorna métricas consolidadas para o Dashboard Executivo.
-    - BSF: Visitas Realizadas vs Meta Total (Soma de todas as metas ativas)
+    - BSF: Visitas Realizadas vs Meta Total
     - AQA: Total de Beneficiários Cadastrados
-    - Financeiro: Total Executado (Soma de todos os lançamentos)
+    - Financeiro: Total Executado
     - Ofícios: Total de Ofícios Registrados
+    - Biomas: Consolidação dos Biomas (Soma Real)
     """
-    import os
-    from supabase import create_client
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
-    
-    supabase = create_client(supabase_url, supabase_key)
-    
     # 1. BSF: Visitas Realizadas vs Meta
-    res_realizado = supabase.table('bsf_visitas').select('count', count='exact').eq('status', 'Realizada').execute()
-    bsf_realizado = res_realizado.count or 0
+    visitas = fetch_all('bsf_visitas')
+    bsf_realizado = len([v for v in visitas if str(v.get('status') or '').strip().lower() == 'realizada'])
     
-    res_meta = supabase.table('bsf_metas_contrato').select('meta_anual').eq('ano', 2025).execute()
-    bsf_meta = sum(row.get('meta_anual', 0) for row in res_meta.data) if res_meta.data else 0
+    metas_contrato = fetch_all('bsf_metas_contrato')
+    bsf_meta = sum(int(row.get('meta_anual') or 0) for row in metas_contrato if row.get('ano') == 2025)
     
     bsf_percent = 0.0
     if bsf_meta > 0:
         bsf_percent = round((bsf_realizado / bsf_meta) * 100, 1)
         
     # 2. AQA: Total Beneficiários
-    res_aqa = supabase.table('beneficiarios').select('count', count='exact').execute()
-    aqa_total = res_aqa.count or 0
+    beneficiarios = fetch_all('beneficiarios')
+    aqa_total = len(beneficiarios)
     
-    # 3. Financeiro: Total Executado
-    res_fin = supabase.table('financeiro_lancamentos').select('valor').execute()
-    financeiro_total = sum(float(row.get('valor', 0)) for row in res_fin.data) if res_fin.data else 0.0
+    # 3. Financeiro: Total Executado (Todos os projetos)
+    lancamentos = fetch_all('financeiro_lancamentos')
+    financeiro_total = sum(float(row.get('valor') or 0.0) for row in lancamentos)
     
     # 4. Ofícios: Total Registrados
-    res_oficios = supabase.table('oficios').select('count', count='exact').execute()
-    oficios_total = res_oficios.count or 0
+    oficios = fetch_all('oficios')
+    oficios_total = len(oficios)
     
+    # 5. Biomas: Consolidação
+    projetos = fetch_all('financeiro_projetos')
+    biomas_ids = []
+    for p in projetos:
+        nome = str(p.get('nome') or '').lower()
+        proj_id = str(p.get('id') or '').lower()
+        if 'biomas' in nome or 'biomas' in proj_id or 'ca-13' in proj_id or 'ca-24' in proj_id:
+            biomas_ids.append(p.get('id'))
+            
+    biomas_financeiro = sum(float(l.get('valor') or 0.0) for l in lancamentos if l.get('projeto_id') in biomas_ids)
+    
+    # Beneficiários dos biomas (tentativa de filtro por projeto)
+    biomas_beneficiarios = 0
+    try:
+        biomas_beneficiarios = len([b for b in beneficiarios if str(b.get('projeto_id') or '') in biomas_ids or 'biomas' in str(b.get('projeto') or '').lower()])
+    except Exception:
+        biomas_beneficiarios = 0
+        
     return {
         "bsf": {
             "realizado": bsf_realizado,
@@ -58,5 +69,10 @@ async def get_dashboard_summary(db: sqlite3.Connection = Depends(get_db_connecti
         },
         "oficios": {
             "total": oficios_total
+        },
+        "biomas": {
+            "financeiro_executado": biomas_financeiro,
+            "beneficiarios": biomas_beneficiarios
         }
     }
+

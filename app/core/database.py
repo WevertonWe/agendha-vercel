@@ -440,3 +440,37 @@ def init_db():
     conn.execute("PRAGMA foreign_keys = ON")
     conn.close()
     logging.info("Banco de dados inicializado com sucesso.")
+
+def get_supabase():
+    """Retorna o cliente do Supabase centralizado"""
+    import os
+    from supabase import create_client
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    if not supabase_url or not supabase_key:
+        raise RuntimeError("SUPABASE_URL ou SUPABASE_KEY não configuradas no ambiente!")
+    return create_client(supabase_url, supabase_key)
+
+def fetch_all(table_name: str, select_query: str = '*'):
+    """Busca todos os registros de uma tabela Supabase com paginação recursiva para evitar limite de 1000"""
+    supabase = get_supabase()
+    all_data = []
+    page_size = 1000
+    start = 0
+    
+    while True:
+        end = start + page_size - 1
+        try:
+            res = supabase.table(table_name).select(select_query).range(start, end).execute()
+            if not res.data:
+                break
+            all_data.extend(res.data)
+            if len(res.data) < page_size:
+                break
+            start += page_size
+        except Exception as e:
+            import logging
+            logging.error(f"Erro ao fazer fetch_all na tabela {table_name}: {e}")
+            break
+        
+    return all_data
