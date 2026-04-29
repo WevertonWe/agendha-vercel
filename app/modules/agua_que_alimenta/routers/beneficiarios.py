@@ -731,15 +731,31 @@ def get_consolidado_atividades(db: sqlite3.Connection = Depends(get_db_connectio
 
 
 @router.get("/municipios", response_class=JSONResponse)
-def get_municipios_unicos(db: sqlite3.Connection = Depends(get_db_connection)):
+def get_municipios_unicos():
     try:
-        cursor = db.cursor()
-        query = "SELECT DISTINCT municipio FROM beneficiarios WHERE municipio IS NOT NULL AND municipio != ''"
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        return sorted([row['municipio'] for row in rows])
-    except sqlite3.Error as e:
-        logging.error(f"Erro ao buscar municípios: {e}")
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').select('municipio').execute()
+        if res.data:
+            municipios = {row.get('municipio') for row in res.data if row.get('municipio')}
+            return sorted(list(municipios))
+        return []
+    except Exception as e:
+        logging.error(f"Erro ao buscar municípios no Supabase: {e}")
+        return []
+
+@router.get("/comunidades", response_class=JSONResponse)
+def get_comunidades_unicas():
+    try:
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').select('comunidade').execute()
+        if res.data:
+            comunidades = {row.get('comunidade') for row in res.data if row.get('comunidade')}
+            return sorted(list(comunidades))
+        return []
+    except Exception as e:
+        logging.error(f"Erro ao buscar comunidades no Supabase: {e}")
         return []
 
 

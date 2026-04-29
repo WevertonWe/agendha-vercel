@@ -6,18 +6,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dados = await response.json();
 
         const labelsMunicipios = dados.map(d => d.municipio);
-        const dataMunicipios = dados.map(d => d.total_beneficiarios || 0); // Correção aqui
+        const dataMunicipios = dados.map(d => Number(d.total_beneficiarios || 0));
         renderizarGraficoBarras(labelsMunicipios, dataMunicipios);
 
         let totalEmCadastro = 0, totalCadastrado = 0, totalAConstruir = 0, totalConstruida = 0, totalOutros = 0;
 
-        // A CORREÇÃO ESTÁ AQUI: Adicionamos '|| 0' para tratar valores nulos ou undefined
         dados.forEach(d => {
-            totalEmCadastro += d.em_cadastro || 0;
-            totalCadastrado += d.cadastrado || 0;
-            totalAConstruir += d.a_construir || 0;
-            totalConstruida += d.construida || 0;
-            totalOutros += d.outros_status || 0;
+            totalEmCadastro += Number(d.em_cadastro || 0);
+            totalCadastrado += Number(d.cadastrado || 0);
+            totalAConstruir += Number(d.a_construir || 0);
+            totalConstruida += Number(d.construida || 0);
+            totalOutros += Number(d.outros_status || 0);
         });
 
         const labelsStatus = ['Em Cadastro', 'Cadastrado', 'A Construir', 'Construída', 'Outros Status'];

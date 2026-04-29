@@ -9,10 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // A CORREÇÃO ESTÁ AQUI: Adicionamos '|| 0' para tratar valores nulos ou undefined
         dados.forEach(d => {
-            totalBeneficiarios += d.total_beneficiarios || 0;
-            totalCadastrados += d.cadastrado || 0;
-            totalEmCadastro += d.em_cadastro || 0;
-            totalOutros += d.outros_status || 0;
+            totalBeneficiarios += Number(d.total_beneficiarios || 0);
+            totalCadastrados += Number(d.cadastrado || 0);
+            totalEmCadastro += Number(d.em_cadastro || 0);
+            totalOutros += Number(d.outros_status || 0);
         });
 
         const elTotal = document.getElementById('kpi-total-beneficiarios');

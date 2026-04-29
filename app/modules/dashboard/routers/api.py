@@ -57,22 +57,22 @@ async def get_dashboard_summary():
         
     return {
         "bsf": {
-            "realizado": bsf_realizado,
-            "meta": bsf_meta,
-            "percent": bsf_percent
+            "realizado": int(bsf_realizado),
+            "meta": int(bsf_meta),
+            "percent": float(bsf_percent)
         },
         "aqa": {
-            "beneficiarios": aqa_total
+            "beneficiarios": int(aqa_total)
         },
         "financeiro": {
-            "executado": financeiro_total
+            "executado": float(financeiro_total)
         },
         "oficios": {
-            "total": oficios_total
+            "total": int(oficios_total)
         },
         "biomas": {
-            "financeiro_executado": biomas_financeiro,
-            "beneficiarios": biomas_beneficiarios
+            "financeiro_executado": float(biomas_financeiro),
+            "beneficiarios": int(biomas_beneficiarios)
         }
     }
 

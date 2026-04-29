@@ -39,10 +39,12 @@ async def list_oficios(request: Request):
 
 @router.get("/download/{filename}")
 async def download_file(filename: str):
-    file_path = settings.UPLOAD_FOLDER / "oficios" / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    return FileResponse(file_path)
+    supabase_url = settings.SUPABASE_URL
+    if not supabase_url:
+         import os
+         supabase_url = os.getenv("SUPABASE_URL", "")
+    public_url = f"{supabase_url}/storage/v1/object/public/oficios/{filename}"
+    return RedirectResponse(url=public_url)
 
 @router.post("/", response_class=HTMLResponse)
 async def create_oficio(
@@ -69,17 +71,18 @@ async def create_oficio(
 
     caminho_arquivo = None
     if arquivo and arquivo.filename:
-        upload_dir = settings.UPLOAD_FOLDER / "oficios"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Safe filename
         safe_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{arquivo.filename}"
-        file_path = upload_dir / safe_filename
         
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(arquivo.file, buffer)
-            
-        caminho_arquivo = safe_filename
+        try:
+            from app.core.database import get_supabase
+            supabase = get_supabase()
+            file_bytes = await arquivo.read()
+            # Fazer upload para o bucket 'oficios' do Supabase
+            supabase.storage.from_('oficios').upload(path=safe_filename, file=file_bytes, file_options={"content-type": arquivo.content_type})
+            caminho_arquivo = safe_filename
+        except Exception as e:
+            logging.error(f"Erro ao subir PDF para Supabase: {e}")
+            caminho_arquivo = None
 
     dados = {
         "numero_oficio": numero_oficio,
@@ -114,17 +117,16 @@ async def update_oficio_endpoint(
         dados["numero_oficio"] = numero_oficio
 
     if arquivo and arquivo.filename:
-        upload_dir = settings.UPLOAD_FOLDER / "oficios"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Safe filename
         safe_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{arquivo.filename}"
-        file_path = upload_dir / safe_filename
         
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(arquivo.file, buffer)
-            
-        dados["caminho_arquivo"] = safe_filename
+        try:
+            from app.core.database import get_supabase
+            supabase = get_supabase()
+            file_bytes = await arquivo.read()
+            supabase.storage.from_('oficios').upload(path=safe_filename, file=file_bytes, file_options={"content-type": arquivo.content_type})
+            dados["caminho_arquivo"] = safe_filename
+        except Exception as e:
+            logging.error(f"Erro ao atualizar PDF no Supabase: {e}")
 
     sucesso = services.update_oficio(None, oficio_id, dados)
     if not sucesso:

@@ -19,21 +19,67 @@ async def get_portal_page(request: Request):
 
 @router.get("/portal", response_class=HTMLResponse)
 async def get_real_portal_page(request: Request):
+    is_admin = False
+    user_username = "Anônimo"
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            if token.startswith(f"{settings.AUTH_BEARER_PREFIX} "):
+                token = token.split(" ")[1]
+            from jose import jwt
+            from app.core.auth.utils import SECRET_KEY, ALGORITHM
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_username = payload.get("sub", "Anônimo")
+            
+            from app.core.database import get_supabase
+            supabase = get_supabase()
+            res_user = supabase.table('users').select('role').eq('username', user_username).execute()
+            if res_user.data and res_user.data[0].get('role') == 'admin':
+                is_admin = True
+        except Exception:
+            pass
+            
     return templates.TemplateResponse(request=request, name=str("agua/portal.html"), context={
         "request": request, 
         "current_page": "portal", 
-        "is_admin": False,
-        "user_username": "Anônimo",
+        "is_admin": is_admin,
+        "user_username": user_username,
         "context_project": "agua"
     })
 
 @router.get("/hub", response_class=HTMLResponse)
 async def get_admin_hub_page(request: Request):
+    is_admin = False
+    user_username = "Anônimo"
+    user_role = "user"
+    token = request.cookies.get("access_token")
+    if token:
+        try:
+            if token.startswith(f"{settings.AUTH_BEARER_PREFIX} "):
+                token = token.split(" ")[1]
+            from jose import jwt
+            from app.core.auth.utils import SECRET_KEY, ALGORITHM
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_username = payload.get("sub", "Anônimo")
+            
+            from app.core.database import get_supabase
+            supabase = get_supabase()
+            res_user = supabase.table('users').select('role').eq('username', user_username).execute()
+            if res_user.data:
+                user_role = res_user.data[0].get('role', 'user')
+                if user_role == 'admin':
+                    is_admin = True
+        except Exception:
+            pass
+            
+    if not is_admin:
+         return RedirectResponse(url="/login")
+
     return templates.TemplateResponse(request=request, name=str("admin/admin_hub.html"), context={
         "request": request, 
         "current_page": "hub",
-        "user_role": "user",
-        "user_username": "Anônimo"
+        "user_role": user_role,
+        "user_username": user_username
     })
 
 @router.get("/login")
