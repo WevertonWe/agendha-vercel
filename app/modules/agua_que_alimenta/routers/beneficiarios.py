@@ -678,56 +678,57 @@ async def comparar_importacao_csv(
 # Vou colocar aqui por enquanto, mas poderiam estar em um router 'dashboard'
 
 @router.get("/consolidado/atividades", response_class=JSONResponse)
-def get_consolidado_atividades(db: sqlite3.Connection = Depends(get_db_connection)):
+def get_consolidado_atividades():
     try:
-        cursor = db.cursor()
-        # Simplificação: Como os dados estão limpos, o GROUP BY SQL é suficiente e performático
-        query = """
-            SELECT UPPER(TRIM(municipio)) as municipio, status 
-            FROM beneficiarios 
-            WHERE municipio IS NOT NULL 
-              AND municipio != '' 
-              AND UPPER(status) != 'EXCLUIDO'
-        """
-        cursor.execute(query)
-        registros = cursor.fetchall()
-
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').select('municipio, status').execute()
+        
+        if not res.data:
+            return []
+            
+        registros = res.data
+        from collections import defaultdict
         dados_agregados = defaultdict(lambda: defaultdict(int))
         for registro in registros:
-            # Blindagem final na agregação
-            nome_normalizado = registro["municipio"]
-
-            dados_agregados[nome_normalizado]["total_beneficiarios"] += 1
-            status = registro["status"]
-            if status in ['Em Cadastro', 'EM CADASTRO']:
-                dados_agregados[nome_normalizado]["em_cadastro"] += 1
-            elif status in ['Cadastrado', 'CADASTRADO']:
-                dados_agregados[nome_normalizado]["cadastrado"] += 1
-            elif status in ['A Construir', 'A CONSTRUIR']:
-                dados_agregados[nome_normalizado]["a_construir"] += 1
-            elif status in ['Construída', 'CONSTRUÍDA']:
-                dados_agregados[nome_normalizado]["construida"] += 1
+            mun = str(registro.get("municipio") or '').strip().upper()
+            if not mun:
+                continue
+                
+            status = str(registro.get("status") or '').strip().upper()
+            if status == 'EXCLUIDO':
+                continue
+                
+            dados_agregados[mun]["total_beneficiarios"] += 1
+            if status in ['EM CADASTRO', 'EM_CADASTRO']:
+                dados_agregados[mun]["em_cadastro"] += 1
+            elif status in ['CADASTRADO']:
+                dados_agregados[mun]["cadastrado"] += 1
+            elif status in ['A CONSTRUIR', 'A_CONSTRUIR']:
+                dados_agregados[mun]["a_construir"] += 1
+            elif status in ['CONSTRUÍDA', 'CONSTRUIDA', 'CONCLUÍDO', 'CONCLUIDO']:
+                dados_agregados[mun]["construida"] += 1
             else:
-                dados_agregados[nome_normalizado]["outros_status"] += 1
+                dados_agregados[mun]["outros_status"] += 1
 
         dados_consolidados = []
-        status_keys = ["em_cadastro", "cadastrado",
-                       "a_construir", "construida", "outros_status"]
+        status_keys = ["em_cadastro", "cadastrado", "a_construir", "construida", "outros_status"]
+        
         for nome, contadores in sorted(dados_agregados.items()):
             resultado_final = {
                 'municipio': nome,
-                'total_beneficiarios': contadores.get('total_beneficiarios', 0)
+                'total_beneficiarios': int(contadores.get('total_beneficiarios', 0))
             }
             for key in status_keys:
-                resultado_final[key] = contadores.get(key, 0)
+                resultado_final[key] = int(contadores.get(key, 0))
 
             dados_consolidados.append(resultado_final)
 
         return dados_consolidados
 
-    except sqlite3.Error as e:
-        logging.error(f"API: Erro ao gerar dados consolidados: {e}")
-        raise HTTPException(status_code=500, detail="Erro interno.")
+    except Exception as e:
+        logging.error(f"API: Erro ao gerar dados consolidados no Supabase: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao consolidar dados.")
 
 
 @router.get("/municipios", response_class=JSONResponse)

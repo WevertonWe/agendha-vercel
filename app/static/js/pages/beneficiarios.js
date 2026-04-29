@@ -134,8 +134,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 { "targets": 12, "render": function (data, type) { if (type === 'display' && data) { return `<span class="badge rounded-pill ${getStatusBadgeClass(data)}">${data}</span>`; } return data; } },
                 { "targets": 14, "render": function (data, type) { 
                     if (type === 'display') {
-                        if (data && data !== 'OK' && typeof data === 'string' && data.includes('/')) { 
-                            return '<a href="/' + data + '" target="_blank" class="btn btn-sm btn-light border" title="Ver Documento"><i class="fas fa-file-pdf text-danger fa-lg"></i></a>'; 
+                        if (data && data !== 'OK' && typeof data === 'string') {
+                            const link = (data.startsWith('http://') || data.startsWith('https://')) ? data : '/' + data;
+                            return '<a href="' + link + '" target="_blank" class="btn btn-sm btn-light border" title="Ver Documento"><i class="fas fa-file-pdf text-danger fa-lg"></i></a>'; 
                         } else if (data === 'OK' || data) { 
                             return '<span class="badge bg-success"><i class="fas fa-check"></i> OK</span>'; 
                         }
@@ -196,8 +197,9 @@ document.addEventListener("DOMContentLoaded", () => {
             $('#edit-longitude').val(data.longitude || '');
             
             const infoArquivo = $('#edit-arquivo-existente-info');
-            if (data.doc_status && (String(data.doc_status).includes('.pdf') || String(data.doc_status).includes('uploads'))) {
-                infoArquivo.html(`Arquivo atual: <a href="/${data.doc_status}" target="_blank">Ver Documento</a>`);
+            if (data.doc_status && typeof data.doc_status === 'string' && data.doc_status !== 'OK') {
+                const link = (data.doc_status.startsWith('http://') || data.doc_status.startsWith('https://')) ? data.doc_status : '/' + data.doc_status;
+                infoArquivo.html(`Arquivo atual: <a href="${link}" target="_blank">Ver Documento</a>`);
             } else {
                 infoArquivo.html('Nenhum documento anexado.');
             }

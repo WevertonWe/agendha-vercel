@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const response = await fetchWithAuth('/api/beneficiarios/consolidado/atividades');
         if (!response.ok) throw new Error('Falha ao buscar dados da API.');
         const dados = await response.json();
+        console.log('Dados recebidos do Consolidado:', dados);
 
         let totalBeneficiarios = 0, totalCadastrados = 0, totalEmCadastro = 0, totalOutros = 0;
 
