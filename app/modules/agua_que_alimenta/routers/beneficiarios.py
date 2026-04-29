@@ -65,27 +65,29 @@ async def view_planejamento_abare(request: Request):
 
 @router.get("", response_class=JSONResponse)
 def get_beneficiarios(
-    municipio: str | None = None,
-    db: sqlite3.Connection = Depends(get_db_connection)
+    municipio: str | None = None
 ):
     """
-    Retorna a lista JSON de todos os beneficiários.
-    Suporta filtragem opcional por 'municipio'.
+    Retorna a lista JSON de todos os beneficiários usando Supabase com paginação segura.
     """
     try:
-        cursor = db.cursor()
-        query = "SELECT * FROM beneficiarios"
-        params = []
+        from app.core.database import fetch_all
+        registros = fetch_all('beneficiarios')
+        
         if municipio:
-            query += " WHERE UPPER(municipio) = ?"
-            params.append(municipio.upper())
-        cursor.execute(query, params)
-        registros = cursor.fetchall()
-        return [dict(registro) for registro in registros]
-    except sqlite3.Error as e:
-        logging.error(f"API: Erro ao buscar beneficiários: {e}")
-        raise HTTPException(
-            status_code=500, detail="Erro interno ao buscar dados.")
+            registros = [r for r in registros if str(r.get('municipio') or '').strip().upper() == municipio.upper()]
+            
+        # Sanitização preventiva de campos de data
+        for r in registros:
+            for key in r.keys():
+                if 'data' in key or 'updated' in key or 'created' in key:
+                    r[key] = str(r[key]) if r[key] is not None else ''
+                    
+        return registros
+    except Exception as e:
+        logging.error(f"API: Erro ao buscar beneficiários no Supabase: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao buscar dados.")
+
 
 
 @router.post("/import/confirmar")

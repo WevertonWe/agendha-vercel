@@ -1,9 +1,7 @@
-import sqlite3
 import logging
 from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from app.dependencies import get_db_connection
+from fastapi import APIRouter, HTTPException, status, Depends
+from app.core.database import get_supabase, fetch_all
 from app.core.auth.dependencies import get_current_user
 from app.modules.fornecedores.models import Fornecedor, FornecedorCreate, FornecedorUpdate
 
@@ -13,12 +11,21 @@ logger = logging.getLogger(__name__)
 # --- CRUD ---
 
 @router.get("/", response_model=List[Fornecedor])
-def listar_fornecedores(db: sqlite3.Connection = Depends(get_db_connection)):
+def listar_fornecedores():
     try:
-        cursor = db.cursor()
-        cursor.execute("SELECT * FROM fornecedores ORDER BY id DESC")
-        registros = cursor.fetchall()
-        return [Fornecedor(**dict(r)) for r in registros]
+        # Usando fetch_all para paginação recursiva segura
+        registros = fetch_all('fornecedores')
+        
+        # Mantendo ordenação por ID decrescente
+        registros.sort(key=lambda x: x.get('id', 0), reverse=True)
+        
+        # Sanitização preventiva de datas para string
+        for r in registros:
+            for key in r.keys():
+                if 'data' in key or 'updated' in key or 'created' in key:
+                    r[key] = str(r[key]) if r[key] is not None else ''
+                    
+        return [Fornecedor(**r) for r in registros]
     except Exception as e:
         logger.error(f"Erro ao listar fornecedores: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar fornecedores.")
@@ -26,36 +33,28 @@ def listar_fornecedores(db: sqlite3.Connection = Depends(get_db_connection)):
 @router.post("/", response_model=Fornecedor, status_code=status.HTTP_201_CREATED)
 def criar_fornecedor(
     fornecedor: FornecedorCreate,
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
     try:
-        cursor = db.cursor()
+        supabase = get_supabase()
         # Verificar duplicidade de CNPJ/CPF se fornecido
         if fornecedor.cnpj_cpf:
-            cursor.execute("SELECT id FROM fornecedores WHERE cnpj_cpf = ?", (fornecedor.cnpj_cpf,))
-            if cursor.fetchone():
+            res_check = supabase.table('fornecedores').select('id').eq('cnpj_cpf', fornecedor.cnpj_cpf).execute()
+            if res_check.data:
                 raise HTTPException(status_code=400, detail="CNPJ/CPF já cadastrado.")
 
-        cursor.execute(
-            """
-            INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj_cpf, email, telefone, endereco)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (fornecedor.razao_social, fornecedor.nome_fantasia, fornecedor.cnpj_cpf, 
-             fornecedor.email, fornecedor.telefone, fornecedor.endereco)
-        )
-        novo_id = cursor.lastrowid
-        db.commit()
-
-        cursor.execute("SELECT * FROM fornecedores WHERE id = ?", (novo_id,))
-        novo_registro = dict(cursor.fetchone())
+        dados = fornecedor.dict(exclude_unset=True)
+        res = supabase.table('fornecedores').insert(dados).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Erro ao salvar fornecedor no Supabase.")
+            
+        novo_registro = res.data[0]
         return Fornecedor(**novo_registro)
 
-    except sqlite3.IntegrityError as e:
-        raise HTTPException(status_code=400, detail=f"Erro de integridade: {e}")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        db.rollback()
         logger.error(f"Erro ao criar fornecedor: {e}")
         raise HTTPException(status_code=500, detail="Erro ao salvar fornecedor.")
 
@@ -63,50 +62,43 @@ def criar_fornecedor(
 def atualizar_fornecedor(
     id: int,
     fornecedor: FornecedorUpdate,
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
     try:
-        cursor = db.cursor()
-        cursor.execute("SELECT id FROM fornecedores WHERE id = ?", (id,))
-        if not cursor.fetchone():
+        supabase = get_supabase()
+        res_check = supabase.table('fornecedores').select('id').eq('id', id).execute()
+        if not res_check.data:
             raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
 
-        cursor.execute(
-            """
-            UPDATE fornecedores
-            SET razao_social = ?, nome_fantasia = ?, cnpj_cpf = ?, email = ?, telefone = ?, endereco = ?
-            WHERE id = ?
-            """,
-            (fornecedor.razao_social, fornecedor.nome_fantasia, fornecedor.cnpj_cpf,
-             fornecedor.email, fornecedor.telefone, fornecedor.endereco, id)
-        )
-        db.commit()
+        dados = fornecedor.dict(exclude_unset=True)
+        res = supabase.table('fornecedores').update(dados).eq('id', id).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Erro ao atualizar fornecedor no Supabase.")
+            
+        return Fornecedor(**res.data[0])
 
-        cursor.execute("SELECT * FROM fornecedores WHERE id = ?", (id,))
-        return Fornecedor(**dict(cursor.fetchone()))
-
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        db.rollback()
         logger.error(f"Erro ao atualizar fornecedor: {e}")
         raise HTTPException(status_code=500, detail="Erro ao atualizar.")
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_fornecedor(
     id: int,
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_current_user)
 ):
     try:
-        cursor = db.cursor()
-        cursor.execute("SELECT id FROM fornecedores WHERE id = ?", (id,))
-        if not cursor.fetchone():
+        supabase = get_supabase()
+        res_check = supabase.table('fornecedores').select('id').eq('id', id).execute()
+        if not res_check.data:
             raise HTTPException(status_code=404, detail="Fornecedor não encontrado.")
 
-        cursor.execute("DELETE FROM fornecedores WHERE id = ?", (id,))
-        db.commit()
+        supabase.table('fornecedores').delete().eq('id', id).execute()
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        db.rollback()
         logger.error(f"Erro ao deletar fornecedor: {e}")
         raise HTTPException(status_code=500, detail="Erro ao deletar.")

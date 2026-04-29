@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, UploadFile, File
+from fastapi import APIRouter, Request, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
-import sqlite3
 import shutil
-from app.core.database import get_db_connection
 from app.config import settings
 from datetime import datetime
 from pydantic import BaseModel
@@ -35,8 +33,8 @@ class OficioUpdate(BaseModel):
     motivo_descricao: Optional[str] = None
 
 @router.get("/", response_class=HTMLResponse)
-async def list_oficios(request: Request, db: sqlite3.Connection = Depends(get_db_connection)):
-    oficios = services.get_all_oficios(db)
+async def list_oficios(request: Request):
+    oficios = services.get_all_oficios()
     return templates.TemplateResponse("admin/oficios.html", {"request": request, "oficios": oficios})
 
 @router.get("/download/{filename}")
@@ -53,8 +51,7 @@ async def create_oficio(
     data_envio: str = Form(...),
     motivo_descricao: str = Form(...),
     numero_oficio: str = Form(None),
-    arquivo: UploadFile = File(None),
-    db: sqlite3.Connection = Depends(get_db_connection)
+    arquivo: UploadFile = File(None)
 ):
     # Tenta pegar o usuário do cookie para 'criado_por'
     criado_por = "Desconhecido"
@@ -93,7 +90,7 @@ async def create_oficio(
         "caminho_arquivo": caminho_arquivo
     }
     
-    services.create_oficio(db, dados)
+    services.create_oficio(None, dados)
     
     return RedirectResponse(url="/oficios", status_code=303)
 
@@ -104,8 +101,7 @@ async def update_oficio_endpoint(
     data_envio: Optional[str] = Form(None),
     motivo_descricao: Optional[str] = Form(None),
     numero_oficio: Optional[str] = Form(None),
-    arquivo: UploadFile = File(None),
-    db: sqlite3.Connection = Depends(get_db_connection)
+    arquivo: UploadFile = File(None)
 ):
     dados = {}
     if destinatario is not None:
@@ -130,17 +126,16 @@ async def update_oficio_endpoint(
             
         dados["caminho_arquivo"] = safe_filename
 
-    sucesso = services.update_oficio(db, oficio_id, dados)
+    sucesso = services.update_oficio(None, oficio_id, dados)
     if not sucesso:
         raise HTTPException(status_code=404, detail="Ofício não encontrado")
     return {"message": "Ofício atualizado com sucesso"}
 
 @router.delete("/{oficio_id}")
 async def delete_oficio_endpoint(
-    oficio_id: int,
-    db: sqlite3.Connection = Depends(get_db_connection)
+    oficio_id: int
 ):
-    sucesso = services.delete_oficio(db, oficio_id)
+    sucesso = services.delete_oficio(None, oficio_id)
     if not sucesso:
         raise HTTPException(status_code=404, detail="Ofício não encontrado")
     return {"message": "Ofício excluído com sucesso"}

@@ -126,18 +126,15 @@ def delete_item_pendente(item_id: str):
 
 # --- Outros Endpoints Relacionados (Mantidos com SQL por enquanto se não forem de validação OCR) ---
 
+# --- Outros Endpoints Relacionados ---
+
 @router.post("/conferencia/verificar")
 async def verificar_conferencia_excel(
     municipio_id: str = Form(...),
-    arquivo_excel: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db_connection)
+    arquivo_excel: UploadFile = File(...)
 ):
     """
     Processa planilha Excel de Conferência (Caixa Econômica).
-    
-    1. Valida município.
-    2. Lê o Excel e cruza com dados do banco.
-    3. Gera estatísticas de divergência.
     """
     logging.info(f"DEBUG: Recebido municipio={municipio_id}, arquivo={arquivo_excel.filename}")
 
@@ -145,45 +142,69 @@ async def verificar_conferencia_excel(
     if municipio_id not in municipios_validos:
         raise HTTPException(status_code=400, detail=f"Município inválido: {municipio_id}")
 
-    return await processar_conferencia_excel(arquivo_excel, municipio_id, db)
+    from app.services.conferencia import processar_conferencia_excel
+    return await processar_conferencia_excel(arquivo_excel, municipio_id, None)
 
 
 @router.get("/conferencia/historico")
-def listar_historico_conferencias(db: sqlite3.Connection = Depends(get_db_connection)):
-    cursor = db.cursor()
+def listar_historico_conferencias():
     try:
-        cursor.execute("SELECT id, municipio, data_criacao, resumo_json FROM historico_conferencias ORDER BY id DESC LIMIT 10")
-        registros = cursor.fetchall()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('historico_conferencias').select('id, municipio, data_criacao, resumo_json').order('id', desc=True).limit(10).execute()
+        
+        if not res.data:
+            return []
+            
         resultado = []
-        for r in registros:
-            row = dict(r)
+        for row in res.data:
             try:
-                full_json = json.loads(row['resumo_json'])
-                row['resumo_metas'] = full_json.get('stats', {}) 
-                # Importante: Removemos a lista mestra (pesada) da resposta de listagem
-                del row['resumo_json'] 
-            except:  # noqa: E722
+                if row.get('resumo_json'):
+                    full_json = json.loads(row['resumo_json'])
+                    row['resumo_metas'] = full_json.get('stats', {})
+                else:
+                    row['resumo_metas'] = {}
+                if 'resumo_json' in row:
+                    del row['resumo_json']
+            except Exception:
                 row['resumo_metas'] = {}
+                
+            for k in row.keys():
+                if 'data' in k:
+                    row[k] = str(row[k]) if row[k] is not None else ''
+                    
             resultado.append(row)
+            
         return resultado
-    except sqlite3.OperationalError:
-        return [] 
+    except Exception as e:
+        logging.warning(f"Erro ao buscar histórico de conferências no Supabase: {e}")
+        return []
 
 
 @router.get("/conferencia/historico/{item_id}")
-def get_historico_detalhe(item_id: int, db: sqlite3.Connection = Depends(get_db_connection)):
-    cursor = db.cursor()
-    cursor.execute("SELECT resumo_json FROM historico_conferencias WHERE id = ?", (item_id,))
-    registro = cursor.fetchone()
-    if not registro:
-        raise HTTPException(status_code=404, detail="Histórico não encontrado")
-    
-    return json.loads(registro['resumo_json'])
+def get_historico_detalhe(item_id: int):
+    try:
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('historico_conferencias').select('resumo_json').eq('id', item_id).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Histórico não encontrado")
+            
+        return json.loads(res.data[0]['resumo_json'])
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar detalhe: {e}")
 
 
 @router.delete("/conferencia/historico/{item_id}")
-async def excluir_historico(item_id: int, db: sqlite3.Connection = Depends(get_db_connection)):
-    cursor = db.cursor()
-    cursor.execute("DELETE FROM historico_conferencias WHERE id = ?", (item_id,))
-    db.commit()
-    return {"message": "Histórico removido com sucesso"}
+async def excluir_historico(item_id: int):
+    try:
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        supabase.table('historico_conferencias').delete().eq('id', item_id).execute()
+        return {"message": "Histórico removido com sucesso"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao remover histórico: {e}")
+
