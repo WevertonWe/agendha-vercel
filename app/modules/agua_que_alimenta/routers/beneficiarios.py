@@ -92,92 +92,80 @@ def get_beneficiarios(
 
 @router.post("/import/confirmar")
 async def confirmar_importacao_csv(
-    dados: Union[List[dict], dict],
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_admin_user)
+    dados: Union[List[dict], dict]
 ):
-    """
-    Recebe um JSON (único ou lista) de beneficiários para importar/atualizar.
-    Realiza UPSERT: Se CPF existir, atualiza; senão, insere.
-    Força status = 'IMPORTADO'.
-    """
-    cursor = db.cursor()
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     count_novos = 0
     count_atualizados = 0
 
-    # Normalizar para lista
     lista_dados = dados if isinstance(dados, list) else [dados]
 
     try:
         for item in lista_dados:
-            # Skip invalid items if needed, or process all that have CPF/Name
             if not item.get('cpf'):
                 continue
             
             nome = item.get('nome', 'Desconhecido')
             cpf = item.get('cpf')
             
-            # Tentar normalizar campos (Blindagem de Município)
             c_comunidade = item.get('comunidade')
             c_municipio = remover_acentos(item.get('municipio'))
             c_nis = item.get('nis')
             c_lat = item.get('latitude')
             c_lon = item.get('longitude')
-            # Force status to IMPORTADO for traceability per user request
             c_status = 'IMPORTADO'
             
-            # Verificar se já existe
-            cursor.execute("SELECT id FROM beneficiarios WHERE cpf = ?", (cpf,))
-            row = cursor.fetchone()
+            res = supabase.table('beneficiarios').select('id').eq('cpf', cpf).execute()
             
-            if row:
-                # UPDATE
-                try:
-                    cursor.execute("""
-                        UPDATE beneficiarios 
-                        SET nome_completo = ?, nome_familiar = ?, comunidade = ?, municipio = ?, nis = ?, latitude = ?, longitude = ?, status = ?
-                        WHERE cpf = ?
-                    """, (nome, nome, c_comunidade, c_municipio, c_nis, c_lat, c_lon, c_status, cpf))
-                    count_atualizados += 1
-                except sqlite3.Error as e:
-                    logging.error(f"Erro ao atualizar {cpf}: {e}")
+            if res.data:
+                supabase.table('beneficiarios').update({
+                    "nome_completo": nome,
+                    "nome_familiar": nome,
+                    "comunidade": c_comunidade,
+                    "municipio": c_municipio,
+                    "nis": c_nis,
+                    "latitude": c_lat,
+                    "longitude": c_lon,
+                    "status": c_status
+                }).eq('cpf', cpf).execute()
+                count_atualizados += 1
             else:
-                # INSERT
-                try:
-                    cursor.execute("""
-                        INSERT INTO beneficiarios (nome_completo, nome_familiar, cpf, cpf_familiar, comunidade, municipio, nis, latitude, longitude, status, doc_status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (nome, nome, cpf, cpf, c_comunidade, c_municipio, c_nis, c_lat, c_lon, c_status, 'PENDENTE'))
-                    count_novos += 1
-                except sqlite3.Error as e:
-                    logging.error(f"Erro ao inserir {cpf}: {e}")
+                supabase.table('beneficiarios').insert({
+                    "nome_completo": nome,
+                    "nome_familiar": nome,
+                    "cpf": cpf,
+                    "cpf_familiar": cpf,
+                    "comunidade": c_comunidade,
+                    "municipio": c_municipio,
+                    "nis": c_nis,
+                    "latitude": c_lat,
+                    "longitude": c_lon,
+                    "status": c_status,
+                    "doc_status": 'PENDENTE'
+                }).execute()
+                count_novos += 1
 
-        db.commit()
         return {"message": "Processamento concluído", "novos": count_novos, "atualizados": count_atualizados}
 
     except Exception as e:
-        db.rollback()
         logging.error(f"Erro ao confirmar importação CSV: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro interno ao processar importação: {e}")
 
 
 @router.delete("/{beneficiario_id}", status_code=204)
-def excluir_beneficiario(
-    beneficiario_id: int, 
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_admin_user)
-):
-    cursor = db.cursor()
+def excluir_beneficiario(beneficiario_id: int):
     try:
-        cursor.execute(
-            "SELECT id FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        if cursor.fetchone() is None:
-            raise HTTPException(
-                status_code=404, detail="Beneficiário não encontrado.")
-        cursor.execute("DELETE FROM beneficiarios WHERE id = ?",
-                       (beneficiario_id,))
-        db.commit()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').delete().eq('id', beneficiario_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
         return
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir: {e}")
     except sqlite3.Error as e:
         db.rollback()
         raise HTTPException(
@@ -185,74 +173,44 @@ def excluir_beneficiario(
 
 
 @router.get("/{beneficiario_id}", response_class=JSONResponse)
-def get_beneficiario_por_id(beneficiario_id: int, db: sqlite3.Connection = Depends(get_db_connection)):
+def get_beneficiario_por_id(beneficiario_id: int):
     try:
-        cursor = db.cursor()
-        cursor.execute(
-            "SELECT * FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        registro = cursor.fetchone()
-        if registro is None:
-            raise HTTPException(
-                status_code=404, detail="Beneficiário não encontrado.")
-        return dict(registro)
-    except sqlite3.Error as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erro no banco de dados: {e}")
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').select('*').eq('id', beneficiario_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+        return res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no banco de dados: {e}")
 
 
 @router.put("/{beneficiario_id}", response_class=JSONResponse)
-def update_beneficiario(
-    beneficiario_id: int, 
-    dados: BeneficiarioUpdate, 
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_admin_user)
-):
+def update_beneficiario(beneficiario_id: int, dados: BeneficiarioUpdate):
     try:
         campos_para_atualizar = dados.dict(exclude_unset=True)
         if not campos_para_atualizar:
-            raise HTTPException(
-                status_code=400, detail="Nenhum dado fornecido para atualização.")
+            raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualização.")
 
-        # --- SYNC CPF FAMILIAR (Bug Fix) ---
-        # Se alterou o CPF, obrigatoriamente altera o CPF Familiar para manter consistência
         if 'cpf' in campos_para_atualizar:
             campos_para_atualizar['cpf_familiar'] = campos_para_atualizar['cpf']
-        # -----------------------------------
 
-        logging.info(
-            f"Atualizando ID {beneficiario_id} com dados: {campos_para_atualizar}")
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        
+        res = supabase.table('beneficiarios').update(campos_para_atualizar).eq('id', beneficiario_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            
+        return res.data[0]
 
-        set_clause_parts = []
-        valores = []
-        for campo, valor in campos_para_atualizar.items():
-            if valor is not None:
-                set_clause_parts.append(f"{campo} = ?")
-                valores.append(valor)
-
-        if not set_clause_parts:
-            logging.warning(
-                f"Nenhum campo com valor para atualizar no ID {beneficiario_id}.")
-            cursor = db.cursor()
-            cursor.execute(
-                "SELECT * FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-            registro_atual = cursor.fetchone()
-            if not registro_atual:
-                raise HTTPException(
-                    status_code=404, detail="Beneficiário não encontrado após tentativa de atualização vazia.")
-            return dict(registro_atual)
-
-        set_clause = ", ".join(set_clause_parts)
-        query = f"UPDATE beneficiarios SET {set_clause} WHERE id = ?"  # nosec
-        valores.append(beneficiario_id)
-
-        cursor = db.cursor()
-        cursor.execute(query, valores)
-        db.commit()
-
-        cursor.execute(
-            "SELECT * FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        registro_atualizado = dict(cursor.fetchone())
-        return registro_atualizado
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Erro inesperado ao atualizar ID {beneficiario_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro inesperado no servidor ao atualizar: {e}")
 
     except sqlite3.Error as e:
         db.rollback()
@@ -274,38 +232,36 @@ def update_beneficiario(
             status_code=500, detail=f"Erro ao atualizar o documento no banco de dados: {e}")
 
 
-@router.post("/{beneficiario_id}/documento", response_model=Beneficiario)
+@router.post("/{beneficiario_id}/documento")
 async def upload_documento_beneficiario(
     beneficiario_id: int,
-    arquivo: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    arquivo: UploadFile = File(...)
 ):
-    """
-    Upload genérico de Documento do Beneficiário. Salva em 'beneficiarios_docs' e atualiza 'doc_status'.
-    """
-    DEST_FOLDER = settings.UPLOAD_FOLDER / "beneficiarios_docs"
-    DEST_FOLDER.mkdir(parents=True, exist_ok=True)
-
-    nome_arquivo_unico = f"doc_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
-    caminho_absoluto = DEST_FOLDER / nome_arquivo_unico
-    
-    with open(caminho_absoluto, "wb") as buffer:
-        shutil.copyfileobj(arquivo.file, buffer)
-
-    caminho_web_relativo = f"uploads/beneficiarios_docs/{nome_arquivo_unico}"
-
     try:
-        cursor = db.cursor()
-        cursor.execute(
-            "UPDATE beneficiarios SET doc_status = ? WHERE id = ?",
-            (caminho_web_relativo, beneficiario_id)
-        )
-        db.commit()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        import uuid
+        nome_arquivo_unico = f"doc_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
+        content = await arquivo.read()
 
-        cursor.execute("SELECT * FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        registro_atualizado = dict(cursor.fetchone())
-        return Beneficiario(**registro_atualizado)
+        supabase.storage.from_('agendha-uploads').upload(
+            path=f"beneficiarios_docs/{nome_arquivo_unico}",
+            file=content,
+            file_options={"content-type": arquivo.content_type or "application/pdf"}
+        )
+
+        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{nome_arquivo_unico}")
+
+        res = supabase.table('beneficiarios').update({"doc_status": public_url}).eq('id', beneficiario_id).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            
+        return res.data[0]
+
+    except Exception as e:
+        logging.error(f"Erro no upload de documento: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao fazer upload do documento: {e}")
 
     except Exception as e:
         db.rollback()
@@ -313,65 +269,56 @@ async def upload_documento_beneficiario(
 
 
 @router.patch("/{beneficiario_id}/desvincular-pedreiro", status_code=200)
-def desvincular_pedreiro(
-    beneficiario_id: int,
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_admin_user)
-):
-    """
-    Remove o vínculo do pedreiro com o beneficiário (seta pedreiro_id = NULL).
-    """
+def desvincular_pedreiro(beneficiario_id: int):
     try:
-        cursor = db.cursor()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
         
-        # Verify existence
-        cursor.execute("SELECT id FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        if not cursor.fetchone():
+        res = supabase.table('beneficiarios').update({"pedreiro_id": None}).eq('id', beneficiario_id).execute()
+        if not res.data:
             raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
-
-        cursor.execute("UPDATE beneficiarios SET pedreiro_id = NULL WHERE id = ?", (beneficiario_id,))
-        db.commit()
+            
         return {"message": "Pedreiro desvinculado com sucesso."}
-    
-    except sqlite3.Error as e:
-        db.rollback()
-        logging.error(f"Erro no DB ao desvincular pedreiro: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Erro ao desvincular pedreiro no Supabase: {e}")
         raise HTTPException(status_code=500, detail="Erro ao desvincular pedreiro.")
 
 
-@router.post("/{beneficiario_id}/nota_fiscal", response_model=Beneficiario)
+@router.post("/{beneficiario_id}/nota_fiscal")
 async def upload_nota_fiscal(
     beneficiario_id: int,
-    arquivo: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db_connection),
-    current_user = Depends(get_current_user)
+    arquivo: UploadFile = File(...)
 ):
-    """
-    Upload específico de Nota Fiscal. Salva em 'pedreiros_docs' e atualiza 'link_nota_fiscal'.
-    """
-    # Pasta solicitada: app/uploads/pedreiros_docs/
-    DEST_FOLDER = settings.UPLOADS_FOLDER / "pedreiros_docs"
-    DEST_FOLDER.mkdir(parents=True, exist_ok=True)
-
-    nome_arquivo_unico = f"nf_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
-    caminho_absoluto = DEST_FOLDER / nome_arquivo_unico
-    
-    with open(caminho_absoluto, "wb") as buffer:
-        shutil.copyfileobj(arquivo.file, buffer)
-
-    caminho_web_relativo = f"uploads/pedreiros_docs/{nome_arquivo_unico}"
-
     try:
-        cursor = db.cursor()
-        cursor.execute(
-            "UPDATE beneficiarios SET link_nota_fiscal = ?, status_pagamento = 'PAGO' WHERE id = ?",
-            (caminho_web_relativo, beneficiario_id)
-        )
-        db.commit()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
+        import uuid
+        nome_arquivo_unico = f"nf_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
+        content = await arquivo.read()
 
-        cursor.execute("SELECT * FROM beneficiarios WHERE id = ?", (beneficiario_id,))
-        registro_atualizado = dict(cursor.fetchone())
-        return Beneficiario(**registro_atualizado)
+        supabase.storage.from_('agendha-uploads').upload(
+            path=f"pedreiros_docs/{nome_arquivo_unico}",
+            file=content,
+            file_options={"content-type": arquivo.content_type or "application/pdf"}
+        )
+
+        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"pedreiros_docs/{nome_arquivo_unico}")
+
+        res = supabase.table('beneficiarios').update({
+            "link_nota_fiscal": public_url,
+            "status_pagamento": 'PAGO'
+        }).eq('id', beneficiario_id).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            
+        return res.data[0]
+
+    except Exception as e:
+        logging.error(f"Erro no upload de nota fiscal: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da nota fiscal: {e}")
 
     except Exception as e:
         db.rollback()
@@ -786,118 +733,92 @@ def fix_sync_cpf_familiar(db: sqlite3.Connection = Depends(get_db_connection), c
 
 
 @router_root.post("/api/salvar-validado", status_code=200)
-def salvar_validacao(dados: SchemaValidacao, db: sqlite3.Connection = Depends(get_db_connection), current_user = Depends(get_admin_user)):
-    """
-    Lógica Corrigida:
-    1. Usa o CPF para identificar a pessoa (não o ID da fila).
-    2. Se o CPF existe -> Atualiza (UPDATE).
-    3. Se o CPF não existe -> Cria (INSERT).
-    4. No final, marca o item da fila (id_fila) como 'Validado'.
-    """
-    # 1. Preparação dos Dados
+def salvar_validacao(dados: SchemaValidacao):
     cpf_limpo = limpar_cpf(dados.cpf)
     if not cpf_limpo:
         raise HTTPException(status_code=400, detail="CPF inválido ou não informado.")
 
-    # Resolver ID da Fila (para dar baixa depois)
     id_fila_para_baixa = None
     if dados.id_fila:
         id_fila_para_baixa = dados.id_fila
     elif dados.id:
-        # Fallback caso o front mande no campo id
         id_fila_para_baixa = dados.id 
         
-    # --- LÓGICA DE VÍNCULO DE PDF ---
-    from app.services import store
-    import os
-    import shutil
+    from app.core.database import get_supabase
+    supabase = get_supabase()
     
-    doc_status_final = "OK"
+    doc_status_final = "PENDENTE"
     
     if id_fila_para_baixa:
         try:
+            from app.services import store
+            import os
+            
             item_fila = store.get_item(str(id_fila_para_baixa))
             if item_fila and item_fila.get('caminho_arquivo_local'):
                 caminho_orig = item_fila['caminho_arquivo_local'] 
                 nome_orig = os.path.basename(caminho_orig)
                 orig_path = settings.UPLOAD_FOLDER / nome_orig
                 
+                if not orig_path.exists():
+                     import tempfile
+                     orig_path = Path(tempfile.gettempdir()) / nome_orig
+                
                 if orig_path.exists():
-                    DEST_FOLDER = settings.UPLOAD_FOLDER / "beneficiarios_docs"
-                    DEST_FOLDER.mkdir(parents=True, exist_ok=True)
-                    novo_nome = f"doc_{id_fila_para_baixa[:8] if isinstance(id_fila_para_baixa, str) else 'ocr'}_{nome_orig}"
-                    novo_path = DEST_FOLDER / novo_nome
-                    shutil.move(str(orig_path), str(novo_path))
-                    doc_status_final = f"uploads/beneficiarios_docs/{novo_nome}"
+                    with open(orig_path, "rb") as f:
+                        file_bytes = f.read()
+                        
+                    import uuid
+                    supabase_file_name = f"doc_ocr_{uuid.uuid4().hex[:8]}_{nome_orig}"
+                    supabase.storage.from_('agendha-uploads').upload(
+                        path=f"beneficiarios_docs/{supabase_file_name}",
+                        file=file_bytes,
+                        file_options={"content-type": "application/pdf"}
+                    )
+                    
+                    doc_status_final = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{supabase_file_name}")
         except Exception as e_pdf:
-            logging.error(f"Erro ao vincular PDF do OCR: {e_pdf}")
-    
-    # Campos para salvar (Dicionário dinâmico)
+            logging.error(f"Erro ao vincular PDF do OCR para o Supabase: {e_pdf}")
+
     dados_salvar = {
-        # CPFs
         'cpf': cpf_limpo,
-        'cpf_familiar': cpf_limpo,    # Obrigatório para a listagem
-        
-        # Nomes
+        'cpf_familiar': cpf_limpo,
         'nome_completo': dados.nome_completo,
-        'nome_familiar': dados.nome_completo, # Espelhar para aparecer na coluna "Nome Familiar"
-        
-        # Outros campos
+        'nome_familiar': dados.nome_completo,
         'data_nascimento': dados.data_nascimento,
         'escolaridade': dados.escolaridade,
         'comunidade': dados.comunidade,
         'municipio': dados.municipio,
         'nis': dados.nis,
-        'estado_uf': dados.uf or dados.estado_uf, # Tenta pegar de um ou de outro
+        'estado_uf': dados.uf or dados.estado_uf,
         'ref_localizacao': dados.ref_localizacao,
         'sexo': dados.sexo,
-        'status': "CADASTRADO", # Status inicial para quem sai da validação
+        'status': "CADASTRADO",
         'doc_status': doc_status_final
     }
     
-    # Remove chaves com valores None para não apagar dados existentes sem querer no Update
     dados_salvar = {k: v for k, v in dados_salvar.items() if v is not None}
 
-    cursor = db.cursor()
     try:
-        # 2. Verificar se a pessoa já existe pelo CPF
-        cursor.execute("SELECT id FROM beneficiarios WHERE cpf = ?", (cpf_limpo,))
-        pessoa_existente = cursor.fetchone()
+        res_existente = supabase.table('beneficiarios').select('id').eq('cpf', cpf_limpo).execute()
         
         id_beneficiario_final = None
-
-        if pessoa_existente:
-            # --- CENÁRIO: ATUALIZAR ---
-            id_beneficiario_final = pessoa_existente['id']
-            
-            set_clause = ", ".join([f"{k} = ?" for k in dados_salvar.keys()])
-            values = list(dados_salvar.values())
-            values.append(id_beneficiario_final)
-            
-            cursor.execute(f"UPDATE beneficiarios SET {set_clause} WHERE id = ?", values)  # nosec
-            logging.info(f"Beneficiário {cpf_limpo} atualizado (ID {id_beneficiario_final}).")
-        
+        if res_existente.data:
+            id_beneficiario_final = res_existente.data[0]['id']
+            supabase.table('beneficiarios').update(dados_salvar).eq('id', id_beneficiario_final).execute()
         else:
-            # --- CENÁRIO: INSERIR NOVO ---
-            colunas = ", ".join(dados_salvar.keys())
-            placeholders = ", ".join(["?" for _ in dados_salvar])
-            values = list(dados_salvar.values())
-            
-            cursor.execute(f"INSERT INTO beneficiarios ({colunas}) VALUES ({placeholders})", values)  # nosec
-            id_beneficiario_final = cursor.lastrowid
-            logging.info(f"Beneficiário {cpf_limpo} criado (ID {id_beneficiario_final}).")
+            res_insert = supabase.table('beneficiarios').insert(dados_salvar).execute()
+            if res_insert.data:
+                id_beneficiario_final = res_insert.data[0]['id']
 
-        # 3. DAR BAIXA NA FILA
         if id_fila_para_baixa:
             from app.services import store
             store.delete_item(str(id_fila_para_baixa))
-        
-        db.commit()
+            
         return {"message": "Salvo com sucesso!", "id": id_beneficiario_final}
 
     except Exception as e:
-        db.rollback()
-        logging.error(f"Erro ao salvar validação: {e}")
+        logging.error(f"Erro ao salvar validação OCR no Supabase: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 @router.get("/export/kml")
 def exportar_beneficiarios_kml(  # noqa: F811

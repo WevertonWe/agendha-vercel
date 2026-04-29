@@ -157,64 +157,21 @@ async def search_beneficiarios(q: str, limit: int = 10, user: str = Depends(requ
         return []
 
     try:
-        conn = services.get_db_connection()
-        conn.create_function("remover_acentos", 1, remover_acentos) # Register custom function if possible or use LIKE
-        cursor = conn.cursor()
+        from app.core.database import get_supabase
+        supabase = get_supabase()
         
-        # Searching primarily in BENEFICIARIOS table (Source of Truth) because they might use the search to find people to Add/Verify
-        # But wait, the goal is to flyTo on Map.
-        # If I return coord from Beneficiarios, map can fly there. 
-        # But if the point is not loaded in the map layers (e.g. not synced), the user will see an empty spot.
-        # Ideally we search MAPA_PONTOS?
-        # But Sync logic updates mapa_pontos.
-        # Let's search BENEFICIARIOS and assume sync is up to date OR allow 'ghost' points (showing marker on flyTo).
-        # Given "status e verificacao_bsf", benef table has this data.
-        
-        # Unaccent logic in SQLITE is tricky without extension.
-        # Using LIKE %q% is simple.
-        # Ensuring fast search: LIMIT 10.
-        
-        # Simple LIKE query for now. Python function remover_acentos can be used on query param, but database data might be accented.
-        # "Conceição" -> user types "conceicao".
-        # We need unaccent logic.
-        # Best bet: Fetch chunks or use a normalized column.
-        # Since we can't change schema easily for normalized column now without migration risk, let's try strict LIKE first or upper.
-        # SQLite GLOB or LIKE is case insensitive for ASCII.
-        
-        # Let's clean query
-        q_clean = q.strip().upper() # Basic
-        
-        # Try finding by CPF (digits only)
+        q_clean = q.strip().upper()
         import re
         q_digits = re.sub(r'[^0-9]', '', q)
         
         results = []
-        
-        if len(q_digits) > 5: # Likely a CPF search
-             cursor.execute("""
-                SELECT nome_completo, cpf, latitude, longitude, status, verificado_bsf 
-                FROM beneficiarios 
-                WHERE cpf LIKE ? AND latitude IS NOT NULL
-                LIMIT ?
-             """, (f"%{q_digits}%", limit))
-             results = cursor.fetchall()
-        
+        if len(q_digits) > 5:
+            res = supabase.table('beneficiarios').select('nome_completo, cpf, latitude, longitude, status, verificado_bsf').ilike('cpf', f"%{q_digits}%").not_.is_('latitude', 'null').limit(limit).execute()
+            results = res.data or []
+            
         if not results:
-             # Text search
-             # Note: SQLite LIKE is case-insensitive for ASCII chars by default, but not UTF-8 (accents).
-             # We will try robust search in Python if dataset is small, or just standard LIKE.
-             # Dataset size unknown. Assuming scalable approach needed.
-             # Let's use simple LIKE with wildcards.
-             cursor.execute("""
-                SELECT nome_completo, cpf, latitude, longitude, status, verificado_bsf 
-                FROM beneficiarios 
-                WHERE (UPPER(nome_completo) LIKE ?) 
-                AND latitude IS NOT NULL
-                LIMIT ?
-             """, (f"%{q_clean}%", limit))
-             results = cursor.fetchall()
-        
-        conn.close()
+            res = supabase.table('beneficiarios').select('nome_completo, cpf, latitude, longitude, status, verificado_bsf').ilike('nome_completo', f"%{q_clean}%").not_.is_('latitude', 'null').limit(limit).execute()
+            results = res.data or []
         
         # Format response
         data = []

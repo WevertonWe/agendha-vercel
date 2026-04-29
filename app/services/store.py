@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
 
-# Define path for the JSON store using a relative path that works with the app structure
-# Assuming app/ is the root for code, lets put data in app/data
-BASE_DIR = Path(__file__).resolve().parent.parent # app/
-DATA_DIR = BASE_DIR / "data"
+if os.environ.get("VERCEL") == "1":
+    DATA_DIR = Path("/tmp")
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    DATA_DIR = BASE_DIR / "data"
+
 FILA_FILE = DATA_DIR / "fila_validacao.json"
 
 logging.basicConfig(level=logging.INFO)
