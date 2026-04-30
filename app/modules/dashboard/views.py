@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from app.config import settings
 
 router = APIRouter(tags=["Dashboard Views"])
 from jinja2 import Environment, FileSystemLoader

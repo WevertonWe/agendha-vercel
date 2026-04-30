@@ -1,9 +1,8 @@
 import json
 import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from app.modules.agua_que_alimenta.services.ai_scanner import extrair_lista_presenca
-from app.config import settings
 from app.core.database import get_supabase
 from pydantic import BaseModel
 from typing import List

@@ -1,9 +1,7 @@
 import os
-import json
 import logging
 from contextlib import asynccontextmanager
-
-import sqlite3
+from jinja2 import Environment, FileSystemLoader
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -55,7 +53,7 @@ from app.modules.fornecedores.routers import fornecedores as fornecedores_router
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-from jinja2 import Environment, FileSystemLoader
+
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 
 def safely_split(value, delimiter='-'):
@@ -86,11 +84,17 @@ async def lifespan(app: FastAPI):
     # verificar_motores_pdf()
     
     # 4. Inicialização do Banco de Dados (Core)
-    from app.core.database import init_db
+    from app.core.database import init_db, sync_projects
     try:
         init_db()
     except Exception as e:
         logging.error(f"⚠️ ERRO no init_db (servidor continua): {e}")
+
+    # 4.2 Sincronização de projetos com Supabase (non-blocking)
+    try:
+        sync_projects()
+    except Exception as e:
+        logging.warning(f"⚠️ sync_projects falhou (non-fatal): {e}")
 
     # 4.1 Validação de Ferramentas Externas
     import shutil
@@ -120,12 +124,7 @@ async def lifespan(app: FastAPI):
             logging.warning(f"⚠️  {name}: Executável NÃO ENCONTRADO no caminho: {path}")
     logging.info("----------------------------------------")
 
-    # --- DEBUG ROTAS (Solicitado: REMOVIDO PARA LIMPEZA) ---
-    # for route in app.routes:
-    #     if hasattr(route, "path"):
-    #          logging.info(f"Rota Ativa: {route.path}")
-    logging.info(">>> FIM LISTA ROTAS <<<")
-    # --------------------------------
+    logging.info(">>> FIM INICIALIZAÇÃO <<<")
 
     # 5. Inicialização do Scheduler de Backup
     scheduler = AsyncIOScheduler()
@@ -267,16 +266,10 @@ app.include_router(admin_audit_router)
 from app.modules.projetos.routers import router as projetos_router  # noqa: E402
 app.include_router(projetos_router)
 
-# Módulo: Bahia Sem Fome (BSF)
-from app.modules.bahia_sem_fome.routers import metas as bsf_metas  # noqa: E402
-from app.modules.bahia_sem_fome.routers import visitas as bsf_visitas  # noqa: E402
 from app.modules.bahia_sem_fome.routers import renomeador as bsf_renomeador  # noqa: E402
 from app.modules.bahia_sem_fome.routers import atestes as bsf_atestes  # noqa: E402
 from app.modules.bahia_sem_fome import views as bsf_views  # noqa: E402
 
-print("DEBUG: Incluindo rotas do BSF no FastAPI...")
-app.include_router(bsf_metas.router)
-app.include_router(bsf_visitas.router)
 app.include_router(bsf_renomeador.router)
 app.include_router(bsf_atestes.router)
 app.include_router(bsf_views.router)

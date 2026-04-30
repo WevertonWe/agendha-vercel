@@ -1,4 +1,4 @@
-from app.core.database import fetch_all, get_supabase
+from app.core.database import fetch_all
 
 def get_biomas_summary():
     """

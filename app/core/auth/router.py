@@ -1,339 +1,302 @@
 from datetime import timedelta
 from typing import List
-import sqlite3
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 
 from app.config import settings
-from app.core.database import get_db_connection
-
-from app.core.auth.models import Token, User, UserCreate, UserUpdate, UserInDB, TrocarSenhaSchema
+from app.core.auth.models import (
+    Token, User, UserCreate, UserUpdate, UserInDB, TrocarSenhaSchema
+)
 from app.core.auth.dependencies import get_current_user, get_admin_user
-from app.core.auth.utils import create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.core.auth.utils import (
+    create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES
+)
 
-# Configuração ajustada do Bcrypt para evitar erros de truncamento
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", truncate_error=True)
+pwd_context = CryptContext(
+    schemes=["bcrypt"], deprecated="auto", truncate_error=True
+)
 
 router = APIRouter(tags=["Autenticação"])
 
-@router.post("/api/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    import os
-    
-    # 1. Tentar Supabase (Ambiente Cloud/Vercel)
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
-    
-    if os.getenv("VERCEL") and supabase_url and supabase_key:
-        try:
-            print(f"Conectando ao Supabase: {supabase_url[:10]}...")
-            from supabase import create_client
-            supabase = create_client(supabase_url, supabase_key)
-            
-            # Substituindo query do banco local pela consulta na tabela Supabase
-            res = supabase.table('users').select('*').ilike('username', form_data.username.strip()).execute()
-            print(f"DEBUG SUPABASE: Resultado da busca = {res.data}")
-            
-            if not res.data:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Usuário ou senha incorretos",
-                    headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
-                )
-            
-            user_dict = res.data[0]
-            db_hash = user_dict.get('password_hash', '').strip()
-            
-            print(f"LOGIN DEBUG: Usuário={user_dict.get('username')} | Hash no Banco={db_hash}")
-            print(f"DEBUG: Tamanho do hash no banco: {len(db_hash)} caracteres")
-            
-            auth_success = False
-            if pwd_context.verify(str(form_data.password), str(db_hash)):
-                auth_success = True
-            elif form_data.password == "agendha2024":
-                auth_success = True
-                print("DEBUG: Bypass temporário de login ativado com senha mestra")
-                
-            if not auth_success:
-                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Usuário ou senha incorretos",
-                    headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
-                )
-                
-            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-            role = user_dict.get('role', 'user')
-            
-            access_token = create_access_token(
-                data={"sub": user_dict['username'], "role": role},
-                expires_delta=access_token_expires
-            )
-            
-            redirect_url = "/hub"
-            
-            response = JSONResponse(content={"access_token": access_token, "token_type": "bearer", "redirect_url": redirect_url})
-            response.set_cookie(key="access_token", value=f"{settings.AUTH_BEARER_PREFIX} {access_token}", httponly=True)
-            return response
-            
-        except HTTPException as he:
-            raise he
-        except Exception as e:
-            print(f"Erro no login Supabase: {e}")
-            # Em vez de crashar e cair no HTML de 500, garantimos retorno JSON
-            raise HTTPException(status_code=500, detail="Erro ao conectar ao Supabase")
+# SuperAdmins VIP — ações registradas no audit_logs
+VIP_SUPERADMINS = {"admin", "weverton", "marilac", "maciel", "fabiano"}
 
-    # 2. Fallback para Banco SQLite (Ambiente Local)
-    conn = sqlite3.connect(settings.DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
+_ERRO_GENERICO = "Usuário ou senha inválidos"
+
+
+def _get_supabase():
+    from app.core.database import get_supabase
+    return get_supabase()
+
+
+def _audit_vip_login(username: str, ip: str | None = None) -> None:
+    """Registra no audit_logs quando um SuperAdmin VIP autentica."""
+    if username.lower() not in VIP_SUPERADMINS:
+        return
     try:
-        cursor.execute("SELECT * FROM users WHERE LOWER(username) = ?", (form_data.username.strip().lower(),))
-        user_row = cursor.fetchone()
-        
-        if not user_row:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário ou senha incorretos",
-                headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},  # nosec
-            )
-        
-        user_dict = dict(user_row)
-        db_hash = user_dict.get('password_hash', '').strip()
-        
-        # Verificação direta usando o contexto local configurado corretamente
-        print(f"LOGIN DEBUG: Usuário={user_dict.get('username')} | Hash no Banco={db_hash}")
-        print(f"DEBUG: Tamanho do hash no banco: {len(db_hash)} caracteres")
-        
-        auth_success = False
-        if pwd_context.verify(str(form_data.password), str(db_hash)):
-            auth_success = True
-        elif form_data.password == "agendha2024":
-            auth_success = True
-            print("DEBUG: Bypass temporário de login ativado com senha mestra")
-            
-        if not auth_success:
-             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário ou senha incorretos",
-                headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},  # nosec
-            )
-            
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        # Assumindo que role existe no dict; se não, padrão para 'user'
-        role = user_dict.get('role', 'user')
-        
-        access_token = create_access_token(
-            data={"sub": user_dict['username'], "role": role},
-            expires_delta=access_token_expires
+        from app.core.logging.services import log_acao
+        log_acao(
+            acao="VIP_LOGIN",
+            modulo="auth",
+            user_id=username,
+            ip=ip,
+            nivel="WARNING",
+            detalhes={"evento": "SuperAdmin VIP autenticado com sucesso"},
         )
-        
-        redirect_url = "/hub"
-        
-        response = JSONResponse(content={"access_token": access_token, "token_type": "bearer", "redirect_url": redirect_url})
-        response.set_cookie(key="access_token", value=f"{settings.AUTH_BEARER_PREFIX} {access_token}", httponly=True)  # nosec
-        return response
-        
-    except HTTPException as he:
-        # Re-raise HTTP exceptions
-        raise he
     except Exception as e:
-        # Log do erro real se necessário
-        print(f"Erro no login: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro interno no servidor: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[AuditVIP] Falha ao registrar login VIP: {e}"
+        )
+
+
+@router.post("/api/login", response_model=Token)
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+):
+    username_lower = form_data.username.strip().lower()
+    client_ip = request.client.host if request.client else None
+
+    supabase = _get_supabase()
+
+    try:
+        res = (
+            supabase.table("users")
+            .select("*")
+            .eq("username", username_lower)
+            .execute()
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            f"[Auth] Falha na consulta Supabase: {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_ERRO_GENERICO,
+            headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
+        )
+
+    # Segurança: mesmo erro para usuário inexistente e senha errada
+    if not res.data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_ERRO_GENERICO,
+            headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
+        )
+
+    user_dict = res.data[0]
+    db_hash = user_dict.get("password_hash", "").strip()
+
+    if not pwd_context.verify(str(form_data.password), str(db_hash)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_ERRO_GENERICO,
+            headers={"WWW-Authenticate": settings.AUTH_BEARER_PREFIX},
+        )
+
+    role = user_dict.get("role", "user")
+    canonical_username = user_dict.get("username", username_lower)
+
+    access_token = create_access_token(
+        data={"sub": canonical_username, "role": role},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    # Auditoria VIP — fire-and-forget
+    _audit_vip_login(canonical_username, ip=client_ip)
+
+    response = JSONResponse(content={
+        "access_token": access_token,
+        "token_type": "bearer",
+        "redirect_url": "/hub",
+    })
+    response.set_cookie(
+        key="access_token",
+        value=f"{settings.AUTH_BEARER_PREFIX} {access_token}",
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@router.post("/api/auth/change-password")
+async def change_password(
+    dados: TrocarSenhaSchema,
+    current_user: UserInDB = Depends(get_current_user),
+):
+    from app.core.auth.services import mudar_senha
+    mudar_senha(current_user.username, dados)
+    return {"message": "Senha alterada com sucesso"}
+
+
+@router.get("/api/users", response_model=List[User])
+async def list_users(current_user: UserInDB = Depends(get_admin_user)):
+    supabase = _get_supabase()
+    users_res = supabase.table("users").select("*").execute()
+    return [
+        User(
+            username=u.get("username"),
+            full_name=u.get("full_name", ""),
+            role=u.get("role", "user"),
+            is_active=bool(u.get("is_active", True)),
+            project_roles=[],
+        )
+        for u in users_res.data
+    ]
+
 
 @router.post("/api/users", response_model=User)
 async def create_user(
-    new_user: UserCreate, 
+    new_user: UserCreate,
     current_user: UserInDB = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db_connection)
 ):
-    cursor = db.cursor()
-    # Verificação Case-Insensitive para evitar duplicidade real (ex: Admin vs admin)
-    cursor.execute("SELECT id FROM users WHERE LOWER(username) = ?", (new_user.username.lower(),))
-    if cursor.fetchone():
-        raise HTTPException(status_code=400, detail=f"O nome de usuário '{new_user.username}' já está em uso.")
-    
-    hashed_password = get_password_hash(new_user.password)
-    try:
-        cursor.execute(
-            "INSERT INTO users (username, password_hash, role, is_active, full_name) VALUES (?, ?, ?, 1, ?)",
-            (new_user.username, hashed_password, new_user.role, new_user.full_name)
+    supabase = _get_supabase()
+    username_lower = new_user.username.strip().lower()
+
+    existing = (
+        supabase.table("users")
+        .select("id")
+        .eq("username", username_lower)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(
+            status_code=400,
+            detail=f"O nome de usuário '{username_lower}' já está em uso.",
         )
-        db.commit()
+
+    hashed_password = get_password_hash(new_user.password)
+    payload = {
+        "username": username_lower,
+        "password_hash": hashed_password,
+        "role": new_user.role,
+        "is_active": True,
+        "full_name": new_user.full_name,
+    }
+
+    try:
+        supabase.table("users").insert(payload).execute()
         return User(
-            username=new_user.username,
+            username=username_lower,
             role=new_user.role,
             is_active=True,
-            full_name=new_user.full_name
+            full_name=new_user.full_name,
         )
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao criar usuário: {e}")
 
-@router.get("/api/users", response_model=List[User])
-async def list_users(
-    current_user: UserInDB = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db_connection)
-):
-    import os
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
-    
-    if os.getenv("VERCEL") and supabase_url and supabase_key:
-        from supabase import create_client
-        supabase = create_client(supabase_url, supabase_key)
-        
-        users_res = supabase.table('users').select('*').execute()
-        
-        users = []
-        for user_dict in users_res.data:
-            users.append(User(
-                username=user_dict.get('username'),
-                full_name=user_dict.get('full_name', ''),
-                role=user_dict.get('role', 'user'),
-                is_active=bool(user_dict.get('is_active', True)),
-                project_roles=[]
-            ))
-        return users
-
-    # Fallback para Banco SQLite (Ambiente Local)
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users")
-    users = []
-    for row in cursor.fetchall():
-        user_dict = dict(row)
-        # Fetch roles for each user
-        cursor.execute("SELECT project_id, role FROM user_project_roles WHERE user_id = ?", (user_dict['id'],))
-        roles_rows = cursor.fetchall()
-        
-        project_roles = [{"project_id": r['project_id'], "role": r['role']} for r in roles_rows]
-        
-        users.append(User(
-            username=user_dict['username'],
-            full_name=user_dict['full_name'],
-            role=user_dict['role'],
-            is_active=bool(user_dict['is_active']),
-            project_roles=project_roles
-        ))
-    return users
 
 @router.put("/api/users/{username}", response_model=User)
 async def update_user(
     username: str,
     user_update: UserUpdate,
     current_user: UserInDB = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db_connection)
 ):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user_row = cursor.fetchone()
-    if not user_row:
+    supabase = _get_supabase()
+    username_lower = username.strip().lower()
+
+    existing = (
+        supabase.table("users")
+        .select("*")
+        .eq("username", username_lower)
+        .execute()
+    )
+    if not existing.data:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
-    current_data = dict(user_row)
-    
-    # Se estiver tentando alterar o próprio role ou status
-    if username == current_user.username:
-        if user_update.role is not None and user_update.role != current_data['role']:
-             raise HTTPException(status_code=400, detail="Não pode alterar seu próprio papel")
-        if user_update.is_active is not None and user_update.is_active is False:
-             raise HTTPException(status_code=400, detail="Não pode desativar a si mesmo")
 
-    updates = []
-    values = []
+    current_data = existing.data[0]
 
+    if username_lower == current_user.username.lower():
+        if (
+            user_update.role is not None
+            and user_update.role != current_data.get("role")
+        ):
+            raise HTTPException(
+                status_code=400, detail="Não pode alterar seu próprio papel"
+            )
+        if user_update.is_active is False:
+            raise HTTPException(
+                status_code=400, detail="Não pode desativar a si mesmo"
+            )
+
+    updates: dict = {}
     if user_update.full_name is not None:
-        updates.append("full_name = ?")
-        values.append(user_update.full_name)
-    
+        updates["full_name"] = user_update.full_name
     if user_update.role is not None:
-        updates.append("role = ?")
-        values.append(user_update.role)
-        
+        updates["role"] = user_update.role
     if user_update.is_active is not None:
-        updates.append("is_active = ?")
-        values.append(1 if user_update.is_active else 0)
-
+        updates["is_active"] = user_update.is_active
     if user_update.password:
-        hashed_pw = get_password_hash(user_update.password)
-        updates.append("password_hash = ?")
-        values.append(hashed_pw)
+        updates["password_hash"] = get_password_hash(user_update.password)
 
     if not updates:
-        # Return current state
-        cursor.execute("SELECT project_id, role FROM user_project_roles WHERE user_id = ?", (current_data['id'],))
-        roles_rows = cursor.fetchall()
-        project_roles = [{"project_id": r['project_id'], "role": r['role']} for r in roles_rows]
-        
         return User(
-            username=current_data['username'],
-            full_name=current_data['full_name'],
-            role=current_data['role'],
-            is_active=bool(current_data['is_active']),
-            project_roles=project_roles
+            username=current_data["username"],
+            full_name=current_data.get("full_name", ""),
+            role=current_data.get("role", "user"),
+            is_active=bool(current_data.get("is_active", True)),
         )
 
-    query = f"UPDATE users SET {', '.join(updates)} WHERE username = ?"  # nosec
-    values.append(username)
-    
     try:
-        cursor.execute(query, values)
-        db.commit()
-        
-        # Retorna dados atualizados
-        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-        updated_row = cursor.fetchone()
-        updated_dict = dict(updated_row)
-        
-        cursor.execute("SELECT project_id, role FROM user_project_roles WHERE user_id = ?", (updated_dict['id'],))
-        roles_rows = cursor.fetchall()
-        project_roles = [{"project_id": r['project_id'], "role": r['role']} for r in roles_rows]
-        
+        (
+            supabase.table("users")
+            .update(updates)
+            .eq("username", username_lower)
+            .execute()
+        )
+        updated = (
+            supabase.table("users")
+            .select("*")
+            .eq("username", username_lower)
+            .execute()
+        )
+        u = updated.data[0]
         return User(
-            username=updated_dict['username'],
-            full_name=updated_dict['full_name'],
-            role=updated_dict['role'],
-            is_active=bool(updated_dict['is_active']),
-            project_roles=project_roles
+            username=u["username"],
+            full_name=u.get("full_name", ""),
+            role=u.get("role", "user"),
+            is_active=bool(u.get("is_active", True)),
         )
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao atualizar usuário: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Erro ao atualizar usuário: {e}"
+        )
 
-@router.post("/api/auth/change-password")
-async def change_password(
-    dados: TrocarSenhaSchema,
-    current_user: UserInDB = Depends(get_current_user),
-    db: sqlite3.Connection = Depends(get_db_connection)
-):
-    from app.core.auth.services import mudar_senha
-    mudar_senha(db, current_user.username, dados)
-    return {"message": "Senha alterada com sucesso"}
 
 @router.delete("/api/users/{username}", status_code=204)
 async def delete_user(
     username: str,
     current_user: UserInDB = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db_connection)
 ):
-    if username == current_user.username:
-        raise HTTPException(status_code=400, detail="Você não pode excluir a si mesmo.")
+    username_lower = username.strip().lower()
 
-    cursor = db.cursor()
-    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
-    if not cursor.fetchone():
+    if username_lower == current_user.username.lower():
+        raise HTTPException(
+            status_code=400, detail="Você não pode excluir a si mesmo."
+        )
+
+    supabase = _get_supabase()
+    existing = (
+        supabase.table("users")
+        .select("id")
+        .eq("username", username_lower)
+        .execute()
+    )
+    if not existing.data:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
 
     try:
-        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
-        db.commit()
+        (
+            supabase.table("users")
+            .delete()
+            .eq("username", username_lower)
+            .execute()
+        )
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao excluir usuário: {e}")
-    return
+        raise HTTPException(
+            status_code=500, detail=f"Erro ao excluir usuário: {e}"
+        )

@@ -1,4 +1,3 @@
-import os
 import uuid
 import logging
 from typing import List
@@ -6,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import RedirectResponse
 from app.core.auth.dependencies import get_current_user
 from app.modules.agua_que_alimenta.models import Documento
-from app.config import settings
 from app.core.database import get_supabase
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos"])

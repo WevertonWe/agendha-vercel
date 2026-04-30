@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from typing import Dict, Any
-from app.core.database import get_supabase, fetch_all
+from app.core.database import fetch_all
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 

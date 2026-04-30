@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import logging
-from app.config import settings
 
 router = APIRouter(tags=["Cotações Views"])
 from jinja2 import Environment, FileSystemLoader

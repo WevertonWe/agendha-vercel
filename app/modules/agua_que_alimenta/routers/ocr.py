@@ -4,12 +4,10 @@ import shutil
 import uuid
 import json
 
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Form
-import sqlite3
+from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 
 from app.services.ocr import processar_ocr_completo
 from app.config import settings
-from app.dependencies import get_db_connection
 from app.services.conferencia import processar_conferencia_excel
 from app.services import store # Import JSON store service
 
@@ -142,7 +140,6 @@ async def verificar_conferencia_excel(
     if municipio_id not in municipios_validos:
         raise HTTPException(status_code=400, detail=f"Município inválido: {municipio_id}")
 
-    from app.services.conferencia import processar_conferencia_excel
     return await processar_conferencia_excel(arquivo_excel, municipio_id, None)
 
 

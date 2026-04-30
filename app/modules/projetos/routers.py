@@ -1,9 +1,7 @@
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from app.config import settings
 from app.core.database import get_supabase
-from datetime import datetime
 import logging
 
 router = APIRouter(prefix="/projetos", tags=["Projetos"])

@@ -1,4 +1,3 @@
-import os
 import uuid
 import logging
 from typing import List, Optional
@@ -6,7 +5,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from app.core.auth.dependencies import get_current_user
 from app.modules.agua_que_alimenta.models import Evento, EventoStatusUpdate
-from app.config import settings
 from app.core.database import get_supabase
 
 router = APIRouter(prefix="/api/eventos_grh", tags=["Eventos GRH"])

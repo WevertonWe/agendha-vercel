@@ -1,29 +1,25 @@
-import shutil
-import uuid
 import logging
-import sqlite3
 import datetime
-# import pandas as pd
 import io
-import json
 import asyncio
 from typing import List, Union, Optional
 from collections import defaultdict
+import pandas as pd
+from jinja2 import Environment, FileSystemLoader
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app.dependencies import get_db_connection, get_db
-from app.core.auth.dependencies import get_current_user, get_admin_user
+from app.core.database import get_supabase, fetch_all
+from app.core.auth.dependencies import get_admin_user
 from app.modules.agua_que_alimenta.models import (
-    Beneficiario, BeneficiarioUpdate, BeneficiarioParaKML, SchemaValidacao
+    BeneficiarioUpdate, BeneficiarioParaKML, SchemaValidacao
 )
 from app.config import settings
 from app.services.utils import remover_acentos, limpar_cpf
 from app.services import ai_vision
-import traceback
 
 router = APIRouter(prefix="/api/beneficiarios", tags=["Beneficiários"])
 router_root = APIRouter() # Roteador auxiliar para rotas raiz (sem prefixo acumulado)
@@ -34,30 +30,31 @@ class RelatorioRequest(BaseModel):
     colunas: List[str]
     email: Optional[str] = None
 
-from jinja2 import Environment, FileSystemLoader
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 logger = logging.getLogger(__name__)
 
 @router_root.get("/beneficiarios/perfil/{id}", response_class=HTMLResponse)
-async def ver_perfil_beneficiario(request: Request, id: int, db: sqlite3.Connection = Depends(get_db_connection)):
+async def ver_perfil_beneficiario(request: Request, id: int):
     """
-    Exibe a página de perfil detalhado de um beneficiário específico.
-    Busta os dados pelo ID e renderiza o template 'beneficiarios/perfil.html'.
+    Exibe a página de perfil detalhado de um beneficiário específico via Supabase.
     """
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM beneficiarios WHERE id = ?", (id,))
-    row = cursor.fetchone()
-    
-    if not row:
-        return templates.TemplateResponse("errors/404.html", {"request": request}, status_code=404)
+    try:
+        supabase = get_supabase()
+        res = supabase.table('beneficiarios').select('*').eq('id', id).execute()
         
-    beneficiario = dict(row)
-    
-    return templates.TemplateResponse("beneficiarios/perfil.html", {
-        "request": request,
-        "beneficiario": beneficiario
-    })
+        if not res.data:
+            return templates.TemplateResponse("errors/404.html", {"request": request}, status_code=404)
+            
+        beneficiario = res.data[0]
+        
+        return templates.TemplateResponse("beneficiarios/perfil.html", {
+            "request": request,
+            "beneficiario": beneficiario
+        })
+    except Exception as e:
+        logger.error(f"Erro ao carregar perfil: {e}")
+        return templates.TemplateResponse("errors/500.html", {"request": request, "detail": str(e)}, status_code=500)
 
 @router_root.get("/planejamento/abare", response_class=HTMLResponse)
 async def view_planejamento_abare(request: Request):
@@ -71,7 +68,6 @@ def get_beneficiarios(
     Retorna a lista JSON de todos os beneficiários usando Supabase com paginação segura.
     """
     try:
-        from app.core.database import fetch_all
         registros = fetch_all('beneficiarios')
         
         if municipio:
@@ -94,21 +90,21 @@ def get_beneficiarios(
 async def confirmar_importacao_csv(
     dados: Union[List[dict], dict]
 ):
-    from app.core.database import get_supabase
-    supabase = get_supabase()
-    count_novos = 0
-    count_atualizados = 0
-
-    lista_dados = dados if isinstance(dados, list) else [dados]
-
     try:
+        supabase = get_supabase()
+        count_novos = 0
+        count_atualizados = 0
+
+        lista_dados = dados if isinstance(dados, list) else [dados]
+
         for item in lista_dados:
-            if not item.get('cpf'):
+            cpf_bruto = item.get('cpf')
+            cpf_limpo = limpar_cpf(cpf_bruto)
+            
+            if not cpf_limpo:
                 continue
             
             nome = item.get('nome', 'Desconhecido')
-            cpf = item.get('cpf')
-            
             c_comunidade = item.get('comunidade')
             c_municipio = remover_acentos(item.get('municipio'))
             c_nis = item.get('nis')
@@ -116,75 +112,67 @@ async def confirmar_importacao_csv(
             c_lon = item.get('longitude')
             c_status = 'IMPORTADO'
             
-            res = supabase.table('beneficiarios').select('id').eq('cpf', cpf).execute()
+            # Busca por CPF para decidir entre insert ou update (Conforme pedido, edições devem usar ID se possível,
+            # mas na importação o CPF é a chave de busca única)
+            res = supabase.table('beneficiarios').select('id').eq('cpf', cpf_limpo).execute()
+            
+            payload = {
+                "nome_completo": nome,
+                "nome_familiar": nome,
+                "comunidade": c_comunidade,
+                "municipio": c_municipio,
+                "nis": c_nis,
+                "latitude": c_lat,
+                "longitude": c_lon,
+                "status": c_status
+            }
             
             if res.data:
-                supabase.table('beneficiarios').update({
-                    "nome_completo": nome,
-                    "nome_familiar": nome,
-                    "comunidade": c_comunidade,
-                    "municipio": c_municipio,
-                    "nis": c_nis,
-                    "latitude": c_lat,
-                    "longitude": c_lon,
-                    "status": c_status
-                }).eq('cpf', cpf).execute()
+                # Usa o ID encontrado para atualizar
+                beneficiario_id = res.data[0]['id']
+                supabase.table('beneficiarios').update(payload).eq('id', beneficiario_id).execute()
                 count_atualizados += 1
             else:
-                supabase.table('beneficiarios').insert({
-                    "nome_completo": nome,
-                    "nome_familiar": nome,
-                    "cpf": cpf,
-                    "cpf_familiar": cpf,
-                    "comunidade": c_comunidade,
-                    "municipio": c_municipio,
-                    "nis": c_nis,
-                    "latitude": c_lat,
-                    "longitude": c_lon,
-                    "status": c_status,
+                # Insere novo
+                payload.update({
+                    "cpf": cpf_limpo,
+                    "cpf_familiar": cpf_limpo,
                     "doc_status": 'PENDENTE'
-                }).execute()
+                })
+                supabase.table('beneficiarios').insert(payload).execute()
                 count_novos += 1
 
         return {"message": "Processamento concluído", "novos": count_novos, "atualizados": count_atualizados}
 
     except Exception as e:
         logging.error(f"Erro ao confirmar importação CSV: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Erro interno ao processar importação: {e}")
+        return JSONResponse(content={"error": f"Erro interno ao processar importação: {str(e)}"}, status_code=500)
 
 
 @router.delete("/{beneficiario_id}", status_code=204)
 def excluir_beneficiario(beneficiario_id: int):
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
         res = supabase.table('beneficiarios').delete().eq('id', beneficiario_id).execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
-        return
-    except HTTPException:
-        raise
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
+        return Response(status_code=204)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao excluir: {e}")
-    except sqlite3.Error as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Erro no banco de dados ao excluir: {e}")
+        logging.error(f"Erro ao excluir ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro ao excluir: {str(e)}"}, status_code=500)
 
 
 @router.get("/{beneficiario_id}", response_class=JSONResponse)
 def get_beneficiario_por_id(beneficiario_id: int):
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
         res = supabase.table('beneficiarios').select('*').eq('id', beneficiario_id).execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
         return res.data[0]
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no banco de dados: {e}")
+        logging.error(f"Erro ao buscar ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro no servidor: {str(e)}"}, status_code=500)
 
 
 @router.put("/{beneficiario_id}", response_class=JSONResponse)
@@ -192,44 +180,28 @@ def update_beneficiario(beneficiario_id: int, dados: BeneficiarioUpdate):
     try:
         campos_para_atualizar = dados.dict(exclude_unset=True)
         if not campos_para_atualizar:
-            raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualização.")
+            return JSONResponse(content={"error": "Nenhum dado fornecido para atualização."}, status_code=400)
 
+        # Sanitização de CPF se estiver presente
         if 'cpf' in campos_para_atualizar:
-            campos_para_atualizar['cpf_familiar'] = campos_para_atualizar['cpf']
+            cpf_limpo = limpar_cpf(campos_para_atualizar['cpf'])
+            if cpf_limpo:
+                campos_para_atualizar['cpf'] = cpf_limpo
+                campos_para_atualizar['cpf_familiar'] = cpf_limpo
+            else:
+                return JSONResponse(content={"error": "CPF inválido."}, status_code=400)
 
-        from app.core.database import get_supabase
         supabase = get_supabase()
-        
         res = supabase.table('beneficiarios').update(campos_para_atualizar).eq('id', beneficiario_id).execute()
+        
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
             
         return res.data[0]
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logging.error(f"Erro inesperado ao atualizar ID {beneficiario_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro inesperado no servidor ao atualizar: {e}")
-
-    except sqlite3.Error as e:
-        db.rollback()
-        logging.error(
-            f"Erro SQLite ao atualizar ID {beneficiario_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Erro no banco de dados ao atualizar: {e}")
-
-    except Exception as e:
-        db.rollback()
-        logging.error(
-            f"Erro inesperado ao atualizar ID {beneficiario_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Erro inesperado no servidor ao atualizar: {e}")
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Erro ao atualizar o documento no banco de dados: {e}")
+        logging.error(f"Erro ao atualizar ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro inesperado no servidor: {str(e)}"}, status_code=500)
 
 
 @router.post("/{beneficiario_id}/documento")
@@ -238,52 +210,44 @@ async def upload_documento_beneficiario(
     arquivo: UploadFile = File(...)
 ):
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
-        import uuid
-        nome_arquivo_unico = f"doc_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
+        # Nomenclatura fixa doc_{id}.pdf para permitir overwrite via upsert
+        ext = arquivo.filename.split('.')[-1] if '.' in arquivo.filename else 'pdf'
+        nome_arquivo = f"doc_{beneficiario_id}.{ext}"
         content = await arquivo.read()
 
         supabase.storage.from_('agendha-uploads').upload(
-            path=f"beneficiarios_docs/{nome_arquivo_unico}",
+            path=f"beneficiarios_docs/{nome_arquivo}",
             file=content,
-            file_options={"content-type": arquivo.content_type or "application/pdf"}
+            file_options={"content-type": arquivo.content_type or "application/pdf", "upsert": "true"}
         )
 
-        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{nome_arquivo_unico}")
+        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{nome_arquivo}")
 
         res = supabase.table('beneficiarios').update({"doc_status": public_url}).eq('id', beneficiario_id).execute()
         
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
             
         return res.data[0]
 
     except Exception as e:
-        logging.error(f"Erro no upload de documento: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao fazer upload do documento: {e}")
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar documento: {e}")
+        logging.error(f"Erro no upload de documento ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro ao fazer upload do documento: {str(e)}"}, status_code=500)
 
 
 @router.patch("/{beneficiario_id}/desvincular-pedreiro", status_code=200)
 def desvincular_pedreiro(beneficiario_id: int):
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
-        
         res = supabase.table('beneficiarios').update({"pedreiro_id": None}).eq('id', beneficiario_id).execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
             
         return {"message": "Pedreiro desvinculado com sucesso."}
-    except HTTPException:
-        raise
     except Exception as e:
-        logging.error(f"Erro ao desvincular pedreiro no Supabase: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao desvincular pedreiro.")
+        logging.error(f"Erro ao desvincular pedreiro ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro ao desvincular pedreiro: {str(e)}"}, status_code=500)
 
 
 @router.post("/{beneficiario_id}/nota_fiscal")
@@ -292,19 +256,18 @@ async def upload_nota_fiscal(
     arquivo: UploadFile = File(...)
 ):
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
-        import uuid
-        nome_arquivo_unico = f"nf_{uuid.uuid4().hex[:8]}_{arquivo.filename}"
+        ext = arquivo.filename.split('.')[-1] if '.' in arquivo.filename else 'pdf'
+        nome_arquivo = f"nf_{beneficiario_id}.{ext}"
         content = await arquivo.read()
 
         supabase.storage.from_('agendha-uploads').upload(
-            path=f"pedreiros_docs/{nome_arquivo_unico}",
+            path=f"pedreiros_docs/{nome_arquivo}",
             file=content,
-            file_options={"content-type": arquivo.content_type or "application/pdf"}
+            file_options={"content-type": arquivo.content_type or "application/pdf", "upsert": "true"}
         )
 
-        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"pedreiros_docs/{nome_arquivo_unico}")
+        public_url = supabase.storage.from_('agendha-uploads').get_public_url(f"pedreiros_docs/{nome_arquivo}")
 
         res = supabase.table('beneficiarios').update({
             "link_nota_fiscal": public_url,
@@ -312,21 +275,17 @@ async def upload_nota_fiscal(
         }).eq('id', beneficiario_id).execute()
         
         if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            return JSONResponse(content={"error": "Beneficiário não encontrado."}, status_code=404)
             
         return res.data[0]
 
     except Exception as e:
-        logging.error(f"Erro no upload de nota fiscal: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao fazer upload da nota fiscal: {e}")
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao salvar nota fiscal: {e}")
+        logging.error(f"Erro no upload de nota fiscal ID {beneficiario_id}: {e}")
+        return JSONResponse(content={"error": f"Erro ao fazer upload da nota fiscal: {str(e)}"}, status_code=500)
 
 
 @router.post("/export/kml", response_class=Response)
-async def exportar_beneficiarios_kml(beneficiarios_filtrados: List[BeneficiarioParaKML]):
+async def exportar_beneficiarios_kml_post(beneficiarios_filtrados: List[BeneficiarioParaKML]):
     """
     Exportação KML via POST (Lista Explícita).
     
@@ -453,47 +412,33 @@ async def exportar_beneficiarios_kml(beneficiarios_filtrados: List[BeneficiarioP
 @router.post("/import/comparar", response_class=JSONResponse)
 async def comparar_importacao_csv(
     file: UploadFile = File(...),
-    db: sqlite3.Connection = Depends(get_db_connection),
     current_user = Depends(get_admin_user)
 ):
     """
-    Recebe um CSV/Excel, localiza colunas dinamicamente e retorna lista consolidada para triagem.
-    Retorno: { "lista_triagem": [ { status, nome, cpf, ... } ] }
+    Recebe um CSV/Excel, localiza colunas dinamicamente e retorna lista consolidada para triagem via Supabase.
     """
-    import io
-    import pandas as pd
-    from app.services.utils import limpar_cpf
+    import csv
 
     content = await file.read()
     filename = file.filename.lower()
     
-    rows = []
-
     try:
         if filename.endswith('.xlsx') or filename.endswith('.xls'):
             df = pd.read_excel(io.BytesIO(content))
         else:
-            # Fallback básico para CSV, mas Excel é o foco
-            import csv
             decoded = content.decode('utf-8-sig')
             csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=';')
             if len(csv_reader.fieldnames or []) < 2:
                 csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=',')
-            rows = list(csv_reader)
-            df = pd.DataFrame(rows)
+            df = pd.DataFrame(list(csv_reader))
 
         # Robust Column Search Helper
         def find_column(df, candidates):
-            # Normaliza colunas do DF: strip + upper
             cols_map = {str(c).strip().upper(): c for c in df.columns}
             for candidate in candidates:
                 cand_upper = candidate.upper()
-                # 1. Tentativa Exata
                 if cand_upper in cols_map:
                     return cols_map[cand_upper]
-                # 2. Tentativa por "Contém" (menos segura, mas útil se específico)
-                # ... Melhor evitar contains genérico para não pegar 'CPF' em 'CPF_PAI' erroneamente
-                # Vamos iterar e ver se 'candidate' está contido na coluna (ex: 'NUMEROCPF' contém 'CPF')
                 for real_col_upper, real_col_name in cols_map.items():
                     if cand_upper in real_col_upper:
                          return real_col_name
@@ -505,19 +450,16 @@ async def comparar_importacao_csv(
         col_comunidade = find_column(df, ['COMUNIDADE', 'LOCALIDADE', 'POVOADO'])
         col_lat = find_column(df, ['LAT', 'LATITUDE', 'COORD_X'])
         col_lon = find_column(df, ['LON', 'LONG', 'LONGITUDE', 'COORD_Y'])
-        col_status = find_column(df, ['STATUS', 'SITUACAO', 'ESTADO'])
         col_municipio = find_column(df, ['MUNICIPIO', 'CIDADE', 'MUNICÍPIO'])
+        col_status = find_column(df, ['STATUS', 'SITUACAO', 'ESTADO'])
 
-        # Pre-fetch CPFs do banco
-        cursor = db.cursor()
-        cursor.execute("SELECT cpf, nome_completo, status, nis, comunidade, latitude, longitude FROM beneficiarios WHERE cpf IS NOT NULL")
-        db_beneficiarios = {row['cpf']: dict(row) for row in cursor.fetchall()}
+        # Pre-fetch CPFs do Supabase
+        supabase_data = fetch_all('beneficiarios', 'cpf, nome_completo, status, nis, comunidade, latitude, longitude')
+        db_beneficiarios = {r['cpf']: r for r in supabase_data if r.get('cpf')}
 
         lista_triagem = []
 
-        # Itera sobre o DataFrame
         for index, row in df.iterrows():
-            # Extração segura
             def get_val(col_name):
                 if not col_name: return ""  # noqa: E701
                 val = row[col_name]
@@ -530,40 +472,27 @@ async def comparar_importacao_csv(
             raw_lat = get_val(col_lat)
             raw_lon = get_val(col_lon)
             raw_status = get_val(col_status).upper()
+            raw_mun = remover_acentos(get_val(col_municipio))
 
-            # Limpeza
-            # Garantir Município Unificado na comparação (Blindagem)
-            raw_mun = remover_acentos(get_val(col_municipio)) if 'col_municipio' in locals() and col_municipio else ""
-            if not raw_mun: # Fallback caso col_municipio não tenha sido mapeada mas exista no row de alguma forma
-                 # Tenta buscar por nomes comuns se col_municipio falhou
-                 candidates = ['MUNICIPIO', 'CIDADE', 'MUNICÍPIO']
-                 for c in candidates:
-                     val = row.get(c)
-                     if pd.notna(val):
-                         raw_mun = remover_acentos(val)
-                         break
+            cpf_limpo = limpar_cpf(raw_cpf)
 
-            cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
-
-            # Objeto de Triagem
             item = {
-                "id_temp": f"temp_{index}", # ID único temporário
+                "id_temp": f"temp_{index}",
                 "nome": raw_nome,
                 "cpf": cpf_limpo or "", 
                 "cpf_original": raw_cpf,
                 "nis": raw_nis,
                 "comunidade": raw_com,
-                "municipio": raw_mun, # Município já normalizado (blindagem)
+                "municipio": raw_mun,
                 "latitude": raw_lat,
                 "longitude": raw_lon,
-                "status": raw_status, # Status vindo do CSV ou Default
-                "status_triagem": "INVALIDO", # NOVO, DUPLICADO, ALTERADO, INVALIDO
+                "status": raw_status,
+                "status_triagem": "INVALIDO",
                 "msg_erro": "",
                 "dados_banco": None,
-                "diffs": [] # Lista de discrepâncias found
+                "diffs": []
             }
 
-            # Lógica de Status Triagem e Diffs
             if not cpf_limpo or len(cpf_limpo) != 11:
                 item["status_triagem"] = "INVALIDO"
                 item["msg_erro"] = "CPF Inválido ou Vazio"
@@ -572,31 +501,24 @@ async def comparar_importacao_csv(
                 item["dados_banco"] = existing
                 item["status_triagem"] = "DUPLICADO"
                 
-                # Detectar alterações/conflitos
                 diffs = []
-                # Helper comp
                 def check_diff(field_csv, field_db, label):
                     val_csv = str(item[field_csv] or "").strip().upper()
-                    val_db = str(existing[field_db] or "").strip().upper()
+                    val_db = str(existing.get(field_db) or "").strip().upper()
                     if val_csv and val_csv != val_db:
-                        diffs.append({"campo": label, "novo": item[field_csv], "antigo": existing[field_db]})
+                        diffs.append({"campo": label, "novo": item[field_csv], "antigo": existing.get(field_db)})
 
                 check_diff("nome", "nome_completo", "Nome")
                 check_diff("nis", "nis", "NIS")
                 check_diff("comunidade", "comunidade", "Comunidade")
                 
-                # Status Check logic
-                # Se o CSV diz 'CADASTRADO' e banco diz 'EM CADASTRO', é update.
                 val_status_csv = raw_status.strip().upper()
-                val_status_db = str(existing['status'] or "").strip().upper()
-                
-                if val_status_csv != val_status_db:
-                    diffs.append({"campo": "Status", "novo": raw_status, "antigo": existing['status']})
+                val_status_db = str(existing.get('status') or "").strip().upper()
+                if val_status_csv and val_status_csv != val_status_db:
+                    diffs.append({"campo": "Status", "novo": raw_status, "antigo": existing.get('status')})
 
                 if diffs:
                     item["diffs"] = diffs
-                    # Se tem diffs, o usuário pode querer atualizar, então destacamos
-                    item["status_triagem"] = "DUPLICADO" # Mantemos como duplicado visualmente amarelo, mas com aviso info
             else:
                 item["status_triagem"] = "NOVO"
                 if not raw_nome or len(raw_nome) < 3 or raw_nome == "Desconhecido":
@@ -616,18 +538,13 @@ async def comparar_importacao_csv(
         }
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=400, detail=f"Erro ao processar arquivo: {str(e)}")
+        logging.error(f"Erro ao comparar importação CSV: {e}")
+        return JSONResponse(content={"error": f"Erro ao processar arquivo: {str(e)}"}, status_code=400)
 
-
-# --- Rotas Consolidadas (não são exatamente /api/beneficiarios mas estão relacionadas) ---
-# Vou colocar aqui por enquanto, mas poderiam estar em um router 'dashboard'
 
 @router.get("/consolidado/atividades", response_class=JSONResponse)
 def get_consolidado_atividades():
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
         res = supabase.table('beneficiarios').select('municipio, status').execute()
         
@@ -635,7 +552,6 @@ def get_consolidado_atividades():
             return []
             
         registros = res.data
-        from collections import defaultdict
         dados_agregados = defaultdict(lambda: defaultdict(int))
         for registro in registros:
             mun = str(registro.get("municipio") or '').strip().upper()
@@ -681,7 +597,6 @@ def get_consolidado_atividades():
 @router.get("/municipios", response_class=JSONResponse)
 def get_municipios_unicos():
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
         res = supabase.table('beneficiarios').select('municipio').execute()
         if res.data:
@@ -695,7 +610,6 @@ def get_municipios_unicos():
 @router.get("/comunidades", response_class=JSONResponse)
 def get_comunidades_unicas():
     try:
-        from app.core.database import get_supabase
         supabase = get_supabase()
         res = supabase.table('beneficiarios').select('comunidade').execute()
         if res.data:
@@ -707,154 +621,136 @@ def get_comunidades_unicas():
         return []
 
 
-# --- Rota de Salvar Validado (Movi para cá pois lida com beneficiários) ---
-# (Função antiga removida para evitar duplicidade e conflito de rota)
-
-
 @router.post("/fix/sync-cpf", status_code=200)
-def fix_sync_cpf_familiar(db: sqlite3.Connection = Depends(get_db_connection), current_user = Depends(get_admin_user)):
+def fix_sync_cpf_familiar(current_user = Depends(get_admin_user)):
     """
-    Script de Correção: Iguala cpf_familiar ao cpf para corrigir dados antigos.
+    Script de Correção: Iguala cpf_familiar ao cpf via Supabase.
     """
     try:
-        cursor = db.cursor()
-        cursor.execute("""
-            UPDATE beneficiarios 
-            SET cpf_familiar = cpf 
-            WHERE cpf IS NOT NULL AND (cpf_familiar IS NULL OR cpf_familiar != cpf)
-        """)
-        rows = cursor.rowcount
-        db.commit()
-        return {"message": f"Sucesso! {rows} beneficiários corrigidos (CPF Familiar sincronizado)."}
-
+        supabase = get_supabase()
+        # Busca registros onde CPF Familiar está diferente do CPF
+        res = supabase.table('beneficiarios').select('id, cpf').execute()
+        
+        count = 0
+        for ben in res.data:
+            if ben.get('cpf'):
+                supabase.table('beneficiarios').update({"cpf_familiar": ben['cpf']}).eq('id', ben['id']).execute()
+                count += 1
+                
+        return {"message": f"Sucesso! {count} beneficiários corrigidos no Supabase."}
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Erro ao sincronizar CPF Familiar: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @router_root.post("/api/salvar-validado", status_code=200)
 def salvar_validacao(dados: SchemaValidacao):
+    import os
+    from pathlib import Path
+    
     cpf_limpo = limpar_cpf(dados.cpf)
     if not cpf_limpo:
-        raise HTTPException(status_code=400, detail="CPF inválido ou não informado.")
+        return JSONResponse(content={"error": "CPF inválido ou não informado."}, status_code=400)
 
-    id_fila_para_baixa = None
-    if dados.id_fila:
-        id_fila_para_baixa = dados.id_fila
-    elif dados.id:
-        id_fila_para_baixa = dados.id 
+    id_fila_para_baixa = dados.id_fila or dados.id
         
-    from app.core.database import get_supabase
-    supabase = get_supabase()
-    
-    doc_status_final = "PENDENTE"
-    
-    if id_fila_para_baixa:
-        try:
-            from app.services import store
-            import os
-            
-            item_fila = store.get_item(str(id_fila_para_baixa))
-            if item_fila and item_fila.get('caminho_arquivo_local'):
-                caminho_orig = item_fila['caminho_arquivo_local'] 
-                nome_orig = os.path.basename(caminho_orig)
-                orig_path = settings.UPLOAD_FOLDER / nome_orig
-                
-                if not orig_path.exists():
-                     import tempfile
-                     orig_path = Path(tempfile.gettempdir()) / nome_orig
-                
-                if orig_path.exists():
-                    with open(orig_path, "rb") as f:
-                        file_bytes = f.read()
-                        
-                    import uuid
-                    supabase_file_name = f"doc_ocr_{uuid.uuid4().hex[:8]}_{nome_orig}"
-                    supabase.storage.from_('agendha-uploads').upload(
-                        path=f"beneficiarios_docs/{supabase_file_name}",
-                        file=file_bytes,
-                        file_options={"content-type": "application/pdf"}
-                    )
-                    
-                    doc_status_final = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{supabase_file_name}")
-        except Exception as e_pdf:
-            logging.error(f"Erro ao vincular PDF do OCR para o Supabase: {e_pdf}")
-
-    dados_salvar = {
-        'cpf': cpf_limpo,
-        'cpf_familiar': cpf_limpo,
-        'nome_completo': dados.nome_completo,
-        'nome_familiar': dados.nome_completo,
-        'data_nascimento': dados.data_nascimento,
-        'escolaridade': dados.escolaridade,
-        'comunidade': dados.comunidade,
-        'municipio': dados.municipio,
-        'nis': dados.nis,
-        'estado_uf': dados.uf or dados.estado_uf,
-        'ref_localizacao': dados.ref_localizacao,
-        'sexo': dados.sexo,
-        'status': "CADASTRADO",
-        'doc_status': doc_status_final
-    }
-    
-    dados_salvar = {k: v for k, v in dados_salvar.items() if v is not None}
-
     try:
+        supabase = get_supabase()
+        
+        if id_fila_para_baixa:
+            try:
+                from app.services import store
+                
+                item_fila = store.get_item(str(id_fila_para_baixa))
+                if item_fila and item_fila.get('caminho_arquivo_local'):
+                    caminho_orig = item_fila['caminho_arquivo_local'] 
+                    nome_orig = os.path.basename(caminho_orig)
+                    
+                    orig_path = Path(settings.UPLOAD_FOLDER) / nome_orig
+                    if not orig_path.exists():
+                         import tempfile
+                         orig_path = Path(tempfile.gettempdir()) / nome_orig
+                    
+                    if orig_path.exists():
+                        with open(orig_path, "rb") as f:
+                            file_bytes = f.read()
+                            
+                        # Nomenclatura fixa doc_{id}.pdf será feita APÓS o insert/get_id se for novo
+                        # Mas aqui temos um problema: precisamos do ID do Supabase.
+                        # Vamos fazer o insert primeiro e depois o upload.
+            except Exception as e_pdf:
+                logging.error(f"Erro ao preparar PDF do OCR: {e_pdf}")
+
+        dados_salvar = {
+            'cpf': cpf_limpo,
+            'cpf_familiar': cpf_limpo,
+            'nome_completo': dados.nome_completo,
+            'nome_familiar': dados.nome_completo,
+            'data_nascimento': dados.data_nascimento,
+            'escolaridade': dados.escolaridade,
+            'comunidade': dados.comunidade,
+            'municipio': dados.municipio,
+            'nis': dados.nis,
+            'estado_uf': dados.uf or dados.estado_uf,
+            'ref_localizacao': dados.ref_localizacao,
+            'sexo': dados.sexo,
+            'status': "CADASTRADO"
+        }
+        
+        dados_salvar = {k: v for k, v in dados_salvar.items() if v is not None}
+
+        # 1. UPSERT no Supabase
         res_existente = supabase.table('beneficiarios').select('id').eq('cpf', cpf_limpo).execute()
         
-        id_beneficiario_final = None
         if res_existente.data:
-            id_beneficiario_final = res_existente.data[0]['id']
-            supabase.table('beneficiarios').update(dados_salvar).eq('id', id_beneficiario_final).execute()
+            id_ben = res_existente.data[0]['id']
+            supabase.table('beneficiarios').update(dados_salvar).eq('id', id_ben).execute()
         else:
-            res_insert = supabase.table('beneficiarios').insert(dados_salvar).execute()
-            if res_insert.data:
-                id_beneficiario_final = res_insert.data[0]['id']
+            res_ins = supabase.table('beneficiarios').insert(dados_salvar).execute()
+            id_ben = res_ins.data[0]['id']
+
+        # 2. Upload do documento agora que temos o ID definitivo
+        if id_fila_para_baixa and 'file_bytes' in locals():
+            nome_fixo = f"doc_{id_ben}.pdf"
+            supabase.storage.from_('agendha-uploads').upload(
+                path=f"beneficiarios_docs/{nome_fixo}",
+                file=file_bytes,
+                file_options={"content-type": "application/pdf", "upsert": "true"}
+            )
+            doc_status_final = supabase.storage.from_('agendha-uploads').get_public_url(f"beneficiarios_docs/{nome_fixo}")
+            supabase.table('beneficiarios').update({"doc_status": doc_status_final}).eq('id', id_ben).execute()
 
         if id_fila_para_baixa:
             from app.services import store
             store.delete_item(str(id_fila_para_baixa))
             
-        return {"message": "Salvo com sucesso!", "id": id_beneficiario_final}
+        return {"message": "Salvo com sucesso!", "id": id_ben}
 
     except Exception as e:
-        logging.error(f"Erro ao salvar validação OCR no Supabase: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Erro ao salvar validação OCR: {e}")
+        return JSONResponse(content={"error": f"Erro ao salvar: {str(e)}"}, status_code=500)
 @router.get("/export/kml")
-def exportar_beneficiarios_kml(  # noqa: F811
+def exportar_beneficiarios_kml(
     municipio: str | None = None,
     status: str | None = None,
-    comunidade: str | None = None,
-    db: sqlite3.Connection = Depends(get_db_connection)
+    comunidade: str | None = None
 ):
     """
-    Exportação KML via GET (Query Params).
-    
-    Gera KML baseado nos filtros de URL.
-    Útil para links diretos de download ou integração externa.
+    Exportação KML via Supabase.
     """
     try:
-        cursor = db.cursor()
-        query = "SELECT nome_completo, cpf, comunidade, latitude, longitude, status, municipio FROM beneficiarios WHERE 1=1"
-        params = []
+        supabase = get_supabase()
+        query = supabase.table('beneficiarios').select('nome_completo, cpf, comunidade, latitude, longitude, status, municipio')
         
         if municipio:
-            query += " AND UPPER(municipio) = ?"
-            params.append(municipio.upper())
-        
+            query = query.ilike('municipio', municipio)
         if status:
-            query += " AND UPPER(status) = ?"
-            params.append(status.upper())
-            
+            query = query.ilike('status', status)
         if comunidade:
-            query += " AND UPPER(comunidade) LIKE ?"
-            params.append(f"%{comunidade.upper()}%")
+            query = query.ilike('comunidade', f"%{comunidade}%")
             
-        # Ensure we only pick valid coordinates
-        query += " AND latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 AND longitude != 0"
-            
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
+        res = query.execute()
+        rows = res.data
         
         # Build KML
         kml = ['<?xml version="1.0" encoding="UTF-8"?>']
@@ -871,12 +767,15 @@ def exportar_beneficiarios_kml(  # noqa: F811
         kml.append('</Style>')
         
         for row in rows:
-            nome = row['nome_completo'] or "Sem Nome"
-            cpf = row['cpf'] or "N/I"
-            com = row['comunidade'] or "N/I"
-            mun = row['municipio'] or "N/I"
-            lat = row['latitude']
-            lon = row['longitude']
+            lat = row.get('latitude')
+            lon = row.get('longitude')
+            if not lat or not lon or str(lat) == '0' or str(lon) == '0':
+                continue
+
+            nome = row.get('nome_completo') or "Sem Nome"
+            cpf = row.get('cpf') or "N/I"
+            com = row.get('comunidade') or "N/I"
+            mun = row.get('municipio') or "N/I"
             
             description = f"<b>Comunidade:</b> {com}<br/><b>CPF:</b> {cpf}<br/><b>Município:</b> {mun}"
             
@@ -893,7 +792,6 @@ def exportar_beneficiarios_kml(  # noqa: F811
         kml.append('</kml>')
         
         kml_content = "\n".join(kml)
-        
         filename = f"Export_Beneficiarios_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.kml"
         
         return Response(
@@ -902,26 +800,25 @@ def exportar_beneficiarios_kml(  # noqa: F811
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
         
-    except sqlite3.Error as e:
-        raise HTTPException(status_code=500, detail=f"Erro no banco de dados: {e}")
+    except Exception as e:
+        logging.error(f"Erro ao exportar KML: {e}")
+        return JSONResponse(content={"error": f"Erro na exportação: {str(e)}"}, status_code=500)
 
 # ==============================================================================
 # NOVAS ROTAS: GERADOR DE RELATÓRIOS CUSTOMIZADOS (PROJETO AGENDHA)
 # ==============================================================================
 
 @router_root.post("/api/relatorios/excel")
-async def gerar_relatorio_excel(data: RelatorioRequest, db: sqlite3.Connection = Depends(get_db)):
+async def gerar_relatorio_excel(data: RelatorioRequest):
     """
-    Gera um arquivo Excel com colunas customizadas para os IDs fornecidos.
+    Gera um arquivo Excel via Supabase com colunas customizadas.
     """
     if not data.ids:
-        raise HTTPException(status_code=400, detail="Nenhum ID fornecido")
+        return JSONResponse(content={"error": "Nenhum ID fornecido"}, status_code=400)
     
     try:
-        # Extração manual para evitar erro de gerador com Pandas
-        cursor = db.cursor()
+        supabase = get_supabase()
         
-        # Mapeamento seguro de colunas permitidas
         colunas_permitidas = {
             "nome_familiar": "Nome",
             "cpf_familiar": "CPF",
@@ -934,34 +831,21 @@ async def gerar_relatorio_excel(data: RelatorioRequest, db: sqlite3.Connection =
             "grh": "GRH"
         }
         
-        # Filtra apenas colunas válidas
         cols_to_query = [c for c in data.colunas if c in colunas_permitidas]
         if not cols_to_query:
             cols_to_query = list(colunas_permitidas.keys())
 
-        # Query com placeholders seguros
-        placeholders = ','.join(['?'] * len(data.ids))
-        query = f"SELECT {', '.join(cols_to_query)} FROM beneficiarios WHERE id IN ({placeholders})"
-        
-        cursor.execute(query, data.ids)
-        rows = cursor.fetchall()
-        
-        # Converte para lista de dicionários (sqlite3.Row -> dict)
-        dados_brutos = [dict(row) for row in rows]
+        # Busca no Supabase
+        res = supabase.table('beneficiarios').select(','.join(cols_to_query)).in_('id', data.ids).execute()
+        dados_brutos = res.data
         
         dados = []
         for i, linha in enumerate(dados_brutos, start=1):
-            # INTERCEPTAÇÃO: Formata o status do documento para algo amigável no Excel
             if 'doc_status' in linha:
                 val = linha['doc_status']
-                if val and isinstance(val, str) and ('/' in val or '.pdf' in val.lower() or val == 'OK'):
-                    linha['doc_status'] = 'OK'
-                else:
-                    linha['doc_status'] = 'Procurar documento'
+                linha['doc_status'] = 'OK' if (val and isinstance(val, str) and ('/' in val or '.pdf' in val.lower())) else 'Procurar documento'
             
-            # --- INJEÇÃO DA COLUNA "Nº" (Sequential) ---
             if 'numero_ordem' in data.colunas:
-                # Cria um novo dicionário com "Nº" na primeira posição
                 nova_linha = {'Nº': i}
                 nova_linha.update(linha)
                 dados.append(nova_linha)
@@ -969,135 +853,72 @@ async def gerar_relatorio_excel(data: RelatorioRequest, db: sqlite3.Connection =
                 dados.append(linha)
 
         df = pd.DataFrame(dados)
-
-        # Renomeia colunas para o Excel
         df.rename(columns={k: v for k, v in colunas_permitidas.items() if k in cols_to_query}, inplace=True)
 
         output = io.BytesIO()
-        # Força o uso do openpyxl conforme solicitado para garantir compatibilidade e formatação visual
-        try:
-            from openpyxl.styles import PatternFill, Font
+        from openpyxl.styles import PatternFill, Font
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Beneficiários')
+            worksheet = writer.sheets['Beneficiários']
             
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name='Beneficiários')
-                worksheet = writer.sheets['Beneficiários']
-                
-                # 1. Cabeçalho em Negrito
-                for cell in worksheet[1]:
-                    if cell.value:
-                        cell.font = Font(bold=True)
-                
-                # 2. Ajuste automático da largura das colunas
-                for col in worksheet.columns:
-                    max_length = 0
-                    column = col[0].column_letter # Get the column name
-                    for cell in col:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except (TypeError, ValueError):
-                            pass
-                    adjusted_width = (max_length + 2)
-                    worksheet.column_dimensions[column].width = adjusted_width
+            for cell in worksheet[1]:
+                if cell.value: cell.font = Font(bold=True) # noqa: E701
+            
+            for col in worksheet.columns:
+                max_length = max((len(str(cell.value)) for cell in col if cell.value), default=0)
+                worksheet.column_dimensions[col[0].column_letter].width = max_length + 2
 
-                # 3. Formatação Condicional: Pintar de Amarelo quem precisa "Procurar documento"
-                yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                for r in worksheet.iter_rows():
-                    for cell in r:
-                        if cell.value == 'Procurar documento':
-                            cell.fill = yellow_fill
-
-        except Exception as e_writer:
-            logger.error(f"Erro no ExcelWriter (openpyxl) na formatação: {e_writer}")
-            # Fallback final direto caso a formatação avançada falhe
-            df.to_excel(output, index=False, engine='openpyxl')
+            yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            for r in worksheet.iter_rows():
+                for cell in r:
+                    if cell.value == 'Procurar documento':
+                        cell.fill = yellow_fill
 
         output.seek(0)
-        headers = {
-            'Content-Disposition': 'attachment; filename="relatorio_beneficiarios.xlsx"'
-        }
-        return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+        return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename="relatorio_beneficiarios.xlsx"'})
 
     except Exception as e:
-        traceback.print_exc()
-        logger.error(f"Erro ao gerar Excel: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro interno no Excel: {str(e)}")
+        logging.error(f"Erro ao gerar Excel: {e}")
+        return JSONResponse(content={"error": f"Erro interno no Excel: {str(e)}"}, status_code=500)
 
 
 @router_root.post("/api/relatorios/analise")
-async def gerar_analise_ia(data: RelatorioRequest, db: sqlite3.Connection = Depends(get_db)):
+async def gerar_analise_ia(data: RelatorioRequest):
     """
-    Realiza uma análise de dados via Gemini AI baseado nos registros selecionados.
+    Análise de IA via Gemini usando dados do Supabase.
     """
     if not data.ids:
-        raise HTTPException(status_code=400, detail="Nenhum ID fornecido")
+        return JSONResponse(content={"error": "Nenhum ID fornecido"}, status_code=400)
 
     try:
-        # Extração manual para evitar erro de gerador com Pandas
-        cursor = db.cursor()
-        # Busca dados brutos para análise
-        cols_for_ai = ["nome_familiar", "municipio", "comunidade", "status", "nis", "tecnico_agua_que_alimenta", "grh", "verificado_bsf"]
-        # Query com placeholders seguros
-        placeholders = ','.join(['?'] * len(data.ids))
-        query = f"SELECT {', '.join(cols_for_ai)} FROM beneficiarios WHERE id IN ({placeholders})"
+        supabase = get_supabase()
+        cols_for_ai = ["nome_familiar", "municipio", "comunidade", "status", "nis", "tecnico_agua_que_alimenta"]
+        res = supabase.table('beneficiarios').select(','.join(cols_for_ai)).in_('id', data.ids).execute()
         
-        cursor.execute(query, data.ids)
-        rows = cursor.fetchall()
-        
-        # Converte para lista de dicionários
-        dados_brutos = [dict(row) for row in rows]
-        
-        dados_para_ia = []
-        for i, linha in enumerate(dados_brutos, start=1):
-            if 'numero_ordem' in data.colunas:
-                nova_linha = {'Nº': i}
-                nova_linha.update(linha)
-                dados_para_ia.append(nova_linha)
-            else:
-                dados_para_ia.append(linha)
-
-        df = pd.DataFrame(dados_para_ia)
-
-        if df.empty:
+        if not res.data:
             return {"analise": "Nenhum dado encontrado para os IDs informados."}
 
-        # Converte para JSON para o Gemini (Garante que é uma lista de dicts limpa)
-        dados_dict = df.head(2000).to_dict(orient="records")
-        dados_json = json.dumps(dados_dict, ensure_ascii=False, indent=2)
+        df = pd.DataFrame(res.data)
+        dados_json = df.to_json(orient="records", force_ascii=False)
         
         prompt = f"""
-        Você é um analista de dados especialista no projeto social Agendha.
-        Analise a seguinte lista de beneficiários ({len(df)} registros) e forneça um resumo executivo:
-        
-        1. **Resumo por Município/Comunidade**: Quais regiões têm mais beneficiários?
-        2. **Status da Obra/Processo**: Como está a distribuição dos status?
-        3. **Anomalias/Alertas**: Identifique possíveis gargalos ou dados faltantes.
-        4. **Sugestão de Ações**: O que o coordenador deve focar agora?
-        
-        Responda em formato Markdown elegante, use emojis. Seja conciso e técnico.
-        
-        DADOS:
-        {dados_json}
+        Analise a seguinte lista de beneficiários ({len(df)} registros) do projeto Agendha:
+        1. Resumo por Município/Comunidade.
+        2. Distribuição de Status.
+        3. Gargalos ou dados faltantes.
+        4. Sugestão de foco imediato.
+        Responda em Markdown elegante com emojis.
+        DADOS: {dados_json}
         """
 
-        # Reutilizando a lógica de configuração e chamada do Gemini
         client = ai_vision.get_gemini_client()
         if client:
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.5-flash",
-                contents=[prompt]
-            )
-            analise_texto = response.text
-            
-            if data.email:
-                logger.info(f"📧 [SIMULAÇÃO] Enviando análise para {data.email}")
-            
-            return {"analise": analise_texto}
+            response = await asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=[prompt])
+            return {"analise": response.text}
         else:
-            return {"analise": "⚠️ Erro: API do Gemini não configurada corretamente."}
+            return JSONResponse(content={"error": "API Gemini não configurada."}, status_code=500)
 
     except Exception as e:
-        traceback.print_exc()
-        logger.error(f"Erro na análise IA: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro interno na IA: {str(e)}")
+        logging.error(f"Erro na análise IA: {e}")
+        return JSONResponse(content={"error": f"Erro interno na IA: {str(e)}"}, status_code=500)

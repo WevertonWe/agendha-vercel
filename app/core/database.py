@@ -68,7 +68,7 @@ def init_db():
         if supabase_url and supabase_key:
             try:
                 from supabase import create_client
-                supabase = create_client(supabase_url, supabase_key)
+                create_client(supabase_url, supabase_key)
                 # Teste simples de conexão (opcional, aqui apenas logamos)
                 logging.info("✅ Conexão com Supabase validada com sucesso.")
             except Exception as e:
@@ -457,7 +457,7 @@ def fetch_all(table_name: str, select_query: str = '*'):
     all_data = []
     page_size = 1000
     start = 0
-    
+
     while True:
         end = start + page_size - 1
         try:
@@ -469,8 +469,77 @@ def fetch_all(table_name: str, select_query: str = '*'):
                 break
             start += page_size
         except Exception as e:
-            import logging
             logging.error(f"Erro ao fazer fetch_all na tabela {table_name}: {e}")
             break
-        
-    return all_data
+
+    return all_data
+
+
+def sync_projects() -> None:
+    """
+    Sincroniza a tabela `projetos` no Supabase com os módulos físicos em app/modules/.
+
+    - Insere projetos novos (pastas que existem no FS mas não no Supabase).
+    - Desativa projetos removidos (registros no Supabase cujas pastas não existem mais).
+    - É idempotente e non-blocking: falhas são logadas mas não interrompem o boot.
+
+    Chamada uma vez durante o lifespan do FastAPI em `main.py`.
+    """
+    try:
+        import pathlib
+
+        supabase = get_supabase()
+
+        # 1. Detecta pastas físicas em app/modules/
+        modules_dir = pathlib.Path(__file__).resolve().parent.parent / "modules"
+        if not modules_dir.exists():
+            logging.warning(f"[sync_projects] Diretório de módulos não encontrado: {modules_dir}")
+            return
+
+        # Nomes de pastas que são módulos válidos (têm __init__.py ou views.py)
+        fs_slugs: set[str] = set()
+        for folder in modules_dir.iterdir():
+            if folder.is_dir() and not folder.name.startswith("_"):
+                # Considera módulo válido se tem views.py ou routers/
+                has_views = (folder / "views.py").exists()
+                has_routers = (folder / "routers").is_dir()
+                has_routes = (folder / "routes.py").exists()
+                if has_views or has_routers or has_routes:
+                    fs_slugs.add(folder.name)
+
+        # 2. Busca projetos já registrados no Supabase
+        res = supabase.table("projetos").select("id, ativo").execute()
+        db_rows = {row["id"]: row["ativo"] for row in (res.data or [])}
+        db_slugs = set(db_rows.keys())
+
+        # 3. Inserir novos projetos (existem no FS, não no DB)
+        to_insert = fs_slugs - db_slugs
+        for slug in to_insert:
+            nome_display = slug.replace("_", " ").title()
+            pasta = f"app/modules/{slug}"
+            supabase.table("projetos").insert({
+                "id": slug,
+                "nome": nome_display,
+                "descricao": f"Módulo {nome_display} (auto-detectado)",
+                "ativo": True,
+                "pasta_fisica": pasta,
+            }).execute()
+            logging.info(f"[sync_projects] ✅ Novo projeto registrado: {slug}")
+
+        # 4. Desativar projetos removidos (existem no DB, não no FS)
+        to_deactivate = db_slugs - fs_slugs
+        for slug in to_deactivate:
+            if db_rows.get(slug):  # Só desativa se ainda estava ativo
+                supabase.table("projetos").update({"ativo": False}).eq("id", slug).execute()
+                logging.warning(f"[sync_projects] ⚠️ Projeto desativado (pasta removida): {slug}")
+
+        logging.info(
+            f"[sync_projects] Sync concluído. "
+            f"FS={len(fs_slugs)} módulos | "
+            f"Inseridos={len(to_insert)} | "
+            f"Desativados={len(to_deactivate)}"
+        )
+
+    except Exception as e:
+        # Non-blocking: falha no sync não impede o boot da aplicação
+        logging.error(f"[sync_projects] Falha na sincronização de projetos (non-fatal): {e}")

@@ -1,4 +1,3 @@
-import sqlite3
 import shutil
 import uuid
 import os
@@ -12,7 +11,6 @@ import io
 from app.config import settings
 from .models import PontoCreate, PontoResponse, CategoriaCreate, CategoriaResponse
 from . import services
-from app.services.utils import remover_acentos
 
 router = APIRouter(prefix="/api/mapa", tags=["Mapa"])
 view_router = APIRouter(include_in_schema=False)

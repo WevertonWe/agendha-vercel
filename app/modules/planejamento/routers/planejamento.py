@@ -1,12 +1,9 @@
-import sqlite3
 import logging
 from datetime import timedelta, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.dependencies import get_db_connection
-from app.core.auth.dependencies import get_current_user
 from app.services.utils import remover_acentos
 from app.modules.planejamento.schemas import (
     CronogramaExecucaoBase, 

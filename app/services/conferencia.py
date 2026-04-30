@@ -1,9 +1,7 @@
 import logging
 # import pandas as pd
 import sqlite3
-import json
 from fastapi import HTTPException, UploadFile
-from app.services.utils import limpar_cpf
 
 METAS = {
     "ABARE": 159,

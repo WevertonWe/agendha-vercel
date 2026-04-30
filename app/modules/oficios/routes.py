@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Request, Form, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-import shutil
 from app.config import settings
 from datetime import datetime
 from pydantic import BaseModel

@@ -1,15 +1,15 @@
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 import os
 import json
 import logging
 from app.config import settings
 
-router = APIRouter(tags=["Core Views"])
-from jinja2 import Environment, FileSystemLoader
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
+router = APIRouter(tags=["Core Views"])
 
 @router.get("/", response_class=HTMLResponse, summary="Página Portal")
 async def get_portal_page(request: Request):

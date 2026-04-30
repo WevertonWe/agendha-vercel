@@ -1,7 +1,5 @@
 import logging
-import asyncio
 from typing import Dict, Any
-from app.config import settings
 import json
 from app.services import ai_vision
 

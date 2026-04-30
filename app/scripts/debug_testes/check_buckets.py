@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -10,7 +9,6 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent.parent.parent / ".env")
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from app.core.database import get_supabase
-from app.config import settings
 
 def main():
     print("=== LISTAGEM DE BUCKETS DO SUPABASE ===")

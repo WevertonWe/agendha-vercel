@@ -1,7 +1,5 @@
 import os
 import sqlite3
-import json
-import uuid
 import mimetypes
 import unicodedata
 import re
@@ -165,7 +163,7 @@ def migrate_database(url_mapping):
     cur_sqlite = conn_sqlite.cursor()
 
     try:
-        print(f"Conectando ao PostgreSQL na porta 6543...")
+        print("Conectando ao PostgreSQL na porta 6543...")
         conn_pg = psycopg2.connect(SUPABASE_DB_STRING)
         cur_pg = conn_pg.cursor()
         print("Conexão bem sucedida com o PostgreSQL!")
@@ -174,13 +172,13 @@ def migrate_database(url_mapping):
         for table in reversed(TABLES_TO_MIGRATE):
             try:
                 cur_pg.execute(f"DELETE FROM {table}")
-            except Exception as e:
+            except Exception:
                 # Pode falhar se a tabela não existir ou outro erro, ignora e continua
                 conn_pg.rollback()
         conn_pg.commit()
         print("Limpeza concluída.\n")
     except psycopg2.OperationalError as e:
-        print(f"\\n[FALHA CRÍTICA] Erro operacional de conexão com o banco de dados:")
+        print("\\n[FALHA CRÍTICA] Erro operacional de conexão com o banco de dados:")
         print(f"{e}")
         print("Possíveis causas:")
         print("- Sua senha contém caracteres especiais que precisam de URL encode (ex: @ vira %40).")
@@ -189,7 +187,7 @@ def migrate_database(url_mapping):
         print("- 'InvalidKey' / 'Invalid password' = Verifique a senha do banco em Configurações > Database no Supabase.\\n")
         return
     except Exception as e:
-        print(f"\\n[FALHA CRÍTICA] Erro inesperado ao conectar ao PostgreSQL:")
+        print("\\n[FALHA CRÍTICA] Erro inesperado ao conectar ao PostgreSQL:")
         print(f"{e}\\n")
         return
 
@@ -269,7 +267,7 @@ def migrate_database(url_mapping):
                 cur_pg.execute(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), COALESCE(max(id), 1), max(id) IS NOT NULL) FROM {table};")
                 conn_pg.commit()
                 print(f"  {len(data_to_insert)} registros inseridos em {table}.")
-            except Exception as batch_err:
+            except Exception:
                 conn_pg.rollback()
                 print(f"  [ALERTA] Falha no insert em lote para {table}. Tentando linha a linha para isolar o erro...")
                 
