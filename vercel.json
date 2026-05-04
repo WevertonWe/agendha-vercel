@@ -1,6 +1,6 @@
 {
   "functions": {
-    "vercel_app.py": {
+    "api/vercel_app.py": {
       "runtime": "vercel-python@0.1.0"
     }
   },
@@ -10,7 +10,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/vercel_app.py"
+      "destination": "/api/vercel_app.py"
     }
   ]
 }
