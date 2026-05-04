@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 router = APIRouter(prefix="/projetos/ater-bahia-sem-fome", tags=["BSF Views"])
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 

@@ -185,7 +185,7 @@
 
 | Arquivo | Status | Dependências Legadas | Notas |
 |---|---|---|---|
-| `routes.py` | `[PARCIAL]` | `open(file_path, "wb")` (linha 237), `pd` não importado globalmente (F821) | ⚠️ Upload salva em disco local. `pd` (pandas) usado sem import global — bug latente. |
+| `routes.py` | `[PARCIAL]` | `open(file_path, "wb")` (linha 237) | ⚠️ Upload salva em disco local. Import de `pd` fixado (try/except global). |
 | `services.py` | `[MIGRADO]` | `get_supabase()` | ✅ CRUD de pontos e categorias. |
 
 #### Frontend
@@ -216,7 +216,7 @@
 
 | Arquivo | Status | Dependências Legadas | Notas |
 |---|---|---|---|
-| `routes.py` | `[PARCIAL]` | `logging` não importado (bug F821 linhas 84, 129) | ⚠️ Upload para Supabase Storage funciona. Mas bug de `logging` não importado silencia erros. |
+| `routes.py` | `[PARCIAL]` | None | ⚠️ Upload para Supabase Storage funciona. Import de `logging` fixado. |
 | `services.py` | `[MIGRADO]` | `get_supabase()` | ✅ CRUD via Supabase. |
 
 ---
@@ -229,7 +229,7 @@
 
 | Arquivo | Status | Dependências Legadas | Notas |
 |---|---|---|---|
-| `routers/planejamento.py` | `[PARCIAL]` | `cursor.execute` (linhas 228-235) após `raise HTTPException` — dead code | ⚠️ Código SQLite inacessível mas cria confusão. Deve ser removido. |
+| `routers/planejamento.py` | `[PARCIAL]` | None | ✅ Código SQLite inacessível foi removido. |
 
 ---
 
@@ -298,9 +298,9 @@
 | **P2** | `app/core/database.py` | `sync_projects()` adicionado | ✅ **CONCLUÍDO** (2026-04-30) |
 | **P3** | `app/core/auth/router.py` | SQLite → Supabase (rota `/token` de login) | 🔴 Próxima sprint |
 | **P3** | `app/core/auth/services.py` | SQLite → Supabase (troca de senha) | 🔴 Próxima sprint |
-| **P4** | `planejamento/routers/planejamento.py` | Remover dead code SQLite | 🟡 Limpeza de código |
-| **P4** | `mapa/routes.py` | `open()` local → Supabase Storage + import `pd` | 🟡 Bug latente |
-| **P4** | `oficios/routes.py` | Adicionar `import logging` | 🟡 Bug de logging silencioso |
+| **P4** | `planejamento/routers/planejamento.py` | Remover dead code SQLite | ✅ **CONCLUÍDO** |
+| **P4** | `mapa/routes.py` | `open()` local → Supabase Storage + import `pd` | 🟡 `pd` fixado, `open()` pendente |
+| **P4** | `oficios/routes.py` | Adicionar `import logging` | ✅ **CONCLUÍDO** |
 | **P5** | `pedreiros.py` + `ocr.py` | `open()` local → `/tmp` ou Supabase Storage | 🟢 Funcional com `/tmp` |
 | **P6** | `modules/backup/` | Deprecar módulo | 🟢 Limpeza |
 

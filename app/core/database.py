@@ -542,4 +542,4 @@ def sync_projects() -> None:
 
     except Exception as e:
         # Non-blocking: falha no sync não impede o boot da aplicação
-        logging.error(f"[sync_projects] Falha na sincronização de projetos (non-fatal): {e}")
+        logging.error(f"[sync_projects] Falha na sincronização de projetos (non-fatal): {e}")

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 import os
 import json
 import logging

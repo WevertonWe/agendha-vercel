@@ -244,8 +244,10 @@ def migrate_database(url_mapping):
                     # 2. TRATAMENTO DE BOOLEANOS
                     if col in ('verificacao_bsf', 'is_active'):
                         v = values[i]
-                        if v in (1, '1', True, 'true', 'True'): values[i] = True
-                        elif v in (0, '0', False, 'false', 'False', None, ''): values[i] = False
+                        if v in (1, '1', True, 'true', 'True'): 
+                            values[i] = True
+                        elif v in (0, '0', False, 'false', 'False', None, ''): 
+                            values[i] = False
                             
                     # Atualiza a referência de val após possíveis modificações
                     val = values[i]

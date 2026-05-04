@@ -215,7 +215,7 @@ def get_dashboard_data() -> List[Dict[str, Any]]:
                 total_orcado = sum(float(r.get('valor_total_programado', 0)) for r in res_rubricas.data) if res_rubricas.data else 0.0
                 
         res_exec = supabase.table('financeiro_lancamentos').select('valor_total_executado').eq('projeto_id', projeto_id).execute()
-        total_executado = sum(float(l.get('valor_total_executado', 0)) for l in res_exec.data) if res_exec.data else 0.0
+        total_executado = sum(float(lan.get('valor_total_executado', 0)) for lan in res_exec.data) if res_exec.data else 0.0
         
         saldo = total_orcado - total_executado
         percentual_concluido = 0.0

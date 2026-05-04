@@ -13,7 +13,7 @@ from app.modules.agua_que_alimenta.models import Pedreiro, PedreiroCreate, Pedre
 from app.config import settings
 
 router = APIRouter(prefix="/api/pedreiros", tags=["Pedreiros"])
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 

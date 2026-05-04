@@ -4,11 +4,12 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from datetime import datetime
 from pydantic import BaseModel
+import logging
 from typing import Optional
 from app.modules.oficios import services
 
 router = APIRouter(prefix="/oficios", tags=["Ofícios"])
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 

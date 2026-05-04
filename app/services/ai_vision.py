@@ -66,7 +66,7 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
         
         file_bytes = await asyncio.to_thread(read_file_content)
         mime_type = "application/pdf" if caminho.suffix.lower() == ".pdf" else "image/jpeg"
-        dados_arquivo = {"mime_type": mime_type, "data": file_bytes}
+        # dados_arquivo = {"mime_type": mime_type, "data": file_bytes}
         
     except Exception as e:
         return json.dumps({"erro": f"Erro ao ler arquivo: {str(e)}"})

@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 import logging
 
 router = APIRouter(tags=["Cotações Views"])
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 

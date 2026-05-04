@@ -7,7 +7,7 @@ import logging
 from app.dependencies import get_db
 
 router = APIRouter(prefix="/admin/auditoria", tags=["Admin Audit"])
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 logger = logging.getLogger(__name__)

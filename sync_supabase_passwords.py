@@ -19,7 +19,7 @@ except Exception as e:
     print(f"Error initializing Supabase client: {e}")
     sys.exit(1)
 
-from passlib.context import CryptContext
+from passlib.context import CryptContext  # noqa: E402
 
 # Use exact same config as the app
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", truncate_error=True)

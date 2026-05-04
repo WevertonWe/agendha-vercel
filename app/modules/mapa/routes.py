@@ -5,7 +5,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Request, HTTPException, Depends, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-# import pandas as pd
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
 import io
 
 from app.config import settings
@@ -15,7 +18,7 @@ from . import services
 router = APIRouter(prefix="/api/mapa", tags=["Mapa"])
 view_router = APIRouter(include_in_schema=False)
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 _env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
 templates = Jinja2Templates(env=_env)
 
@@ -453,6 +456,8 @@ async def export_template(user: str = Depends(require_auth)):
     """
     Returns a sample .xlsx file for import.
     """
+    if pd is None:
+        raise HTTPException(status_code=500, detail="Pandas não está disponível neste ambiente.")
     data = [{
         "Nome": "Exemplo Cisterna",
         "Latitude": -9.41234,

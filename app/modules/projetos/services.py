@@ -24,7 +24,7 @@ def get_biomas_summary():
         if 'biomas' in nome or 'biomas' in proj_id or 'ca-13' in proj_id or 'ca-24' in proj_id:
             biomas_ids.append(p.get('id'))
             
-    total_executado = sum(float(l.get('valor') or 0.0) for l in lancamentos if l.get('projeto_id') in biomas_ids)
+    total_executado = sum(float(lan.get('valor') or 0.0) for lan in lancamentos if lan.get('projeto_id') in biomas_ids)
     
     total_beneficiarios = 0
     try:

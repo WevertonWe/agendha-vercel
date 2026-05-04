@@ -224,16 +224,6 @@ def desvincular_beneficiario(
     except Exception as e:
         logging.error(f"Erro ao desvincular no Supabase: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao desvincular: {e}")
-        cursor = db.cursor()
-        cursor.execute("""
-            DELETE FROM cronograma_beneficiarios 
-            WHERE cronograma_id = ? AND beneficiario_id = ?
-        """, (cronograma_id, beneficiario_id))
-        db.commit()
-        return {"message": "Vínculo removido"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erro ao desvincular: {e}")
 
 # --- UPDATE GET TO INCLUDE BENEFICIARIES ---
 

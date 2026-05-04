@@ -5,7 +5,7 @@ import asyncio
 from typing import List, Union, Optional
 from collections import defaultdict
 import pandas as pd
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader  # noqa: E402
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse

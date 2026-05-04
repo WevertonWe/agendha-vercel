@@ -46,7 +46,7 @@ async def get_dashboard_summary():
         if 'biomas' in nome or 'biomas' in proj_id or 'ca-13' in proj_id or 'ca-24' in proj_id:
             biomas_ids.append(p.get('id'))
             
-    biomas_financeiro = sum(float(l.get('valor') or 0.0) for l in lancamentos if l.get('projeto_id') in biomas_ids)
+    biomas_financeiro = sum(float(lan.get('valor') or 0.0) for lan in lancamentos if lan.get('projeto_id') in biomas_ids)
     
     # Beneficiários dos biomas (tentativa de filtro por projeto)
     biomas_beneficiarios = 0

@@ -8,7 +8,7 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent.parent.parent / ".env")
 # Adicionar caminho raiz ao sys.path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from app.core.database import get_supabase
+from app.core.database import get_supabase  # noqa: E402
 
 def main():
     print("=== LISTAGEM DE BUCKETS DO SUPABASE ===")
