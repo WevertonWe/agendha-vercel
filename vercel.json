@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/vercel_app.py": {
-      "runtime": "@vercel/python"
-    }
-  },
   "regions": [
     "gru1"
   ],
