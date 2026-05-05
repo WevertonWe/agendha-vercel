@@ -20,3 +20,4 @@ openpyxl
 pymupdf
 pdfplumber
 docxtpl
+pandas
