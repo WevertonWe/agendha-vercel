@@ -104,7 +104,6 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
             return texto_limpo
 
         except Exception as e:
-            erro_str = str(e).lower()
             logger.warning(f"⚠️ Falha no modelo {nome_modelo}: {e}")
             ultimo_erro = str(e)
             
