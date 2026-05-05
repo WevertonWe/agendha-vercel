@@ -51,8 +51,8 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
     if not client:
         return json.dumps({"erro": "Configuração da API inválida"})
 
-    # Lista de modelos Free Tier (Ajustada para cota real do usuário)
-    modelos_para_tentar = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-3-flash", "gemini-2.5-flash"]
+    # Lista de Modelos: Emergência/Resiliência (Prioridade 2025)
+    modelos_para_tentar = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
     ultimo_erro = ""
 
     caminho = Path(caminho_arquivo)
@@ -66,67 +66,53 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
         
         file_bytes = await asyncio.to_thread(read_file_content)
         mime_type = "application/pdf" if caminho.suffix.lower() == ".pdf" else "image/jpeg"
-        # dados_arquivo = {"mime_type": mime_type, "data": file_bytes}
         
     except Exception as e:
         return json.dumps({"erro": f"Erro ao ler arquivo: {str(e)}"})
 
-    # Prompt Otimizado
+    # Prompt Otimizado para Estruturação
     prompt = """
     Analise este documento de cadastro.
-    Extraia os dados e retorne APENAS um JSON válido.
-    Campos obrigatórios: 'nome_completo', 'sexo', 'data_nascimento', 'cpf', 'escolaridade', 'comunidade', 'municipio', 'estado_uf', 'nis'.
-    Se o campo estiver vazio ou ilegível, retorne string vazia "".
-    NÃO USE MARKDOWN. NÃO USE ```json. Retorne apenas o texto do JSON cru.
+    Extraia os dados e retorne APENAS um JSON válido seguindo o schema.
+    Campos: 'nome_completo', 'sexo', 'data_nascimento', 'cpf', 'escolaridade', 'comunidade', 'municipio', 'estado_uf', 'nis'.
+    Se ilegível, retorne "".
     """
 
-    # Loop de Fallback entre Modelos
+    # Loop de Fallback Resiliente (Handshake 2025)
     for nome_modelo in modelos_para_tentar:
-        print(f"Buscando modelo: {nome_modelo}...")
+        logger.info(f"Tentando processamento com modelo: {nome_modelo}...")
         
-        # Loop Interno de Smart Retry (Max 2 retentativas por modelo)
-        max_retries = 2
-        for attempt in range(max_retries + 1):
-            try:
-                # Na nova API, enviamos os bytes encapsulados em Part
-                part_arquivo = types.Part.from_bytes(
-                    data=file_bytes,
-                    mime_type=mime_type,
+        try:
+            # Encapsulamento em Part para a nova SDK
+            part_arquivo = types.Part.from_bytes(
+                data=file_bytes,
+                mime_type=mime_type,
+            )
+            
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=nome_modelo,
+                contents=[prompt, part_arquivo],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=BeneficiarioExtraido,
                 )
-                
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=nome_modelo,
-                    contents=[prompt, part_arquivo],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=BeneficiarioExtraido,
-                    )
-                )
-                
-                texto_limpo = response.text
-                print(f"✅ SUCESSO com {nome_modelo}")
-                
-                # --- RATE LIMIT PREVENTIVO (Respeitar 5 RPM -> 12s delay) ---
-                await asyncio.sleep(12) 
-                
-                return texto_limpo
+            )
+            
+            texto_limpo = response.text
+            logger.info(f"✅ SUCESSO com {nome_modelo}")
+            return texto_limpo
 
-            except Exception as e:
-                erro_str = str(e).lower()
-                if "429" in erro_str or "quota" in erro_str or "exhausted" in erro_str:
-                    msg = f"⚠️ Rate limit (429) atingido no modelo {nome_modelo}."
-                    if attempt < max_retries:
-                        logger.warning(f"{msg} Pausando 30s antes da tentativa {attempt + 2}/{max_retries + 1}...")
-                        await asyncio.sleep(30)
-                        continue
-                    else:
-                        logger.error(f"{msg} Máximo de retentativas atingido. Pulando para fallback...")
-                        break
-                
-                print(f"⚠️ Falha técnica no modelo {nome_modelo}: {e}")
-                ultimo_erro = str(e)
-                break # Erro não relacionado à cota (ex: schema), tenta próximo modelo
+        except Exception as e:
+            erro_str = str(e).lower()
+            logger.warning(f"⚠️ Falha no modelo {nome_modelo}: {e}")
+            ultimo_erro = str(e)
+            
+            # Protocolo de Espera Resiliente (5s) antes do próximo modelo
+            if nome_modelo != modelos_para_tentar[-1]:
+                logger.info("Aguardando 5s para fallback de modelo...")
+                await asyncio.sleep(5)
+            continue
 
     # Em caso de falha total
     return json.dumps({

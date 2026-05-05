@@ -12,7 +12,7 @@ python-multipart
 jinja2
 psycopg2-binary
 supabase
-google-genai
+google-genai==0.4.0
 google-api-core
 pytz
 reportlab

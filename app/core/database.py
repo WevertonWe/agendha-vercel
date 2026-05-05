@@ -1,43 +1,30 @@
-import sqlite3
 import logging
 import os
 from passlib.context import CryptContext
 from app.config import settings
 
+# --- DEBUG AUDIT (Handshake 2025) ---
+print(f"DEBUG: VERCEL_ENV_VAR: {os.getenv('VERCEL')}")
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# --- CORREÇÃO DEFINITIVA DE CAMINHO ---
-# 1. Pega o caminho absoluto deste arquivo (database.py)
-current_file_path = os.path.abspath(__file__)
-# 2. Sobe 2 níveis para chegar na raiz do projeto (app/core/database.py -> app/core -> app -> raiz)
-# Ajuste isso se a estrutura for diferente. Baseado no seu log, database.py está em app/core/ ou raiz?
-# Vamos assumir que database.py está dentro de app/alguma_coisa.
-# O jeito mais seguro é procurar a pasta 'agendha' no caminho.
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
-
-# Fallback de segurança: Se subir 3 pastas cair fora do projeto, tenta pegar direto.
-if os.path.basename(BASE_DIR).lower() not in ['agendha', 'projetos']:
-    # Tenta usar o diretório de trabalho se o cálculo relativo falhar, mas loga o aviso
-    BASE_DIR = os.getcwd()
-
-DB_PATH_FIX = os.path.join(BASE_DIR, "agendha.db")
-
-print(f"BANCO DE DADOS CARREGADO EM: {DB_PATH_FIX}") # Log forçado no terminal
-# --------------------------------------
-
-from app.database.wrapper import AuditConnection  # noqa: E402
-
-def get_db_connection(request=None): # Request optional for backward compatibility
-    """Conexão por requisição com Auditoria (DEPRECATED)"""
-    import os
+def get_db_connection(request=None): 
+    """Conexão por requisição (Hard-Locked for Production)"""
     if os.getenv("VERCEL"):
-        raise RuntimeError("O uso do SQLite local (agendha.db) está desativado na Vercel. Utilize o cliente Supabase diretamente!")
+        # Bloqueio total de SQLite em produção
+        raise RuntimeError("CRITICAL: SQLite is disabled in production. Use Supabase SDK!")
         
-    # Mantém fallback apenas para desenvolvimento local
-    conexao = AuditConnection(DB_PATH_FIX, check_same_thread=False)
-    conexao.execute("PRAGMA foreign_keys = ON") # Enable Foreign Keys
+    # Fallback apenas para DEV LOCAL
+    import sqlite3
+    from app.database.wrapper import AuditConnection
+    conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), check_same_thread=False)
+    conexao.execute("PRAGMA foreign_keys = ON")
     conexao.row_factory = sqlite3.Row
+    
+    try:
+        yield conexao
+    finally:
+        conexao.close()
     
     # Try to set user context if request is provided and has user
     try:
@@ -69,7 +56,6 @@ def init_db():
             try:
                 from supabase import create_client
                 create_client(supabase_url, supabase_key)
-                # Teste simples de conexão (opcional, aqui apenas logamos)
                 logging.info("✅ Conexão com Supabase validada com sucesso.")
             except Exception as e:
                 logging.error(f"⚠️ Erro ao validar conexão Supabase: {e}")
@@ -78,10 +64,13 @@ def init_db():
         
         return
 
+    # Fallback LOCAL: Importações tardias para evitar ghost imports em PROD
+    import sqlite3
+    DB_PATH_FIX = os.path.join(os.getcwd(), "agendha.db")
     logging.info(f"Inicializando banco de dados local em: {DB_PATH_FIX}")
     
     conn = sqlite3.connect(DB_PATH_FIX)
-    conn.execute("PRAGMA foreign_keys = OFF")  # OFF during init_db for safety
+    conn.execute("PRAGMA foreign_keys = OFF")
     cursor = conn.cursor()
 
     
