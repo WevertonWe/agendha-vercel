@@ -5,7 +5,7 @@ Endpoints para listagem, filtros e preparação de arquivos do módulo BSF.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
 
 from app.core.database import get_supabase
 
@@ -27,12 +27,12 @@ async def listar_beneficiarios(
         supabase = get_supabase()
         
         cols = (
-            "id, nome_completo, cpf, municipio, comunidade, "
+            "id, nome_completo, cpf, caf, nis, municipio, comunidade, "
             "nome_tecnico, tecnico_agua_que_alimenta, status, "
-            "verificado_bsf, data_atividade"
+            "verificado_bsf, data_atividade, projeto"
         )
         
-        query = supabase.table("beneficiarios").select(cols, count="exact")
+        query = supabase.table("beneficiarios").select(cols, count="exact").eq("projeto", "Bahia Sem Fome")
         
         if tecnico:
             query = query.ilike("nome_tecnico", f"%{tecnico}%")
@@ -72,17 +72,17 @@ async def obter_filtros():
         supabase = get_supabase()
         
         # Fetch unique tecnicos
-        res_tec = supabase.table("beneficiarios").select("nome_tecnico").not_.is_("nome_tecnico", "null").execute()
+        res_tec = supabase.table("beneficiarios").select("nome_tecnico").eq("projeto", "Bahia Sem Fome").not_.is_("nome_tecnico", "null").execute()
         tecnicos_raw = [r["nome_tecnico"] for r in (res_tec.data or []) if r.get("nome_tecnico")]
         tecnicos = sorted(set(t.strip() for t in tecnicos_raw if t.strip()))
         
         # Fetch unique municipios
-        res_mun = supabase.table("beneficiarios").select("municipio").not_.is_("municipio", "null").execute()
+        res_mun = supabase.table("beneficiarios").select("municipio").eq("projeto", "Bahia Sem Fome").not_.is_("municipio", "null").execute()
         municipios_raw = [r["municipio"] for r in (res_mun.data or []) if r.get("municipio")]
         municipios = sorted(set(m.strip() for m in municipios_raw if m.strip()))
         
         # Fetch unique statuses
-        res_st = supabase.table("beneficiarios").select("status").not_.is_("status", "null").execute()
+        res_st = supabase.table("beneficiarios").select("status").eq("projeto", "Bahia Sem Fome").not_.is_("status", "null").execute()
         statuses_raw = [r["status"] for r in (res_st.data or []) if r.get("status")]
         statuses = sorted(set(s.strip() for s in statuses_raw if s.strip()))
         
@@ -102,7 +102,7 @@ async def detalhar_beneficiario(beneficiario_id: int):
     """Retorna os dados completos de um beneficiário específico."""
     try:
         supabase = get_supabase()
-        res = supabase.table("beneficiarios").select("*").eq("id", beneficiario_id).execute()
+        res = supabase.table("beneficiarios").select("*").eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
         
         if not res.data:
             raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
@@ -125,18 +125,18 @@ async def listar_arquivos_beneficiario(beneficiario_id: int):
     try:
         supabase = get_supabase()
         res = supabase.table("beneficiarios").select(
-            "id, nome_completo, cpf, municipio"
-        ).eq("id", beneficiario_id).execute()
+            "id, nome_completo, cpf, caf, nis, municipio"
+        ).eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
         
         if not res.data:
             raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
         
         ben = res.data[0]
-        cpf_limpo = (ben.get("cpf") or "").replace(".", "").replace("-", "").replace(" ", "")
+        cpf_ou_caf = (ben.get("cpf") or ben.get("caf") or "SEM_DOC").replace(".", "").replace("-", "").replace(" ", "")
         municipio = (ben.get("municipio") or "SEM_MUNICIPIO").strip()
         
         # Storage path pattern for BSF documents
-        base_path = f"bsf/{municipio}/{cpf_limpo}"
+        base_path = f"bsf/{municipio}/{cpf_ou_caf}"
         
         arquivos = {
             "sigater": {
@@ -170,3 +170,59 @@ async def listar_arquivos_beneficiario(beneficiario_id: int):
     except Exception as e:
         logger.error(f"Erro ao listar arquivos do beneficiário {beneficiario_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar arquivos.")
+
+
+@router.post("/{beneficiario_id}/upload")
+async def upload_documento_bsf(
+    beneficiario_id: int,
+    tipo: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """Realiza o upload de um documento para o beneficiário."""
+    try:
+        if tipo not in ["sigater", "colletum", "ateste"]:
+            raise HTTPException(status_code=400, detail="Tipo de documento inválido.")
+            
+        supabase = get_supabase()
+        res = supabase.table("beneficiarios").select(
+            "id, cpf, caf, municipio"
+        ).eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            
+        ben = res.data[0]
+        cpf_ou_caf = (ben.get("cpf") or ben.get("caf") or "SEM_DOC").replace(".", "").replace("-", "").replace(" ", "")
+        municipio = (ben.get("municipio") or "SEM_MUNICIPIO").strip()
+        
+        nome_arquivo = f"{tipo}.pdf"
+        # agendha-uploads is the bucket
+        caminho_storage = f"bsf/{municipio}/{cpf_ou_caf}/{tipo}/{nome_arquivo}"
+        
+        file_content = await file.read()
+        
+        # Fazendo upload pro Supabase Storage
+        # Note: if the file exists, Supabase upload will fail unless upsert=True is supported, 
+        # but let's try to remove existing first just in case.
+        try:
+            supabase.storage.from_("agendha-uploads").remove([caminho_storage])
+        except Exception:
+            pass
+            
+        res_upload = supabase.storage.from_("agendha-uploads").upload(
+            file=file_content,
+            path=caminho_storage,
+            file_options={"content-type": "application/pdf"}
+        )
+        
+        if res_upload.status_code != 200:
+             # some supabase-py versions return dict, some return response objects
+             pass
+
+        return {"status": "success", "caminho": caminho_storage}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro no upload BSF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro no upload: {e}")

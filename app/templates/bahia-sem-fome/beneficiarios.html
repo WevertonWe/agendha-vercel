@@ -286,8 +286,8 @@ async function verDetalhe(id) {
                     <p class="text-muted">${b.status || '-'}</p>
                 </div>
                 <div class="col-md-6">
-                    <p class="mb-1"><strong>NIS:</strong></p>
-                    <p class="text-muted">${b.nis || '-'}</p>
+                    <p class="mb-1"><strong>CAF:</strong></p>
+                    <p class="text-muted">${b.caf || b.nis || '-'}</p>
                 </div>
                 <div class="col-md-6">
                     <p class="mb-1"><strong>Verificado BSF:</strong></p>
@@ -321,13 +321,22 @@ async function carregarArquivos(id) {
         for (const [key, doc] of Object.entries(docs)) {
             const count = (doc.arquivos_encontrados || []).length;
             const iconClass = count > 0 ? 'text-success' : 'text-muted';
+            const disabledAttr = count > 0 ? '' : 'disabled';
             html += `
                 <div class="col-md-4">
-                    <div class="border rounded p-3 text-center h-100">
+                    <div class="border rounded p-3 text-center h-100 d-flex flex-column">
                         <i class="fas fa-file-pdf ${iconClass} mb-2" style="font-size:1.5rem;"></i>
                         <p class="fw-bold small mb-1">${doc.tipo}</p>
-                        <p class="text-muted small mb-0">${doc.descricao}</p>
-                        <span class="badge bg-light text-dark border mt-1">${count} arquivo(s)</span>
+                        <p class="text-muted small mb-2 flex-grow-1">${doc.descricao}</p>
+                        <div class="btn-group btn-group-sm w-100 mt-auto">
+                            <label class="btn btn-outline-primary mb-0" title="Upload">
+                                <i class="fas fa-upload"></i>
+                                <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(${id}, '${key}', this)">
+                            </label>
+                            <button class="btn btn-outline-secondary" title="Visualizar" ${disabledAttr} onclick="visualizarDocumento('${key}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -337,6 +346,51 @@ async function carregarArquivos(id) {
     } catch (e) {
         container.innerHTML = '<p class="text-muted small">Estrutura de documentos preparada. Os PDFs serão vinculados em breve.</p>';
     }
+}
+
+async function fazerUploadDocumento(id, tipo, input) {
+    if (!input.files || !input.files.length) return;
+    const file = input.files[0];
+    
+    if (file.type !== "application/pdf") {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Apenas PDFs permitidos.");
+        else alert("Apenas PDFs permitidos.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("tipo", tipo);
+    
+    if (typeof ui !== 'undefined') ui.mostrarLoading("Enviando documento...");
+    
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/${id}/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (typeof ui !== 'undefined') ui.esconderLoading();
+        
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro no upload");
+        }
+        
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Documento salvo com sucesso!");
+        else alert("Documento salvo!");
+        
+        carregarArquivos(id);
+    } catch (e) {
+        if (typeof ui !== 'undefined') ui.esconderLoading();
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+        else alert(e.message);
+    }
+}
+
+function visualizarDocumento(tipo) {
+    if (typeof ui !== 'undefined') ui.feedbackSucesso("Visualização será implementada em breve (Bucket Público).");
+    else alert("Visualizar " + tipo);
 }
 </script>
 {% endblock %}
