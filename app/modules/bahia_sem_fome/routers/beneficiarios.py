@@ -6,8 +6,21 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+import io
+import csv
 
 from app.core.database import get_supabase
+from app.services.utils import limpar_cpf
+
+class BeneficiarioBSFCreate(BaseModel):
+    nome_completo: str
+    cpf: Optional[str] = None
+    caf: Optional[str] = None
+    municipio: Optional[str] = None
+    comunidade: Optional[str] = None
+    tecnico: Optional[str] = None
 
 router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 
@@ -226,3 +239,123 @@ async def upload_documento_bsf(
     except Exception as e:
         logger.error(f"Erro no upload BSF: {e}")
         raise HTTPException(status_code=500, detail=f"Erro no upload: {e}")
+
+@router.post("")
+async def criar_beneficiario(dados: BeneficiarioBSFCreate):
+    """Cria um novo beneficiário individualmente no projeto BSF."""
+    try:
+        supabase = get_supabase()
+        cpf_limpo = limpar_cpf(dados.cpf) if dados.cpf else None
+        caf_limpo = dados.caf.strip() if dados.caf else None
+        
+        if not cpf_limpo and not caf_limpo:
+            raise HTTPException(400, "CPF ou CAF é obrigatório.")
+            
+        payload = {
+            "nome_completo": dados.nome_completo,
+            "cpf": cpf_limpo,
+            "caf": caf_limpo,
+            "municipio": dados.municipio,
+            "comunidade": dados.comunidade,
+            "nome_tecnico": dados.tecnico,
+            "projeto": "Bahia Sem Fome",
+            "status": "CADASTRADO"
+        }
+        res = supabase.table("beneficiarios").insert(payload).execute()
+        return {"message": "Beneficiário cadastrado", "data": res.data[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao cadastrar BSF: {e}")
+        raise HTTPException(500, f"Erro ao cadastrar: {e}")
+
+@router.post("/importar")
+async def importar_planilha_bsf(file: UploadFile = File(...)):
+    """Importa lista de beneficiários BSF em massa, detectando colunas."""
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            return JSONResponse(content={"error": "Converta para CSV."}, status_code=400)
+            
+        decoded = content.decode('utf-8-sig')
+        sniffer = csv.Sniffer()
+        try:
+            dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+            delimiter = dialect.delimiter
+        except csv.Error:
+            delimiter = ';' if ';' in decoded[:100] else ','
+            
+        csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+        linhas = list(csv_reader)
+        fieldnames = csv_reader.fieldnames or []
+
+        def find_col(candidates):
+            cols_map = {str(c).strip().upper(): c for c in fieldnames}
+            for cand in candidates:
+                cand_upper = cand.upper()
+                if cand_upper in cols_map:
+                    return cols_map[cand_upper]
+                for real_col_upper, real_col_name in cols_map.items():
+                    if cand_upper in real_col_upper:
+                        return real_col_name
+            return None
+
+        col_cpf = find_col(['CPF', 'DOCUMENTO', 'DOC'])
+        col_caf = find_col(['CAF', 'DAP', 'NIS'])
+        col_nome = find_col(['NOME', 'BENEFICIARIO'])
+        col_mun = find_col(['MUNICIPIO', 'CIDADE'])
+        col_com = find_col(['COMUNIDADE', 'LOCALIDADE'])
+        col_tec = find_col(['TECNICO', 'RESPONSAVEL'])
+        
+        supabase = get_supabase()
+        count_novos = 0
+        count_atualizados = 0
+        
+        for row in linhas:
+            raw_cpf = row.get(col_cpf) if col_cpf else None
+            raw_caf = row.get(col_caf) if col_caf else None
+            cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
+            
+            nome = (row.get(col_nome) or "Desconhecido").strip()
+            mun = row.get(col_mun)
+            com = row.get(col_com)
+            tec = row.get(col_tec)
+            
+            if not cpf_limpo and not raw_caf:
+                continue 
+                
+            payload = {
+                "nome_completo": nome,
+                "municipio": mun,
+                "comunidade": com,
+                "nome_tecnico": tec,
+                "projeto": "Bahia Sem Fome"
+            }
+            if raw_caf:
+                payload["caf"] = raw_caf
+            
+            query = supabase.table("beneficiarios").select("id, projeto")
+            if cpf_limpo:
+                query = query.eq("cpf", cpf_limpo)
+            else:
+                query = query.eq("caf", raw_caf)
+                
+            res = query.execute()
+            
+            if res.data:
+                existente = res.data[0]
+                if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
+                    supabase.table("beneficiarios").update(payload).eq("id", existente["id"]).execute()
+                    count_atualizados += 1
+            else:
+                if cpf_limpo:
+                    payload["cpf"] = cpf_limpo
+                payload["status"] = "IMPORTADO"
+                supabase.table("beneficiarios").insert(payload).execute()
+                count_novos += 1
+                
+        return {"message": "Importação concluída", "novos": count_novos, "atualizados": count_atualizados}
+    except Exception as e:
+        logger.error(f"Erro importar bsf: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)

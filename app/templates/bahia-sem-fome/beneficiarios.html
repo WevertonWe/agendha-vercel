@@ -49,8 +49,18 @@
     <!-- Results Table -->
     <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h6 class="fw-bold text-secondary mb-0">Beneficiários</h6>
-            <span id="benefCount" class="badge bg-primary">0</span>
+            <div>
+                <h6 class="fw-bold text-secondary mb-0 d-inline-block me-2">Beneficiários</h6>
+                <span id="benefCount" class="badge bg-primary">0</span>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalImportacao()">
+                    <i class="fas fa-file-excel me-1"></i> Importar Planilha
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="abrirModalCadastro()">
+                    <i class="fas fa-plus me-1"></i> Novo Beneficiário
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <!-- Loading -->
@@ -111,10 +121,87 @@
     </div>
 </div>
 
+<!-- Modal Importação -->
+<div class="modal fade" id="modalImportacao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i>Importar Planilha</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">A planilha deve estar em formato CSV. O sistema detectará automaticamente as colunas (Nome, CPF, CAF, Município, Comunidade, Técnico).</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Arquivo CSV</label>
+                    <input class="form-control" type="file" id="arquivoImportacao" accept=".csv">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="importarPlanilha()" id="btnImportar">
+                    <i class="fas fa-upload me-1"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cadastro Individual -->
+<div class="modal fade" id="modalCadastro" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i>Novo Beneficiário</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCadastroBeneficiario">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nome Completo *</label>
+                        <input type="text" class="form-control" id="cadNome" required>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">CPF</label>
+                            <input type="text" class="form-control" id="cadCpf">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">CAF</label>
+                            <input type="text" class="form-control" id="cadCaf">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Município</label>
+                            <input type="text" class="form-control" id="cadMunicipio">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Comunidade</label>
+                            <input type="text" class="form-control" id="cadComunidade">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Técnico Responsável</label>
+                        <input type="text" class="form-control" id="cadTecnico">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarNovoBeneficiario()" id="btnSalvarCad">
+                    <i class="fas fa-save me-1"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
+let modalImportacaoInst = null;
+let modalCadastroInst = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.ui) console.error("ui_utils.js not loaded!");
@@ -391,6 +478,111 @@ async function fazerUploadDocumento(id, tipo, input) {
 function visualizarDocumento(tipo) {
     if (typeof ui !== 'undefined') ui.feedbackSucesso("Visualização será implementada em breve (Bucket Público).");
     else alert("Visualizar " + tipo);
+}
+
+function abrirModalImportacao() {
+    document.getElementById('arquivoImportacao').value = '';
+    if (typeof bootstrap !== 'undefined') {
+        modalImportacaoInst = new bootstrap.Modal(document.getElementById('modalImportacao'));
+        modalImportacaoInst.show();
+    }
+}
+
+function abrirModalCadastro() {
+    document.getElementById('formCadastroBeneficiario').reset();
+    if (typeof bootstrap !== 'undefined') {
+        modalCadastroInst = new bootstrap.Modal(document.getElementById('modalCadastro'));
+        modalCadastroInst.show();
+    }
+}
+
+async function importarPlanilha() {
+    const input = document.getElementById('arquivoImportacao');
+    if (!input.files || !input.files.length) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+    
+    const btn = document.getElementById('btnImportar');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/importar', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro na importação.");
+        
+        if (typeof ui !== 'undefined') ui.feedbackSucesso(`Importação concluída: ${data.novos} novos, ${data.atualizados} atualizados.`);
+        else alert(`Importação concluída: ${data.novos} novos, ${data.atualizados} atualizados.`);
+        
+        modalImportacaoInst?.hide();
+        carregarBeneficiarios(1);
+    } catch(e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+        else alert(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function salvarNovoBeneficiario() {
+    const nome = document.getElementById('cadNome').value.trim();
+    const cpf = document.getElementById('cadCpf').value.trim();
+    const caf = document.getElementById('cadCaf').value.trim();
+    const municipio = document.getElementById('cadMunicipio').value.trim();
+    const comunidade = document.getElementById('cadComunidade').value.trim();
+    const tecnico = document.getElementById('cadTecnico').value.trim();
+    
+    if (!nome) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Nome é obrigatório.");
+        return;
+    }
+    if (!cpf && !caf) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Informe o CPF ou o CAF.");
+        return;
+    }
+    
+    const btn = document.getElementById('btnSalvarCad');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nome_completo: nome,
+                cpf: cpf || null,
+                caf: caf || null,
+                municipio: municipio || null,
+                comunidade: comunidade || null,
+                tecnico: tecnico || null
+            })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Erro ao salvar.");
+        
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Beneficiário cadastrado!");
+        
+        modalCadastroInst?.hide();
+        carregarBeneficiarios(1);
+    } catch(e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
 }
 </script>
 {% endblock %}
