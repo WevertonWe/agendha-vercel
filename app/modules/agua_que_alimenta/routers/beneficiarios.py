@@ -424,17 +424,24 @@ async def comparar_importacao_csv(
     
     try:
         if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            df = pd.read_excel(io.BytesIO(content))
-        else:
-            decoded = content.decode('utf-8-sig')
-            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=';')
-            if len(csv_reader.fieldnames or []) < 2:
-                csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=',')
-            df = pd.DataFrame(list(csv_reader))
+            return JSONResponse(content={"error": "Por favor, converta o arquivo Excel para CSV antes de importar."}, status_code=400)
+            
+        decoded = content.decode('utf-8-sig')
+        
+        sniffer = csv.Sniffer()
+        try:
+            dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+            delimiter = dialect.delimiter
+        except csv.Error:
+            delimiter = ';' if ';' in decoded[:100] else ','
+            
+        csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+        linhas = list(csv_reader)
+        fieldnames = csv_reader.fieldnames or []
 
         # Robust Column Search Helper
-        def find_column(df, candidates):
-            cols_map = {str(c).strip().upper(): c for c in df.columns}
+        def find_column(fieldnames_list, candidates):
+            cols_map = {str(c).strip().upper(): c for c in fieldnames_list}
             for candidate in candidates:
                 cand_upper = candidate.upper()
                 if cand_upper in cols_map:
@@ -444,14 +451,14 @@ async def comparar_importacao_csv(
                          return real_col_name
             return None
 
-        col_cpf = find_column(df, ['CPF', 'C.P.F', 'DOC', 'DOCUMENTO', 'NR_CPF'])
-        col_nome = find_column(df, ['NOME', 'NOME_COMPLETO', 'BENEFICIARIO', 'CANDIDATO'])
-        col_nis = find_column(df, ['NIS', 'PIS', 'NIT'])
-        col_comunidade = find_column(df, ['COMUNIDADE', 'LOCALIDADE', 'POVOADO'])
-        col_lat = find_column(df, ['LAT', 'LATITUDE', 'COORD_X'])
-        col_lon = find_column(df, ['LON', 'LONG', 'LONGITUDE', 'COORD_Y'])
-        col_municipio = find_column(df, ['MUNICIPIO', 'CIDADE', 'MUNICÍPIO'])
-        col_status = find_column(df, ['STATUS', 'SITUACAO', 'ESTADO'])
+        col_cpf = find_column(fieldnames, ['CPF', 'C.P.F', 'DOC', 'DOCUMENTO', 'NR_CPF'])
+        col_nome = find_column(fieldnames, ['NOME', 'NOME_COMPLETO', 'BENEFICIARIO', 'CANDIDATO'])
+        col_nis = find_column(fieldnames, ['NIS', 'PIS', 'NIT'])
+        col_comunidade = find_column(fieldnames, ['COMUNIDADE', 'LOCALIDADE', 'POVOADO'])
+        col_lat = find_column(fieldnames, ['LAT', 'LATITUDE', 'COORD_X'])
+        col_lon = find_column(fieldnames, ['LON', 'LONG', 'LONGITUDE', 'COORD_Y'])
+        col_municipio = find_column(fieldnames, ['MUNICIPIO', 'CIDADE', 'MUNICÍPIO'])
+        col_status = find_column(fieldnames, ['STATUS', 'SITUACAO', 'ESTADO'])
 
         # Pre-fetch CPFs do Supabase
         supabase_data = fetch_all('beneficiarios', 'cpf, nome_completo, status, nis, comunidade, latitude, longitude')
@@ -459,18 +466,37 @@ async def comparar_importacao_csv(
 
         lista_triagem = []
 
-        for index, row in df.iterrows():
+        for index, row in enumerate(linhas):
             def get_val(col_name):
-                if not col_name: return ""  # noqa: E701
-                val = row[col_name]
-                return str(val).strip() if pd.notna(val) else ""
+                if not col_name:
+                    return ""
+                val = row.get(col_name)
+                return str(val).strip() if val is not None else ""
+                
+            def get_float_val(col_name):
+                val = get_val(col_name)
+                if not val:
+                    return ""
+                try:
+                    return float(val.replace(',', '.'))
+                except ValueError:
+                    return ""
+                    
+            def get_int_val(col_name):
+                val = get_val(col_name)
+                if not val:
+                    return ""
+                try:
+                    return int(float(val))
+                except ValueError:
+                    return ""
 
             raw_nome = get_val(col_nome) or "Desconhecido"
             raw_cpf = get_val(col_cpf)
             raw_nis = get_val(col_nis)
             raw_com = get_val(col_comunidade)
-            raw_lat = get_val(col_lat)
-            raw_lon = get_val(col_lon)
+            raw_lat = get_float_val(col_lat)
+            raw_lon = get_float_val(col_lon)
             raw_status = get_val(col_status).upper()
             raw_mun = remover_acentos(get_val(col_municipio))
 

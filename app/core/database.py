@@ -10,29 +10,61 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_db_connection(request=None): 
     """Conexão por requisição (Hard-Locked for Production)"""
-    if os.getenv("VERCEL"):
-        # Bloqueio total de SQLite em produção
-        raise RuntimeError("CRITICAL: SQLite is disabled in production. Use Supabase SDK!")
-        
+    
+    # Force use of SUPABASE_DB_STRING in production
+    if os.getenv("VERCEL") or os.getenv("SUPABASE_DB_STRING"):
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            db_string = os.getenv("SUPABASE_DB_STRING")
+            if not db_string:
+                raise RuntimeError("CRITICAL: SUPABASE_DB_STRING is missing in production!")
+            conexao = psycopg2.connect(db_string, cursor_factory=RealDictCursor)
+            
+            try:
+                yield conexao
+            finally:
+                if not conexao.closed:
+                    conexao.close()
+            return
+        except Exception as e:
+            logging.error(f"PostgreSQL connection failed: {e}")
+            if os.getenv("VERCEL"):
+                raise RuntimeError(f"Database connection failed in production: {e}")
+            
     # Fallback apenas para DEV LOCAL
     import sqlite3
-    from app.database.wrapper import AuditConnection
-    conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), check_same_thread=False)
-    conexao.execute("PRAGMA foreign_keys = ON")
-    conexao.row_factory = sqlite3.Row
-    
     try:
-        yield conexao
-    finally:
-        conexao.close()
+        from app.database.wrapper import AuditConnection
+        conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), check_same_thread=False)
+        conexao.execute("PRAGMA foreign_keys = ON")
+        conexao.row_factory = sqlite3.Row
+    except Exception as e:
+        # Se SQLite falhar, tenta SUPABASE_DB_STRING como última chance
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            db_string = os.getenv("SUPABASE_DB_STRING")
+            if db_string:
+                conexao = psycopg2.connect(db_string, cursor_factory=RealDictCursor)
+                try:
+                    yield conexao
+                finally:
+                    if not conexao.closed:
+                        conexao.close()
+                return
+            else:
+                raise e
+        except Exception:
+            raise e
     
     # Try to set user context if request is provided and has user
     try:
         if request and hasattr(request, "state") and hasattr(request.state, "user"):
             user = request.state.user
-            # Assuming user is dict or object with username or id
             user_id = user.get("username") if isinstance(user, dict) else getattr(user, "username", "SYSTEM")
-            conexao.set_user(user_id)
+            if hasattr(conexao, "set_user"):
+                conexao.set_user(user_id)
     except Exception:
         pass # Fallback to SYSTEM
 
