@@ -46,3 +46,8 @@ async def get_atestes_page(request: Request):
     ctx = await get_user_context(request)
     return templates.TemplateResponse(request=request, name="bahia-sem-fome/gerador_atestes.html", context={"current_page": "bsf_atestes", **ctx})
 
+
+@router.get("/beneficiarios", response_class=HTMLResponse)
+async def get_beneficiarios_page(request: Request):
+    ctx = await get_user_context(request)
+    return templates.TemplateResponse(request=request, name="bahia-sem-fome/beneficiarios.html", context={"current_page": "bsf_beneficiarios", **ctx})

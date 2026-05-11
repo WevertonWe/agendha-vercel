@@ -268,10 +268,12 @@ app.include_router(projetos_router)
 
 from app.modules.bahia_sem_fome.routers import renomeador as bsf_renomeador  # noqa: E402
 from app.modules.bahia_sem_fome.routers import atestes as bsf_atestes  # noqa: E402
+from app.modules.bahia_sem_fome.routers import beneficiarios as bsf_beneficiarios  # noqa: E402
 from app.modules.bahia_sem_fome import views as bsf_views  # noqa: E402
 
 app.include_router(bsf_renomeador.router)
 app.include_router(bsf_atestes.router)
+app.include_router(bsf_beneficiarios.router)
 app.include_router(bsf_views.router)
 
 

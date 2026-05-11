@@ -1,0 +1,342 @@
+{% extends "bahia-sem-fome/base_bsf.html" %}
+
+{% block title %}Gestão de Beneficiários - BSF{% endblock %}
+
+{% block bsf_content %}
+<div class="container py-4">
+    <!-- Page Header -->
+    <div class="text-center mb-4">
+        <h2 class="h4 fw-bold text-dark">
+            <i class="fas fa-users me-2"></i> Gestão de Beneficiários BSF
+        </h2>
+        <p class="text-muted small">Consulte e gerencie os beneficiários do programa Bahia Sem Fome.</p>
+        <a href="/projetos/ater-bahia-sem-fome/producao" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Voltar ao Portal
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 900px;">
+        <div class="card-body">
+            <div class="row g-3 justify-content-center">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Município</label>
+                    <select id="filtroMunicipio" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Técnico</label>
+                    <select id="filtroTecnico" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Status</label>
+                    <select id="filtroStatus" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button onclick="carregarBeneficiarios()" class="btn btn-primary btn-sm w-100" id="btnFiltrar">
+                        <i class="fas fa-filter me-1"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold text-secondary mb-0">Beneficiários</h6>
+            <span id="benefCount" class="badge bg-primary">0</span>
+        </div>
+        <div class="card-body">
+            <!-- Loading -->
+            <div id="loadingState" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="text-muted mt-2 small">Carregando beneficiários...</p>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle d-none" id="tabelaBeneficiarios">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>CPF</th>
+                            <th>Município</th>
+                            <th>Comunidade</th>
+                            <th>Técnico</th>
+                            <th>Status</th>
+                            <th class="text-center" style="width:80px;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="benefBody"></tbody>
+                </table>
+            </div>
+
+            <div id="noResults" class="text-center py-5 d-none">
+                <i class="fas fa-search text-muted" style="font-size: 2rem;"></i>
+                <p class="text-muted mt-2">Nenhum beneficiário encontrado.</p>
+            </div>
+
+            <!-- Pagination -->
+            <nav id="paginacao" class="d-none mt-3" aria-label="Paginação de beneficiários">
+                <ul class="pagination pagination-sm justify-content-center mb-0" id="paginacaoList"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhe -->
+<div class="modal fade" id="modalDetalhe" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-eye me-2"></i>Detalhes do Beneficiário</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalheBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let detalheModalInst = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.ui) console.error("ui_utils.js not loaded!");
+    carregarFiltros();
+    carregarBeneficiarios();
+});
+
+async function carregarFiltros() {
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/filtros');
+        const data = await res.json();
+
+        const selMun = document.getElementById('filtroMunicipio');
+        (data.municipios || []).forEach(m => {
+            selMun.innerHTML += `<option value="${m}">${m}</option>`;
+        });
+
+        const selTec = document.getElementById('filtroTecnico');
+        (data.tecnicos || []).forEach(t => {
+            selTec.innerHTML += `<option value="${t}">${t}</option>`;
+        });
+
+        const selSt = document.getElementById('filtroStatus');
+        (data.statuses || []).forEach(s => {
+            selSt.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+    } catch (e) {
+        console.error('Erro ao carregar filtros:', e);
+    }
+}
+
+async function carregarBeneficiarios(page) {
+    if (page) currentPage = page;
+
+    const municipio = document.getElementById('filtroMunicipio').value;
+    const tecnico = document.getElementById('filtroTecnico').value;
+    const status = document.getElementById('filtroStatus').value;
+
+    let url = `/api/bsf/beneficiarios?page=${currentPage}&page_size=${PAGE_SIZE}`;
+    if (municipio) url += `&municipio=${encodeURIComponent(municipio)}`;
+    if (tecnico) url += `&tecnico=${encodeURIComponent(tecnico)}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+
+    const loading = document.getElementById('loadingState');
+    const tabela = document.getElementById('tabelaBeneficiarios');
+    const noRes = document.getElementById('noResults');
+    const pag = document.getElementById('paginacao');
+
+    loading.classList.remove('d-none');
+    tabela.classList.add('d-none');
+    noRes.classList.add('d-none');
+    pag.classList.add('d-none');
+
+    try {
+        const res = await fetch(url);
+        const result = await res.json();
+        const items = result.data || [];
+
+        document.getElementById('benefCount').textContent = result.total || 0;
+        loading.classList.add('d-none');
+
+        if (!items.length) {
+            noRes.classList.remove('d-none');
+            return;
+        }
+
+        tabela.classList.remove('d-none');
+        const tbody = document.getElementById('benefBody');
+        tbody.innerHTML = '';
+
+        items.forEach(b => {
+            const nome = b.nome_completo || b.nome_tecnico || '-';
+            const cpf = b.cpf || '-';
+            const mun = b.municipio || '-';
+            const com = b.comunidade || '-';
+            const tec = b.nome_tecnico || b.tecnico_agua_que_alimenta || '-';
+            const st = b.status || '-';
+
+            let badgeClass = 'bg-secondary';
+            if (st.toLowerCase().includes('conclu')) badgeClass = 'bg-success';
+            else if (st.toLowerCase().includes('ativ') || st.toLowerCase().includes('cadastro')) badgeClass = 'bg-info';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="small fw-semibold">${nome}</td>
+                <td class="small text-muted">${cpf}</td>
+                <td class="small">${mun}</td>
+                <td class="small text-muted">${com}</td>
+                <td class="small">${tec}</td>
+                <td><span class="badge ${badgeClass} fw-normal">${st}</span></td>
+                <td class="text-center">
+                    <button onclick="verDetalhe(${b.id})" class="btn btn-sm btn-outline-primary rounded-circle" title="Visualizar" style="width:30px;height:30px;padding:0;">
+                        <i class="fas fa-eye fa-xs"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Pagination
+        if (result.total_pages > 1) {
+            pag.classList.remove('d-none');
+            renderPaginacao(result.page, result.total_pages);
+        }
+
+    } catch (e) {
+        loading.classList.add('d-none');
+        console.error('Erro ao carregar beneficiários:', e);
+    }
+}
+
+function renderPaginacao(page, totalPages) {
+    const ul = document.getElementById('paginacaoList');
+    ul.innerHTML = '';
+    const maxVisible = 5;
+    let start = Math.max(1, page - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1);
+
+    if (page > 1) {
+        ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="carregarBeneficiarios(${page - 1});return false;">&laquo;</a></li>`;
+    }
+    for (let i = start; i <= end; i++) {
+        ul.innerHTML += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="#" onclick="carregarBeneficiarios(${i});return false;">${i}</a></li>`;
+    }
+    if (page < totalPages) {
+        ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="carregarBeneficiarios(${page + 1});return false;">&raquo;</a></li>`;
+    }
+}
+
+async function verDetalhe(id) {
+    const modalEl = document.getElementById('modalDetalhe');
+    const body = document.getElementById('modalDetalheBody');
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+    if (typeof bootstrap !== 'undefined') {
+        detalheModalInst = new bootstrap.Modal(modalEl);
+        detalheModalInst.show();
+    }
+
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/${id}`);
+        const b = await res.json();
+
+        body.innerHTML = `
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Nome Completo:</strong></p>
+                    <p class="text-muted">${b.nome_completo || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>CPF:</strong></p>
+                    <p class="text-muted">${b.cpf || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Município:</strong></p>
+                    <p class="text-muted">${b.municipio || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Comunidade:</strong></p>
+                    <p class="text-muted">${b.comunidade || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Técnico:</strong></p>
+                    <p class="text-muted">${b.nome_tecnico || b.tecnico_agua_que_alimenta || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Status:</strong></p>
+                    <p class="text-muted">${b.status || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>NIS:</strong></p>
+                    <p class="text-muted">${b.nis || '-'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Verificado BSF:</strong></p>
+                    <p class="text-muted">${b.verificado_bsf || 'Não'}</p>
+                </div>
+            </div>
+            <hr>
+            <h6 class="fw-bold text-secondary"><i class="fas fa-folder-open me-1"></i> Documentos Associados</h6>
+            <div id="docsContainer" class="mt-2">
+                <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+            </div>
+        `;
+
+        // Load file associations
+        carregarArquivos(id);
+
+    } catch (e) {
+        body.innerHTML = '<p class="text-danger">Erro ao carregar detalhes.</p>';
+        console.error(e);
+    }
+}
+
+async function carregarArquivos(id) {
+    const container = document.getElementById('docsContainer');
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/${id}/arquivos`);
+        const data = await res.json();
+        const docs = data.documentos || {};
+
+        let html = '<div class="row g-2">';
+        for (const [key, doc] of Object.entries(docs)) {
+            const count = (doc.arquivos_encontrados || []).length;
+            const iconClass = count > 0 ? 'text-success' : 'text-muted';
+            html += `
+                <div class="col-md-4">
+                    <div class="border rounded p-3 text-center h-100">
+                        <i class="fas fa-file-pdf ${iconClass} mb-2" style="font-size:1.5rem;"></i>
+                        <p class="fw-bold small mb-1">${doc.tipo}</p>
+                        <p class="text-muted small mb-0">${doc.descricao}</p>
+                        <span class="badge bg-light text-dark border mt-1">${count} arquivo(s)</span>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<p class="text-muted small">Estrutura de documentos preparada. Os PDFs serão vinculados em breve.</p>';
+    }
+}
+</script>
+{% endblock %}
