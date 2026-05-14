@@ -6,10 +6,11 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import io
 import csv
+import os
 
 from app.core.database import get_supabase
 from app.services.utils import limpar_cpf
@@ -269,6 +270,18 @@ async def criar_beneficiario(dados: BeneficiarioBSFCreate):
         logger.error(f"Erro ao cadastrar BSF: {e}")
         raise HTTPException(500, f"Erro ao cadastrar: {e}")
 
+@router.get("/template")
+async def baixar_template():
+    """Baixa a planilha modelo para importação."""
+    caminho = os.path.join("app", "modules", "bahia_sem_fome", "assets", "planilha_exemplo.xlsx")
+    if not os.path.exists(caminho):
+        raise HTTPException(status_code=404, detail="Template não encontrado.")
+    return FileResponse(
+        path=caminho,
+        filename="planilha_exemplo_bsf.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 @router.post("/importar")
 async def importar_planilha_bsf(file: UploadFile = File(...)):
     """Importa lista de beneficiários BSF em massa, detectando colunas."""
@@ -313,47 +326,57 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         count_atualizados = 0
         
         for row in linhas:
-            raw_cpf = row.get(col_cpf) if col_cpf else None
-            raw_caf = row.get(col_caf) if col_caf else None
-            cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
-            
-            nome = (row.get(col_nome) or "Desconhecido").strip()
-            mun = row.get(col_mun)
-            com = row.get(col_com)
-            tec = row.get(col_tec)
-            
-            if not cpf_limpo and not raw_caf:
-                continue 
+            try:
+                raw_cpf = row.get(col_cpf) if col_cpf else None
+                raw_caf = row.get(col_caf) if col_caf else None
+                cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
                 
-            payload = {
-                "nome_completo": nome,
-                "municipio": mun,
-                "comunidade": com,
-                "nome_tecnico": tec,
-                "projeto": "Bahia Sem Fome"
-            }
-            if raw_caf:
-                payload["caf"] = raw_caf
-            
-            query = supabase.table("beneficiarios").select("id, projeto")
-            if cpf_limpo:
-                query = query.eq("cpf", cpf_limpo)
-            else:
-                query = query.eq("caf", raw_caf)
+                nome = (row.get(col_nome) or "Desconhecido").strip()
+                mun = row.get(col_mun)
+                com = row.get(col_com)
+                tec = row.get(col_tec)
                 
-            res = query.execute()
-            
-            if res.data:
-                existente = res.data[0]
-                if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
-                    supabase.table("beneficiarios").update(payload).eq("id", existente["id"]).execute()
-                    count_atualizados += 1
-            else:
+                if not cpf_limpo and not raw_caf:
+                    continue 
+                    
+                payload = {
+                    "nome_completo": nome,
+                    "municipio": mun,
+                    "comunidade": com,
+                    "nome_tecnico": tec,
+                    "projeto": "Bahia Sem Fome"
+                }
+                if raw_caf:
+                    payload["caf"] = raw_caf
+                
+                query = supabase.table("beneficiarios").select("id, projeto")
                 if cpf_limpo:
-                    payload["cpf"] = cpf_limpo
-                payload["status"] = "IMPORTADO"
-                supabase.table("beneficiarios").insert(payload).execute()
-                count_novos += 1
+                    query = query.eq("cpf", cpf_limpo)
+                else:
+                    query = query.eq("caf", raw_caf)
+                    
+                res = query.execute()
+                
+                if res.data:
+                    existente = res.data[0]
+                    if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
+                        supabase.table("beneficiarios").update(payload).eq("id", existente["id"]).execute()
+                        count_atualizados += 1
+                else:
+                    if cpf_limpo:
+                        payload["cpf"] = cpf_limpo
+                    payload["status"] = "IMPORTADO"
+                    supabase.table("beneficiarios").insert(payload).execute()
+                    count_novos += 1
+            except Exception as e:
+                error_msg = str(e).lower()
+                if 'pgrst204' in error_msg or 'caf' in error_msg:
+                    try:
+                        supabase.rpc('reload_schema', {}).execute()
+                    except:
+                        pass
+                    return JSONResponse(content={"error": "O esquema do banco de dados foi atualizado. Por favor, tente novamente em 5 segundos."}, status_code=500)
+                logger.error(f"Erro na linha durante importação BSF: {e}")
                 
         return {"message": "Importação concluída", "novos": count_novos, "atualizados": count_atualizados}
     except Exception as e:
