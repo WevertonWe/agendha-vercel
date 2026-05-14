@@ -130,15 +130,15 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="small text-muted">A planilha deve estar em formato CSV. O sistema detectará automaticamente as colunas (Nome, CPF, CAF, Município, Comunidade, Técnico).</p>
+                <p class="small text-muted">A planilha pode estar em formato CSV ou XLSX. O sistema detectará automaticamente as colunas (Nome, CPF, CAF, Município, Comunidade, Técnico).</p>
                 <div class="mb-3 text-center">
                     <a href="/api/bsf/beneficiarios/template" class="btn btn-sm btn-outline-primary mb-3">
                         <i class="fas fa-download me-1"></i> 📥 Baixar Planilha Modelo
                     </a>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">Arquivo CSV</label>
-                    <input class="form-control" type="file" id="arquivoImportacao" accept=".csv">
+                    <label class="form-label fw-bold">Arquivo Planilha</label>
+                    <input class="form-control" type="file" id="arquivoImportacao" accept=".csv,.xlsx">
                 </div>
             </div>
             <div class="modal-footer">
@@ -201,12 +201,47 @@
     </div>
 </div>
 
+<!-- Modal Nova Atividade -->
+<div class="modal fade" id="modalNovaAtividade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-plus me-2"></i>Nova Atividade</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="atvBeneficiarioId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Atividade *</label>
+                    <select class="form-select" id="atvTipo">
+                        <option value="Visita">Visita</option>
+                        <option value="Caracterização">Caracterização</option>
+                        <option value="Acompanhamento">Acompanhamento</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Data *</label>
+                    <input type="date" class="form-control" id="atvData" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="salvarNovaAtividade()" id="btnSalvarAtv">
+                    <i class="fas fa-save me-1"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
 let modalImportacaoInst = null;
 let modalCadastroInst = null;
+let modalNovaAtividadeInst = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.ui) console.error("ui_utils.js not loaded!");
@@ -297,9 +332,12 @@ async function carregarBeneficiarios(page) {
                 <td class="small text-muted">${com}</td>
                 <td class="small">${tec}</td>
                 <td><span class="badge ${badgeClass} fw-normal">${st}</span></td>
-                <td class="text-center">
-                    <button onclick="verDetalhe(${b.id})" class="btn btn-sm btn-outline-primary rounded-circle" title="Visualizar" style="width:30px;height:30px;padding:0;">
+                <td class="text-center text-nowrap">
+                    <button onclick="verDetalhe(${b.id})" class="btn btn-sm btn-outline-primary rounded-circle me-1" title="Visualizar" style="width:30px;height:30px;padding:0;">
                         <i class="fas fa-eye fa-xs"></i>
+                    </button>
+                    <button onclick="excluirBeneficiario(${b.id})" class="btn btn-sm btn-outline-danger rounded-circle" title="Excluir" style="width:30px;height:30px;padding:0;">
+                        <i class="fas fa-trash fa-xs"></i>
                     </button>
                 </td>
             `;
@@ -387,7 +425,12 @@ async function verDetalhe(id) {
                 </div>
             </div>
             <hr>
-            <h6 class="fw-bold text-secondary"><i class="fas fa-folder-open me-1"></i> Documentos Associados</h6>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-list me-1"></i> Atividades</h6>
+                <button class="btn btn-sm btn-outline-success" onclick="abrirModalNovaAtividade(${id})">
+                    <i class="fas fa-plus"></i> Nova Atividade
+                </button>
+            </div>
             <div id="docsContainer" class="mt-2">
                 <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
             </div>
@@ -405,42 +448,58 @@ async function verDetalhe(id) {
 async function carregarArquivos(id) {
     const container = document.getElementById('docsContainer');
     try {
-        const res = await fetch(`/api/bsf/beneficiarios/${id}/arquivos`);
-        const data = await res.json();
-        const docs = data.documentos || {};
+        const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`);
+        if (!res.ok) throw new Error("Falha na rede");
+        const atividades = await res.json();
+        
+        if (!atividades.length) {
+            container.innerHTML = '<p class="text-muted small text-center">Nenhuma atividade registrada.</p>';
+            return;
+        }
 
-        let html = '<div class="row g-2">';
-        for (const [key, doc] of Object.entries(docs)) {
-            const count = (doc.arquivos_encontrados || []).length;
-            const iconClass = count > 0 ? 'text-success' : 'text-muted';
-            const disabledAttr = count > 0 ? '' : 'disabled';
+        let html = '<div class="list-group list-group-flush">';
+        atividades.forEach(atv => {
+            const sigaterCount = (atv.link_sigater || []).length;
+            const colletumCount = (atv.link_colletum || []).length;
+            const atesteCount = (atv.link_ateste || []).length;
+            
+            const renderBtn = (tipo, count) => {
+                const badge = count > 0 ? `<span class="badge bg-primary ms-1">${count}</span>` : '';
+                return `
+                <div class="btn-group btn-group-sm me-2 mb-2">
+                    <button class="btn btn-outline-secondary" onclick="visualizarDocumento('${tipo}', ${atv.id})" title="Ver ${tipo}">
+                        <i class="fas fa-folder-open"></i> ${tipo} ${badge}
+                    </button>
+                    <label class="btn btn-outline-primary mb-0" title="Upload">
+                        <i class="fas fa-upload"></i>
+                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(${id}, ${atv.id}, '${tipo.toLowerCase()}', this)">
+                    </label>
+                </div>`;
+            };
+
+            const dataFormatada = new Date(atv.data + 'T00:00:00').toLocaleDateString('pt-BR');
             html += `
-                <div class="col-md-4">
-                    <div class="border rounded p-3 text-center h-100 d-flex flex-column">
-                        <i class="fas fa-file-pdf ${iconClass} mb-2" style="font-size:1.5rem;"></i>
-                        <p class="fw-bold small mb-1">${doc.tipo}</p>
-                        <p class="text-muted small mb-2 flex-grow-1">${doc.descricao}</p>
-                        <div class="btn-group btn-group-sm w-100 mt-auto">
-                            <label class="btn btn-outline-primary mb-0" title="Upload">
-                                <i class="fas fa-upload"></i>
-                                <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(${id}, '${key}', this)">
-                            </label>
-                            <button class="btn btn-outline-secondary" title="Visualizar" ${disabledAttr} onclick="visualizarDocumento('${key}')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
+                <div class="list-group-item px-0 py-3">
+                    <div class="d-flex w-100 justify-content-between mb-2">
+                        <h6 class="mb-1 fw-bold">${atv.tipo_atividade}</h6>
+                        <small class="text-muted">${dataFormatada}</small>
+                    </div>
+                    <div class="d-flex flex-wrap">
+                        ${renderBtn('Sigater', sigaterCount)}
+                        ${renderBtn('Colletum', colletumCount)}
+                        ${renderBtn('Ateste', atesteCount)}
                     </div>
                 </div>
             `;
-        }
+        });
         html += '</div>';
         container.innerHTML = html;
     } catch (e) {
-        container.innerHTML = '<p class="text-muted small">Estrutura de documentos preparada. Os PDFs serão vinculados em breve.</p>';
+        container.innerHTML = '<p class="text-muted small">Erro ao carregar atividades.</p>';
     }
 }
 
-async function fazerUploadDocumento(id, tipo, input) {
+async function fazerUploadDocumento(benId, atvId, tipo, input) {
     if (!input.files || !input.files.length) return;
     const file = input.files[0];
     
@@ -457,22 +516,21 @@ async function fazerUploadDocumento(id, tipo, input) {
     if (typeof ui !== 'undefined') ui.mostrarLoading("Enviando documento...");
     
     try {
-        const res = await fetch(`/api/bsf/beneficiarios/${id}/upload`, {
+        const res = await fetch(`/api/bsf/beneficiarios/${benId}/atividades/${atvId}/upload`, {
             method: 'POST',
             body: formData
         });
         
         if (typeof ui !== 'undefined') ui.esconderLoading();
-        
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.detail || "Erro no upload");
         }
         
-        if (typeof ui !== 'undefined') ui.feedbackSucesso("Documento salvo com sucesso!");
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Documento salvo!");
         else alert("Documento salvo!");
         
-        carregarArquivos(id);
+        carregarArquivos(benId);
     } catch (e) {
         if (typeof ui !== 'undefined') ui.esconderLoading();
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
@@ -480,9 +538,99 @@ async function fazerUploadDocumento(id, tipo, input) {
     }
 }
 
-function visualizarDocumento(tipo) {
+function visualizarDocumento(tipo, atvId) {
     if (typeof ui !== 'undefined') ui.feedbackSucesso("Visualização será implementada em breve (Bucket Público).");
     else alert("Visualizar " + tipo);
+}
+
+function abrirModalNovaAtividade(id) {
+    document.getElementById('atvBeneficiarioId').value = id;
+    document.getElementById('atvTipo').value = 'Visita';
+    document.getElementById('atvData').value = new Date().toISOString().split('T')[0];
+    
+    if (typeof bootstrap !== 'undefined') {
+        const modalEl = document.getElementById('modalNovaAtividade');
+        if (!modalEl) return;
+        modalNovaAtividadeInst = new bootstrap.Modal(modalEl);
+        modalNovaAtividadeInst.show();
+    }
+}
+
+async function salvarNovaAtividade() {
+    const id = document.getElementById('atvBeneficiarioId').value;
+    const tipo = document.getElementById('atvTipo').value;
+    const dataAtv = document.getElementById('atvData').value;
+    
+    if (!dataAtv) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Preencha a data.");
+        return;
+    }
+    
+    const btn = document.getElementById('btnSalvarAtv');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ tipo_atividade: tipo, data: dataAtv })
+        });
+        if (!res.ok) throw new Error("Erro ao salvar");
+        
+        modalNovaAtividadeInst?.hide();
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Atividade registrada!");
+        carregarArquivos(id);
+    } catch (e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function excluirBeneficiario(id) {
+    if (typeof ui !== 'undefined' && ui.confirmarExclusao) {
+        const confirmou = await ui.confirmarExclusao("Tem certeza?", "Isso excluirá o beneficiário e todos os documentos associados.");
+        if (!confirmou) return;
+    } else if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: 'Tem certeza?',
+            text: "Isso excluirá o beneficiário e todos os documentos associados.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sim, excluir!',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!result.isConfirmed) return;
+    } else {
+        if (!confirm("Tem certeza que deseja excluir o beneficiário e seus documentos?")) return;
+    }
+
+    try {
+        if (typeof ui !== 'undefined') ui.mostrarLoading("Excluindo...");
+        const res = await fetch(`/api/bsf/beneficiarios/${id}`, {
+            method: 'DELETE'
+        });
+        if (typeof ui !== 'undefined') ui.esconderLoading();
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao excluir beneficiário");
+        }
+
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Beneficiário excluído com sucesso.");
+        else alert("Beneficiário excluído com sucesso.");
+        
+        carregarBeneficiarios(currentPage);
+    } catch (e) {
+        if (typeof ui !== 'undefined') ui.esconderLoading();
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+        else alert(e.message);
+    }
 }
 
 function abrirModalImportacao() {

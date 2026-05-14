@@ -11,6 +11,7 @@ from pydantic import BaseModel
 import io
 import csv
 import os
+import unicodedata
 
 from app.core.database import get_supabase
 from app.services.utils import limpar_cpf
@@ -22,6 +23,10 @@ class BeneficiarioBSFCreate(BaseModel):
     municipio: Optional[str] = None
     comunidade: Optional[str] = None
     tecnico: Optional[str] = None
+
+class AtividadeCreate(BaseModel):
+    tipo_atividade: str
+    data: str
 
 router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 
@@ -130,109 +135,86 @@ async def detalhar_beneficiario(beneficiario_id: int):
         raise HTTPException(status_code=500, detail="Erro ao buscar beneficiário.")
 
 
-@router.get("/{beneficiario_id}/arquivos")
-async def listar_arquivos_beneficiario(beneficiario_id: int):
-    """
-    Prepara a estrutura de associação de arquivos para um beneficiário.
-    Retorna os caminhos esperados para Sigater, Colletum e Ateste.
-    """
+@router.get("/{beneficiario_id}/atividades")
+async def listar_atividades_beneficiario(beneficiario_id: int):
+    """Retorna as atividades associadas a um beneficiário."""
     try:
         supabase = get_supabase()
-        res = supabase.table("beneficiarios").select(
-            "id, nome_completo, cpf, caf, nis, municipio"
-        ).eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
+        res = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data", desc=True).execute()
         
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
-        
-        ben = res.data[0]
-        cpf_ou_caf = (ben.get("cpf") or ben.get("caf") or "SEM_DOC").replace(".", "").replace("-", "").replace(" ", "")
-        municipio = (ben.get("municipio") or "SEM_MUNICIPIO").strip()
-        
-        # Storage path pattern for BSF documents
-        base_path = f"bsf/{municipio}/{cpf_ou_caf}"
-        
-        arquivos = {
-            "sigater": {
-                "tipo": "Sigater",
-                "path": f"{base_path}/sigater/",
-                "descricao": "Relatório do Sistema de Gestão da Assistência Técnica",
-                "arquivos_encontrados": [],
-            },
-            "colletum": {
-                "tipo": "Colletum",
-                "path": f"{base_path}/colletum/",
-                "descricao": "Formulários de coleta de dados em campo",
-                "arquivos_encontrados": [],
-            },
-            "ateste": {
-                "tipo": "Ateste",
-                "path": f"{base_path}/ateste/",
-                "descricao": "Termos de ateste de atividades realizadas",
-                "arquivos_encontrados": [],
-            },
-        }
-        
-        return {
-            "beneficiario": ben,
-            "storage_base": base_path,
-            "documentos": arquivos,
-        }
-        
-    except HTTPException:
-        raise
+        # Parse arrays if they are returned as None
+        atividades = res.data or []
+        for a in atividades:
+            a["link_sigater"] = a.get("link_sigater") or []
+            a["link_colletum"] = a.get("link_colletum") or []
+            a["link_ateste"] = a.get("link_ateste") or []
+            
+        return atividades
     except Exception as e:
-        logger.error(f"Erro ao listar arquivos do beneficiário {beneficiario_id}: {e}")
-        raise HTTPException(status_code=500, detail="Erro ao buscar arquivos.")
+        logger.error(f"Erro ao listar atividades {beneficiario_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar atividades.")
 
+@router.post("/{beneficiario_id}/atividades")
+async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
+    """Cria uma nova atividade para o beneficiário."""
+    try:
+        supabase = get_supabase()
+        payload = {
+            "beneficiario_id": beneficiario_id,
+            "tipo_atividade": dados.tipo_atividade,
+            "data": dados.data,
+            "link_sigater": [],
+            "link_colletum": [],
+            "link_ateste": []
+        }
+        res = supabase.table("bsf_atividades").insert(payload).execute()
+        return res.data[0]
+    except Exception as e:
+        logger.error(f"Erro ao criar atividade: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao criar atividade.")
 
-@router.post("/{beneficiario_id}/upload")
-async def upload_documento_bsf(
+@router.post("/{beneficiario_id}/atividades/{atividade_id}/upload")
+async def upload_documento_atividade(
     beneficiario_id: int,
+    atividade_id: int,
     tipo: str = Form(...),
     file: UploadFile = File(...)
 ):
-    """Realiza o upload de um documento para o beneficiário."""
+    """Realiza o upload de um documento para a atividade específica."""
     try:
         if tipo not in ["sigater", "colletum", "ateste"]:
             raise HTTPException(status_code=400, detail="Tipo de documento inválido.")
             
         supabase = get_supabase()
-        res = supabase.table("beneficiarios").select(
-            "id, cpf, caf, municipio"
-        ).eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
-        
-        if not res.data:
+        res_ben = supabase.table("beneficiarios").select("cpf, caf, municipio").eq("id", beneficiario_id).execute()
+        if not res_ben.data:
             raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
             
-        ben = res.data[0]
+        ben = res_ben.data[0]
         cpf_ou_caf = (ben.get("cpf") or ben.get("caf") or "SEM_DOC").replace(".", "").replace("-", "").replace(" ", "")
         municipio = (ben.get("municipio") or "SEM_MUNICIPIO").strip()
         
-        nome_arquivo = f"{tipo}.pdf"
-        # agendha-uploads is the bucket
-        caminho_storage = f"bsf/{municipio}/{cpf_ou_caf}/{tipo}/{nome_arquivo}"
+        nome_arquivo = f"{file.filename}"
+        caminho_storage = f"bsf/{municipio}/{cpf_ou_caf}/atividade_{atividade_id}/{tipo}/{nome_arquivo}"
         
         file_content = await file.read()
         
-        # Fazendo upload pro Supabase Storage
-        # Note: if the file exists, Supabase upload will fail unless upsert=True is supported, 
-        # but let's try to remove existing first just in case.
-        try:
-            supabase.storage.from_("agendha-uploads").remove([caminho_storage])
-        except Exception:
-            pass
-            
         res_upload = supabase.storage.from_("agendha-uploads").upload(
             file=file_content,
             path=caminho_storage,
             file_options={"content-type": "application/pdf"}
         )
         
-        if res_upload.status_code != 200:
-             # some supabase-py versions return dict, some return response objects
-             pass
-
+        # Atualizar a tabela de atividades
+        coluna = f"link_{tipo}"
+        res_atv = supabase.table("bsf_atividades").select(coluna).eq("id", atividade_id).execute()
+        
+        if res_atv.data:
+            links_atuais = res_atv.data[0].get(coluna) or []
+            if caminho_storage not in links_atuais:
+                links_atuais.append(caminho_storage)
+                supabase.table("bsf_atividades").update({coluna: links_atuais}).eq("id", atividade_id).execute()
+                
         return {"status": "success", "caminho": caminho_storage}
         
     except HTTPException:
@@ -270,6 +252,27 @@ async def criar_beneficiario(dados: BeneficiarioBSFCreate):
         logger.error(f"Erro ao cadastrar BSF: {e}")
         raise HTTPException(500, f"Erro ao cadastrar: {e}")
 
+@router.delete("/{beneficiario_id}")
+async def deletar_beneficiario(beneficiario_id: int):
+    """Exclui permanentemente um beneficiário do projeto BSF."""
+    try:
+        supabase = get_supabase()
+        
+        # Verificar se o beneficiário existe e pertence ao BSF
+        res = supabase.table("beneficiarios").select("id").eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
+            
+        # Deletar no Supabase (ON DELETE CASCADE no banco removerá os registros em bsf_atividades)
+        supabase.table("beneficiarios").delete().eq("id", beneficiario_id).execute()
+        
+        return {"message": "Beneficiário excluído com sucesso."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao excluir beneficiário BSF: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao excluir beneficiário.")
+
 @router.get("/template")
 async def baixar_template():
     """Baixa a planilha modelo para importação."""
@@ -288,25 +291,54 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
     try:
         content = await file.read()
         filename = file.filename.lower()
-        if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            return JSONResponse(content={"error": "Converta para CSV."}, status_code=400)
+        
+        linhas = []
+        fieldnames = []
+        
+        if filename.endswith('.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            sheet = wb.active
             
-        decoded = content.decode('utf-8-sig')
-        sniffer = csv.Sniffer()
-        try:
-            dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
-            delimiter = dialect.delimiter
-        except csv.Error:
-            delimiter = ';' if ';' in decoded[:100] else ','
+            # Pegando cabeçalhos na primeira linha
+            headers = [cell.value for cell in sheet[1]]
+            fieldnames = [str(h).strip() for h in headers if h is not None]
             
-        csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
-        linhas = list(csv_reader)
-        fieldnames = csv_reader.fieldnames or []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                # Ignora linhas totalmente vazias
+                if any(row):
+                    row_dict = {}
+                    for i, header in enumerate(fieldnames):
+                        if i < len(row):
+                            # Preserva números como string para não quebrar validações
+                            val = row[i]
+                            row_dict[header] = str(val).strip() if val is not None else None
+                    linhas.append(row_dict)
+                    
+        elif filename.endswith('.xls'):
+            return JSONResponse(content={"error": "Formato .xls legado não suportado. Use .xlsx ou .csv."}, status_code=400)
+            
+        else:
+            decoded = content.decode('utf-8-sig')
+            sniffer = csv.Sniffer()
+            try:
+                dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+                delimiter = dialect.delimiter
+            except csv.Error:
+                delimiter = ';' if ';' in decoded[:100] else ','
+                
+            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+            linhas = list(csv_reader)
+            fieldnames = csv_reader.fieldnames or []
+
+        def remove_accents(text):
+            if not text: return ""
+            return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
 
         def find_col(candidates):
-            cols_map = {str(c).strip().upper(): c for c in fieldnames}
+            cols_map = {remove_accents(str(c).strip().upper()): c for c in fieldnames if c is not None}
             for cand in candidates:
-                cand_upper = cand.upper()
+                cand_upper = remove_accents(cand.upper())
                 if cand_upper in cols_map:
                     return cols_map[cand_upper]
                 for real_col_upper, real_col_name in cols_map.items():
