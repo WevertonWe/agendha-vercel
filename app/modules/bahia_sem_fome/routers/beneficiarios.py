@@ -140,7 +140,7 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
     """Retorna as atividades associadas a um beneficiário."""
     try:
         supabase = get_supabase()
-        res = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data", desc=True).execute()
+        res = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data_atividade", desc=True).execute()
         
         # Parse arrays if they are returned as None
         atividades = res.data or []
@@ -148,6 +148,8 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
             a["link_sigater"] = a.get("link_sigater") or []
             a["link_colletum"] = a.get("link_colletum") or []
             a["link_ateste"] = a.get("link_ateste") or []
+            # Retrocompatibilidade no response para o frontend (que lê atv.data)
+            a["data"] = a.get("data_atividade")
             
         return atividades
     except Exception as e:
@@ -162,7 +164,7 @@ async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
         payload = {
             "beneficiario_id": beneficiario_id,
             "tipo_atividade": dados.tipo_atividade,
-            "data": dados.data,
+            "data_atividade": dados.data,
             "link_sigater": [],
             "link_colletum": [],
             "link_ateste": []
