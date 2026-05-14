@@ -459,22 +459,35 @@ async function carregarArquivos(id) {
 
         let html = '<div class="list-group list-group-flush">';
         atividades.forEach(atv => {
-            const sigaterCount = (atv.link_sigater || []).length;
-            const colletumCount = (atv.link_colletum || []).length;
-            const atesteCount = (atv.link_ateste || []).length;
+            const sigaterLinks = atv.link_sigater || [];
+            const colletumLinks = atv.link_colletum || [];
+            const atesteLinks = atv.link_ateste || [];
             
-            const renderBtn = (tipo, count) => {
-                const badge = count > 0 ? `<span class="badge bg-primary ms-1">${count}</span>` : '';
-                return `
+            const renderBtn = (tipo, links) => {
+                const count = links.length;
+                let btnHtml = `
                 <div class="btn-group btn-group-sm me-2 mb-2">
-                    <button class="btn btn-outline-secondary" onclick="visualizarDocumento('${tipo}', ${atv.id})" title="Ver ${tipo}">
-                        <i class="fas fa-folder-open"></i> ${tipo} ${badge}
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ver ${tipo}">
+                        <i class="fas fa-folder-open"></i> ${tipo} ${count > 0 ? `<span class="badge bg-primary ms-1">${count}</span>` : ''}
                     </button>
+                    <ul class="dropdown-menu">`;
+                    
+                if (count === 0) {
+                    btnHtml += `<li><span class="dropdown-item text-muted small">Nenhum arquivo</span></li>`;
+                } else {
+                    links.forEach((url, idx) => {
+                        btnHtml += `<li><a class="dropdown-item small" href="${url}" target="_blank"><i class="fas fa-external-link-alt me-1 text-primary"></i> Arquivo ${idx + 1}</a></li>`;
+                    });
+                }
+                
+                btnHtml += `
+                    </ul>
                     <label class="btn btn-outline-primary mb-0" title="Upload">
                         <i class="fas fa-upload"></i>
                         <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(${id}, ${atv.id}, '${tipo.toLowerCase()}', this)">
                     </label>
                 </div>`;
+                return btnHtml;
             };
 
             const dataFormatada = new Date(atv.data + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -485,9 +498,9 @@ async function carregarArquivos(id) {
                         <small class="text-muted">${dataFormatada}</small>
                     </div>
                     <div class="d-flex flex-wrap">
-                        ${renderBtn('Sigater', sigaterCount)}
-                        ${renderBtn('Colletum', colletumCount)}
-                        ${renderBtn('Ateste', atesteCount)}
+                        ${renderBtn('Sigater', sigaterLinks)}
+                        ${renderBtn('Colletum', colletumLinks)}
+                        ${renderBtn('Ateste', atesteLinks)}
                     </div>
                 </div>
             `;
@@ -536,11 +549,6 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
         else alert(e.message);
     }
-}
-
-function visualizarDocumento(tipo, atvId) {
-    if (typeof ui !== 'undefined') ui.feedbackSucesso("Visualização será implementada em breve (Bucket Público).");
-    else alert("Visualizar " + tipo);
 }
 
 function abrirModalNovaAtividade(id) {

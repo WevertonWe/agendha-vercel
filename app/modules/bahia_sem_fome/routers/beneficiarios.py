@@ -145,9 +145,14 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
         # Parse arrays if they are returned as None
         atividades = res.data or []
         for a in atividades:
-            a["link_sigater"] = a.get("link_sigater") or []
-            a["link_colletum"] = a.get("link_colletum") or []
-            a["link_ateste"] = a.get("link_ateste") or []
+            sigater_paths = a.get("link_sigater") or []
+            colletum_paths = a.get("link_colletum") or []
+            ateste_paths = a.get("link_ateste") or []
+            
+            a["link_sigater"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in sigater_paths]
+            a["link_colletum"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in colletum_paths]
+            a["link_ateste"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in ateste_paths]
+            
             # Retrocompatibilidade no response para o frontend (que lê atv.data)
             a["data"] = a.get("data_atividade")
             
