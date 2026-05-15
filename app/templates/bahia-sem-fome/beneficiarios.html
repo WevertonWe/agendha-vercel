@@ -600,48 +600,27 @@ async function salvarNovaAtividade() {
 }
 
 async function excluirBeneficiario(id) {
-    if (typeof ui !== 'undefined' && ui.confirmarExclusao) {
-        const confirmou = await ui.confirmarExclusao("Tem certeza?", "Isso excluirá o beneficiário e todos os documentos associados.");
-        if (!confirmou) return;
-    } else if (typeof Swal !== 'undefined') {
-        const result = await Swal.fire({
-            title: 'Tem certeza?',
-            text: "Isso excluirá o beneficiário e todos os documentos associados.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sim, excluir!',
-            cancelButtonText: 'Cancelar'
-        });
-        if (!result.isConfirmed) return;
-    } else {
-        if (!confirm("Tem certeza que deseja excluir o beneficiário e seus documentos?")) return;
-    }
+    console.log("ID enviado para exclusão:", id);
+    if (!confirm("Tem certeza que deseja excluir o beneficiário e seus documentos?")) return;
 
     try {
-        if (typeof ui !== 'undefined') ui.mostrarLoading("Excluindo...");
         const res = await fetch(`/api/bsf/beneficiarios/${id}`, {
             method: 'DELETE',
             headers: {
+                'Content-Type': 'application/json',
                 'Accept': 'application/json'
             }
         });
-        if (typeof ui !== 'undefined') ui.esconderLoading();
 
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.detail || "Erro ao excluir beneficiário");
         }
 
-        if (typeof ui !== 'undefined') ui.feedbackSucesso("Beneficiário excluído com sucesso.");
-        else alert("Beneficiário excluído com sucesso.");
-        
+        alert("Beneficiário excluído com sucesso.");
         carregarBeneficiarios(currentPage);
     } catch (e) {
-        if (typeof ui !== 'undefined') ui.esconderLoading();
-        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
-        else alert(e.message);
+        alert(e.message);
     }
 }
 

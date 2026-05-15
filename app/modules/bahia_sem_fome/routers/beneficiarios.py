@@ -271,6 +271,7 @@ async def criar_beneficiario(dados: BeneficiarioBSFCreate):
 @router.delete("/{id}")
 async def deletar_beneficiario(id: int):
     """Exclui permanentemente um beneficiário do projeto BSF."""
+    print(f"DEBUG: Tentativa de exclusão do ID {id}")
     try:
         supabase = get_supabase()
         
