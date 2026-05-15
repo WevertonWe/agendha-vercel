@@ -206,7 +206,7 @@ async def upload_documento_atividade(
         
         file_content = await file.read()
         
-        res_upload = supabase.storage.from_("agendha-uploads").upload(
+        supabase.storage.from_("agendha-uploads").upload(
             file=file_content,
             path=caminho_storage,
             file_options={"content-type": "application/pdf"}
@@ -220,7 +220,16 @@ async def upload_documento_atividade(
             links_atuais = res_atv.data[0].get(coluna) or []
             if caminho_storage not in links_atuais:
                 links_atuais.append(caminho_storage)
-                supabase.table("bsf_atividades").update({coluna: links_atuais}).eq("id", atividade_id).execute()
+                res_upd = supabase.table("bsf_atividades").update({coluna: links_atuais}).eq("id", atividade_id).execute()
+                
+                # Fetch signed URLs for the response so frontend can use them immediately
+                updated_data = res_upd.data[0] if res_upd.data else None
+                if updated_data:
+                    for t in ["sigater", "colletum", "ateste"]:
+                        paths = updated_data.get(f"link_{t}") or []
+                        updated_data[f"link_{t}"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in paths]
+                    
+                return {"status": "success", "caminho": caminho_storage, "atividade": updated_data}
                 
         return {"status": "success", "caminho": caminho_storage}
         
@@ -259,19 +268,19 @@ async def criar_beneficiario(dados: BeneficiarioBSFCreate):
         logger.error(f"Erro ao cadastrar BSF: {e}")
         raise HTTPException(500, f"Erro ao cadastrar: {e}")
 
-@router.delete("/{beneficiario_id}")
-async def deletar_beneficiario(beneficiario_id: int):
+@router.delete("/{id}")
+async def deletar_beneficiario(id: int):
     """Exclui permanentemente um beneficiário do projeto BSF."""
     try:
         supabase = get_supabase()
         
         # Verificar se o beneficiário existe e pertence ao BSF
-        res = supabase.table("beneficiarios").select("id").eq("id", beneficiario_id).eq("projeto", "Bahia Sem Fome").execute()
+        res = supabase.table("beneficiarios").select("id").eq("id", id).eq("projeto", "Bahia Sem Fome").execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Beneficiário não encontrado.")
             
         # Deletar no Supabase (ON DELETE CASCADE no banco removerá os registros em bsf_atividades)
-        supabase.table("beneficiarios").delete().eq("id", beneficiario_id).execute()
+        supabase.table("beneficiarios").delete().eq("id", id).execute()
         
         return {"message": "Beneficiário excluído com sucesso."}
     except HTTPException:
@@ -339,7 +348,8 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
             fieldnames = csv_reader.fieldnames or []
 
         def remove_accents(text):
-            if not text: return ""
+            if not text:
+                return ""
             return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
 
         def find_col(candidates):
@@ -412,7 +422,7 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 if 'pgrst204' in error_msg or 'caf' in error_msg:
                     try:
                         supabase.rpc('reload_schema', {}).execute()
-                    except:
+                    except Exception:
                         pass
                     return JSONResponse(content={"error": "O esquema do banco de dados foi atualizado. Por favor, tente novamente em 5 segundos."}, status_code=500)
                 logger.error(f"Erro na linha durante importação BSF: {e}")

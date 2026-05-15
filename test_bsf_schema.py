@@ -1,5 +1,4 @@
 import sys
-import asyncio
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import get_supabase

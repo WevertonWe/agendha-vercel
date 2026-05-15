@@ -540,9 +540,10 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
             throw new Error(err.detail || "Erro no upload");
         }
         
-        if (typeof ui !== 'undefined') ui.feedbackSucesso("Documento salvo!");
-        else alert("Documento salvo!");
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Arquivo enviado com sucesso!");
+        else alert("Arquivo enviado com sucesso!");
         
+        // Dispara uma nova busca pelos dados da atividade para atualizar a interface
         carregarArquivos(benId);
     } catch (e) {
         if (typeof ui !== 'undefined') ui.esconderLoading();
@@ -621,7 +622,10 @@ async function excluirBeneficiario(id) {
     try {
         if (typeof ui !== 'undefined') ui.mostrarLoading("Excluindo...");
         const res = await fetch(`/api/bsf/beneficiarios/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json'
+            }
         });
         if (typeof ui !== 'undefined') ui.esconderLoading();
 
