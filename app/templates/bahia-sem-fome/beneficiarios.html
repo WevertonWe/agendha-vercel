@@ -600,8 +600,31 @@ async function salvarNovaAtividade() {
 }
 
 async function excluirBeneficiario(id) {
-    console.log("ID enviado para exclusão:", id);
-    if (!confirm("Tem certeza que deseja excluir o beneficiário e seus documentos?")) return;
+    if (typeof Swal === 'undefined') {
+        alert("Erro: SweetAlert2 não carregado.");
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: 'Tem certeza?',
+        text: 'Esta ação não pode ser desfeita!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+        title: 'Excluindo...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
 
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}`, {
@@ -617,10 +640,17 @@ async function excluirBeneficiario(id) {
             throw new Error(err.detail || "Erro ao excluir beneficiário");
         }
 
-        alert("Beneficiário excluído com sucesso.");
-        carregarBeneficiarios(currentPage);
+        Swal.fire({
+            title: 'Excluído!',
+            text: 'Beneficiário excluído com sucesso.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false
+        }).then(() => {
+            location.reload();
+        });
     } catch (e) {
-        alert(e.message);
+        Swal.fire('Erro!', e.message, 'error');
     }
 }
 
