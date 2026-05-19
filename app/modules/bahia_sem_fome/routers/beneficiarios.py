@@ -149,9 +149,9 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
             colletum_paths = a.get("link_colletum") or []
             ateste_paths = a.get("link_ateste") or []
             
-            a["link_sigater"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in sigater_paths]
-            a["link_colletum"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in colletum_paths]
-            a["link_ateste"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in ateste_paths]
+            a["link_sigater"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in sigater_paths]
+            a["link_colletum"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in colletum_paths]
+            a["link_ateste"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in ateste_paths]
             
             # Retrocompatibilidade no response para o frontend (que lê atv.data)
             a["data"] = a.get("data_atividade")
@@ -227,7 +227,7 @@ async def upload_documento_atividade(
                 if updated_data:
                     for t in ["sigater", "colletum", "ateste"]:
                         paths = updated_data.get(f"link_{t}") or []
-                        updated_data[f"link_{t}"] = [supabase.storage.from_("agendha-uploads").get_public_url(p) for p in paths]
+                        updated_data[f"link_{t}"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in paths]
                     
                 return {"status": "success", "caminho": caminho_storage, "atividade": updated_data}
                 

@@ -447,6 +447,7 @@ async function verDetalhe(id) {
 
 async function carregarArquivos(id) {
     const container = document.getElementById('docsContainer');
+    container.innerHTML = ''; // Limpar o HTML anterior
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`);
         if (!res.ok) throw new Error("Falha na rede");
@@ -540,8 +541,8 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
             throw new Error(err.detail || "Erro no upload");
         }
         
-        if (typeof ui !== 'undefined') ui.feedbackSucesso("Arquivo enviado com sucesso!");
-        else alert("Arquivo enviado com sucesso!");
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Sucesso! Documento anexado à atividade.");
+        else alert("Sucesso! Documento anexado à atividade.");
         
         // Dispara uma nova busca pelos dados da atividade para atualizar a interface
         carregarArquivos(benId);
