@@ -33,6 +33,58 @@ router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 logger = logging.getLogger(__name__)
 
 
+def parse_links_safe(paths, supabase, context_info: str = "") -> list:
+    """
+    Parses and sanitizes document links safely to prevent AttributeError or list parsing errors.
+    If paths is a JSON string, tries to load it. Discards non-string/null elements, logs a warning
+    for invalid links, and generates storage public URLs safely using try-except.
+    """
+    if not paths:
+        return []
+        
+    # Coerce to list if paths is a string
+    if isinstance(paths, str):
+        paths_trimmed = paths.strip()
+        if paths_trimmed.startswith("[") and paths_trimmed.endswith("]"):
+            import json
+            try:
+                paths = json.loads(paths_trimmed)
+            except Exception as e:
+                logger.warning(f"Falha ao decodificar array JSON de links '{paths_trimmed}' {context_info}: {e}")
+                paths = [paths_trimmed]
+        else:
+            paths = [paths_trimmed]
+            
+    if not isinstance(paths, list):
+        logger.warning(f"Formato de link inválido (não é lista nem string) {context_info}: {type(paths)}")
+        return []
+        
+    sanitized_links = []
+    for p in paths:
+        if p is None:
+            continue
+        if not isinstance(p, str):
+            logger.warning(f"Elemento de link ignorado por não ser string {context_info}: {p} (tipo {type(p)})")
+            continue
+            
+        p_str = p.strip()
+        if not p_str:
+            continue
+            
+        if p_str.startswith("http"):
+            sanitized_links.append(p_str)
+        else:
+            # Assumir que é um caminho do storage. Usar try-except preventivo.
+            try:
+                public_url = supabase.storage.from_("agendha-uploads").get_public_url(p_str)
+                if public_url:
+                    sanitized_links.append(public_url)
+            except Exception as ex:
+                logger.warning(f"Erro preventivo ao gerar URL pública para o caminho '{p_str}' {context_info}: {ex}")
+                
+    return sanitized_links
+
+
 @router.get("")
 async def listar_beneficiarios(
     tecnico: Optional[str] = Query(None, description="Filtro por técnico responsável"),
@@ -145,13 +197,10 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
         # Parse arrays if they are returned as None
         atividades = res.data or []
         for a in atividades:
-            sigater_paths = a.get("link_sigater") or []
-            colletum_paths = a.get("link_colletum") or []
-            ateste_paths = a.get("link_ateste") or []
-            
-            a["link_sigater"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in sigater_paths]
-            a["link_colletum"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in colletum_paths]
-            a["link_ateste"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in ateste_paths]
+            context = f"da atividade {a.get('id')} do beneficiário {beneficiario_id}"
+            a["link_sigater"] = parse_links_safe(a.get("link_sigater"), supabase, f"sigater {context}")
+            a["link_colletum"] = parse_links_safe(a.get("link_colletum"), supabase, f"colletum {context}")
+            a["link_ateste"] = parse_links_safe(a.get("link_ateste"), supabase, f"ateste {context}")
             
             # Retrocompatibilidade no response para o frontend (que lê atv.data)
             a["data"] = a.get("data_atividade")
@@ -226,8 +275,8 @@ async def upload_documento_atividade(
                 updated_data = res_upd.data[0] if res_upd.data else None
                 if updated_data:
                     for t in ["sigater", "colletum", "ateste"]:
-                        paths = updated_data.get(f"link_{t}") or []
-                        updated_data[f"link_{t}"] = [p if p.startswith("http") else supabase.storage.from_("agendha-uploads").get_public_url(p) for p in paths]
+                        context = f"da atividade {atividade_id} no upload do beneficiário {beneficiario_id}"
+                        updated_data[f"link_{t}"] = parse_links_safe(updated_data.get(f"link_{t}"), supabase, f"{t} {context}")
                     
                 return {"status": "success", "caminho": caminho_storage, "atividade": updated_data}
                 

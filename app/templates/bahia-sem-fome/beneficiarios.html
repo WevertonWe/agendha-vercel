@@ -447,7 +447,14 @@ async function verDetalhe(id) {
 
 async function carregarArquivos(id) {
     const container = document.getElementById('docsContainer');
-    container.innerHTML = ''; // Limpar o HTML anterior
+    if (!container) {
+        console.error("docsContainer não encontrado no DOM!");
+        return;
+    }
+    
+    // BSF Dropdown Injection: Limpa o container do dropdown imediatamente para redesenho
+    container.innerHTML = ''; 
+    
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`);
         if (!res.ok) throw new Error("Falha na rede");
@@ -544,7 +551,8 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
         if (typeof ui !== 'undefined') ui.feedbackSucesso("Sucesso! Documento anexado à atividade.");
         else alert("Sucesso! Documento anexado à atividade.");
         
-        // Dispara uma nova busca pelos dados da atividade para atualizar a interface
+        // BSF Dropdown Injection: Executa o recarregamento imediato dos dados do beneficiário
+        // limpando o container e redesenhando o dropdown com as novas URLs assinadas.
         carregarArquivos(benId);
     } catch (e) {
         if (typeof ui !== 'undefined') ui.esconderLoading();
