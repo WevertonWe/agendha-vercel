@@ -708,3 +708,137 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Erro importar bsf: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.post("/importar-metas")
+async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
+    """Importa metas do PowerBI para beneficiários BSF, sobrescrevendo dados antigos do beneficiário."""
+    try:
+        content = await file.read()
+        filename = file.filename.lower()
+        
+        linhas = []
+        fieldnames = []
+        
+        if filename.endswith('.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            sheet = wb.active
+            
+            headers = [cell.value for cell in sheet[1]]
+            fieldnames = [str(h).strip() for h in headers if h is not None]
+            
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                if any(row):
+                    row_dict = {}
+                    for i, header in enumerate(fieldnames):
+                        if i < len(row):
+                            val = row[i]
+                            row_dict[header] = str(val).strip() if val is not None else None
+                    linhas.append(row_dict)
+                    
+        elif filename.endswith('.xls'):
+            return JSONResponse(content={"error": "Formato .xls legado não suportado. Use .xlsx ou .csv."}, status_code=400)
+            
+        else:
+            decoded = content.decode('utf-8-sig')
+            sniffer = csv.Sniffer()
+            try:
+                dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+                delimiter = dialect.delimiter
+            except csv.Error:
+                delimiter = ';' if ';' in decoded[:100] else ','
+                
+            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+            linhas = list(csv_reader)
+            fieldnames = csv_reader.fieldnames or []
+
+        def remove_accents(text):
+            if not text:
+                return ""
+            return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
+
+        def find_col(candidates):
+            cols_map = {remove_accents(str(c).strip().upper()): c for c in fieldnames if c is not None}
+            for cand in candidates:
+                cand_upper = remove_accents(cand.upper())
+                if cand_upper in cols_map:
+                    return cols_map[cand_upper]
+                for real_col_upper, real_col_name in cols_map.items():
+                    if cand_upper in real_col_upper:
+                        return real_col_name
+            return None
+
+        col_codigo = find_col(['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO', 'CHAVE'])
+        
+        if not col_codigo:
+            return JSONResponse(content={"error": "Coluna de código de plano/metas não encontrada na planilha."}, status_code=400)
+
+        supabase = get_supabase()
+        count_metas_inseridas = 0
+        beneficiarios_limpos = set()
+        
+        for row in linhas:
+            try:
+                raw_codigo = row.get(col_codigo)
+                if not raw_codigo:
+                    continue
+                
+                raw_codigo_str = str(raw_codigo).strip()
+                partes = raw_codigo_str.split('.')
+                if not partes or not partes[0]:
+                    continue
+                
+                codigo_plano_extraido = partes[0].strip()
+                
+                # Procura descrição de forma extremamente flexível baseada em aproximação de colunas candidatas
+                raw_descricao = None
+                colunas_descricao = ['OBJETIVO', 'INICIATIVA', 'TAREFA', 'COMO FAZER', 'DESCRICAO', 'TEXTO', 'META']
+                for cand in colunas_descricao:
+                    col_cand = find_col([cand])
+                    if col_cand and row.get(col_cand):
+                        raw_descricao = str(row.get(col_cand)).strip()
+                        break
+                
+                # Classifica o Tipo (um ponto = OBJETIVO; dois pontos = INICIATIVA)
+                pontos = raw_codigo_str.count('.')
+                if pontos == 1:
+                    tipo = "OBJETIVO"
+                elif pontos >= 2:
+                    tipo = "INICIATIVA"
+                else:
+                    continue
+                
+                # Busca o ID real do beneficiário pelo codigo_plano
+                res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
+                if not res_ben.data:
+                    continue
+                
+                beneficiario_id = res_ben.data[0]["id"]
+                
+                # Sobrescrita exclusiva: limpa as metas na primeira aparição do beneficiário
+                if beneficiario_id not in beneficiarios_limpos:
+                    supabase.table("bsf_metas_plano").delete().eq("beneficiario_id", beneficiario_id).execute()
+                    beneficiarios_limpos.add(beneficiario_id)
+                
+                # Insere a nova meta limpa
+                payload_meta = {
+                    "beneficiario_id": beneficiario_id,
+                    "codigo": raw_codigo_str,
+                    "tipo": tipo,
+                    "descricao": raw_descricao or ""
+                }
+                supabase.table("bsf_metas_plano").insert(payload_meta).execute()
+                count_metas_inseridas += 1
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar linha de metas: {e}")
+                
+        return {
+            "message": "Importação de metas concluída com sucesso",
+            "metas_inseridas": count_metas_inseridas,
+            "beneficiarios_atualizados": len(beneficiarios_limpos)
+        }
+    except Exception as e:
+        logger.error(f"Erro ao importar metas BSF: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)

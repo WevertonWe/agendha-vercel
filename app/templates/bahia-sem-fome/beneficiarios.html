@@ -65,6 +65,9 @@
                 <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalImportacao()">
                     <i class="fas fa-file-excel me-1"></i> Importar Planilha
                 </button>
+                <button class="btn btn-sm btn-outline-info me-1" onclick="abrirModalImportacaoMetas()">
+                    <i class="fas fa-project-diagram me-1"></i> Importar Metas (PowerBI)
+                </button>
                 <button class="btn btn-sm btn-primary" onclick="abrirModalCadastro()">
                     <i class="fas fa-plus me-1"></i> Novo Beneficiário
                 </button>
@@ -153,6 +156,31 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-success" onclick="importarPlanilha()" id="btnImportar">
                     <i class="fas fa-upload me-1"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Importação Metas -->
+<div class="modal fade" id="modalImportacaoMetas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-project-diagram me-2"></i>Importar Metas (PowerBI)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">A planilha de Metas (PowerBI) pode estar em formato CSV ou XLSX. O sistema realizará a varredura e importará as metas associadas aos beneficiários por meio do código do plano, aplicando a **sobrescrita limpa** dos lotes antigos.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Arquivo de Metas</label>
+                    <input class="form-control" type="file" id="arquivoImportacaoMetas" accept=".csv,.xlsx">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info text-white" onclick="importarPlanilhaMetas()" id="btnImportarMetas">
+                    <i class="fas fa-upload me-1"></i> Importar Metas
                 </button>
             </div>
         </div>
@@ -257,6 +285,7 @@ let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
 let modalImportacaoInst = null;
+let modalImportacaoMetasInst = null;
 let modalCadastroInst = null;
 let modalNovaAtividadeInst = null;
 
@@ -808,6 +837,55 @@ async function importarPlanilha() {
     }
 }
 
+function abrirModalImportacaoMetas() {
+    document.getElementById('arquivoImportacaoMetas').value = '';
+    if (typeof bootstrap !== 'undefined') {
+        modalImportacaoMetasInst = new bootstrap.Modal(document.getElementById('modalImportacaoMetas'));
+        modalImportacaoMetasInst.show();
+    }
+}
+
+async function importarPlanilhaMetas() {
+    const input = document.getElementById('arquivoImportacaoMetas');
+    if (!input.files || !input.files.length) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+    
+    const btn = document.getElementById('btnImportarMetas');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/importar-metas', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro na importação de metas.");
+        
+        if (typeof ui !== 'undefined') {
+            ui.feedbackSucesso(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas para ${data.beneficiarios_atualizados} beneficiários.`);
+        } else {
+            alert(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas.`);
+        }
+        
+        modalImportacaoMetasInst?.hide();
+        carregarBeneficiarios(1);
+    } catch(e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+        else alert(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
 async function salvarNovoBeneficiario() {
     const nome = document.getElementById('cadNome').value.trim();
     const cpf = document.getElementById('cadCpf').value.trim();
@@ -1246,10 +1324,6 @@ async function alternarStatusCategoria(id, statusAtual, ehDaEdicao = false, back
 }
 // ----------------------------------------------------
 
-    } catch (e) {
-        Swal.close();
-        Swal.fire('Erro!', e.message, 'error');
-    }
 }
 </script>
 {% endblock %}
