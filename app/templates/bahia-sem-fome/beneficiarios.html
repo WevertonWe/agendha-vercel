@@ -648,7 +648,8 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
 
 async function obterHtmlChecklistMetas(beneficiarioId, iniciativasMarcadas = []) {
     try {
-        const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas`);
+        const timestamp = new Date().getTime();
+        const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas?_=${timestamp}`);
         if (!res.ok) return '<div class="text-danger small text-center py-2">Erro ao carregar metas do plano.</div>';
         const metas = await res.json();
         if (!metas || metas.length === 0) {
@@ -1145,7 +1146,8 @@ async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 
     selectEl.innerHTML = '<option value="">Carregando categorias...</option>';
     
     try {
-        const response = await fetch('/api/bsf/beneficiarios/tipos-atividade?somente_ativos=true');
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/bsf/beneficiarios/tipos-atividade?somente_ativos=true&_=${timestamp}`);
         if (!response.ok) throw new Error("Erro ao buscar tipos de atividade");
         const dados = await response.json();
         
