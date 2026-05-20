@@ -232,10 +232,9 @@
                     <label class="form-label fw-bold">Data *</label>
                     <input type="date" class="form-control" id="atvData" required>
                 </div>
-                <div class="mb-3 d-none" id="bsf-metas-wrapper">
-                    <label class="form-label fw-bold small">Iniciativas do Plano Produtivo</label>
-                    <div id="bsf-iniciativas-checklist-container" class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
-                        <!-- Checkboxes dynamically rendered here -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Iniciativas do Plano Produtivo (PowerBI)</label>
+                    <div id="bsf-metas-wrapper" class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
                     </div>
                 </div>
             </div>
@@ -517,16 +516,13 @@ async function carregarArquivos(id) {
             const dataFormatada = new Date(atv.data + 'T00:00:00').toLocaleDateString('pt-BR');
             html += `
                 <div class="list-group-item px-0 py-3">
-                    <div class="d-flex w-100 justify-content-between mb-2 align-items-center">
-                        <div class="d-flex align-items-center gap-3">
-                            <h6 class="mb-0 fw-bold">${atv.tipo_atividade}</h6>
-                            <small class="text-muted">${dataFormatada}</small>
-                        </div>
-                        <div class="d-flex gap-2 ms-auto">
-                            <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-edit" onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}', '${(atv.iniciativas_vinculadas || []).join(',')}')" title="Editar atividade" style="transition: color 0.2s;">
+                    <div class="d-flex justify-content-between align-items-center w-100 mb-2">
+                        <span class="fw-bold small text-dark">${atv.tipo_atividade} - ${dataFormatada}</span>
+                        <div>
+                            <button onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}', '${(atv.iniciativas_vinculadas || []).join(',')}')" class="btn btn-warning btn-sm me-1 text-white" title="Editar atividade">
                                 <i class="fas fa-pencil-alt"></i>
                             </button>
-                            <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-delete" onclick="excluirAtividade('${atv.id}', '${id}')" title="Excluir atividade" style="transition: color 0.2s;">
+                            <button onclick="excluirAtividade('${atv.id}', '${id}')" class="btn btn-danger btn-sm" title="Excluir atividade">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>
@@ -611,14 +607,16 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
 async function obterHtmlChecklistMetas(beneficiarioId, iniciativasMarcadas = []) {
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas`);
-        if (!res.ok) return '';
+        if (!res.ok) return '<div class="text-danger small text-center py-2">Erro ao carregar metas do plano.</div>';
         const metas = await res.json();
-        if (!metas || metas.length === 0) return '';
+        if (!metas || metas.length === 0) {
+            return '<div class="text-muted small text-center py-2">Nenhuma iniciativa registrada para este beneficiário.</div>';
+        }
 
         let html = '';
         metas.forEach(meta => {
             if (meta.tipo === 'OBJETIVO') {
-                html += `<div class="fw-bold mt-3 mb-1 text-dark small text-start border-bottom pb-1"><i class="fas fa-bullseye text-success me-1"></i> ${meta.codigo} - ${meta.descricao}</div>`;
+                html += `<div class="fw-bold mt-2 mb-1 text-dark small text-start border-bottom pb-1"><i class="fas fa-bullseye text-success me-1"></i> ${meta.codigo} - ${meta.descricao}</div>`;
             } else if (meta.tipo === 'INICIATIVA') {
                 const checked = (iniciativasMarcadas || []).includes(meta.codigo) ? 'checked' : '';
                 html += `
@@ -633,7 +631,7 @@ async function obterHtmlChecklistMetas(beneficiarioId, iniciativasMarcadas = [])
         return html;
     } catch (e) {
         console.error("Erro ao carregar checklist de metas:", e);
-        return '';
+        return '<div class="text-danger small text-center py-2">Erro ao carregar metas do plano.</div>';
     }
 }
 
@@ -643,17 +641,12 @@ async function abrirModalNovaAtividade(id) {
     document.getElementById('atvData').value = new Date().toISOString().split('T')[0];
     
     const wrapper = document.getElementById('bsf-metas-wrapper');
-    const container = document.getElementById('bsf-iniciativas-checklist-container');
-    if (wrapper && container) {
-        container.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
-        wrapper.classList.remove('d-none');
-        const checklistHtml = await obterHtmlChecklistMetas(id, []);
-        if (checklistHtml) {
-            container.innerHTML = checklistHtml;
-        } else {
-            wrapper.classList.add('d-none');
-            container.innerHTML = '';
-        }
+    if (wrapper) {
+        wrapper.innerHTML = '<div class="text-muted small text-center py-2"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Carregando iniciativas...</div>';
+        
+        // Utiliza beneficiarioIdGlobal para a busca de metas homologada no Socratic Gate
+        const checklistHtml = await obterHtmlChecklistMetas(beneficiarioIdGlobal, []);
+        wrapper.innerHTML = checklistHtml || '<div class="text-muted small text-center py-2">Nenhuma iniciativa registrada para este beneficiário.</div>';
     }
     
     if (typeof bootstrap !== 'undefined') {
@@ -674,7 +667,7 @@ async function salvarNovaAtividade() {
         return;
     }
     
-    const chks = document.querySelectorAll('#bsf-iniciativas-checklist-container .bsf-iniciativa-chk:checked');
+    const chks = document.querySelectorAll('#bsf-metas-wrapper .bsf-iniciativa-chk:checked');
     const iniciativas = Array.from(chks).map(c => c.value);
     
     const btn = document.getElementById('btnSalvarAtv');
@@ -868,30 +861,6 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
     }
 
     const marcadas = iniciativasVinculadasStr ? iniciativasVinculadasStr.split(',') : [];
-    
-    Swal.fire({
-        title: 'Carregando metas...',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-
-    const checklistHtml = await obterHtmlChecklistMetas(benId, marcadas);
-    
-    Swal.close();
-
-    let metasSection = '';
-    if (checklistHtml) {
-        metasSection = `
-            <div class="mb-3 text-start">
-                <label class="form-label fw-bold small">Iniciativas do Plano Produtivo</label>
-                <div id="swal-checklist-container" class="border rounded p-3 bg-light" style="max-height: 180px; overflow-y: auto;">
-                    ${checklistHtml}
-                </div>
-            </div>
-        `;
-    }
 
     const { value: formValues } = await Swal.fire({
         title: 'Editar Atividade',
@@ -907,14 +876,27 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
             </div>
             <div class="mb-3 text-start">
                 <label class="form-label fw-bold small">Data da Atividade</label>
-                <input id="swal-data-atividade" type="date" class="form-select" value="${dataAtual}">
+                <input id="swal-data-atividade" type="date" class="form-control" value="${dataAtual}">
             </div>
-            ${metasSection}
+            <div class="mb-3 text-start">
+                <label class="form-label fw-bold small">Iniciativas do Plano Produtivo (PowerBI)</label>
+                <div id="bsf-metas-wrapper-edit" class="border rounded p-2 bg-light" style="max-height: 180px; overflow-y: auto;">
+                    <div class="text-muted small text-center py-2"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Carregando iniciativas...</div>
+                </div>
+            </div>
         `,
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: 'Salvar',
         cancelButtonText: 'Cancelar',
+        didOpen: async () => {
+            const container = document.getElementById('bsf-metas-wrapper-edit');
+            if (container) {
+                // Utiliza beneficiarioIdGlobal para a busca de metas homologada no Socratic Gate
+                const checklistHtml = await obterHtmlChecklistMetas(beneficiarioIdGlobal, marcadas);
+                container.innerHTML = checklistHtml || '<div class="text-muted small text-center py-2">Nenhuma iniciativa registrada para este beneficiário.</div>';
+            }
+        },
         preConfirm: () => {
             const tipo = document.getElementById('swal-tipo-atividade').value;
             const data = document.getElementById('swal-data-atividade').value;
@@ -923,7 +905,7 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
                 return false;
             }
             
-            const chks = document.querySelectorAll('#swal-checklist-container .bsf-iniciativa-chk:checked');
+            const chks = document.querySelectorAll('#bsf-metas-wrapper-edit .bsf-iniciativa-chk:checked');
             const iniciativas = Array.from(chks).map(c => c.value);
             
             return { tipo_atividade: tipo, data: data, iniciativas_vinculadas: iniciativas };

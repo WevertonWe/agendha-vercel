@@ -227,19 +227,30 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
 
 @router.get("/{beneficiario_id}/metas")
 async def listar_metas_beneficiario(beneficiario_id: int):
-    """Retorna as metas e iniciativas associadas a um beneficiário."""
+    """Retorna as metas e iniciativas associadas a um beneficiário com tratamento Null-Safety."""
     try:
         supabase = get_supabase()
         res = supabase.table("bsf_metas_plano").select("*").eq("beneficiario_id", beneficiario_id).execute()
         metas = res.data or []
+        
+        # Mapeamento preventivo contra nulos para evitar Erro 500 no template (Null-Safety)
+        safe_metas = []
+        for m in metas:
+            safe_metas.append({
+                "id": m.get("id") or 0,
+                "beneficiario_id": m.get("beneficiario_id") or 0,
+                "codigo": m.get("codigo") or "",
+                "tipo": m.get("tipo") or "",
+                "descricao": m.get("descricao") or ""
+            })
         
         # Ordenação natural pelo código
         import re
         def natural_key(code):
             return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', code or "")]
             
-        metas.sort(key=lambda x: natural_key(x.get("codigo", "")))
-        return metas
+        safe_metas.sort(key=lambda x: natural_key(x.get("codigo", "")))
+        return safe_metas
     except Exception as e:
         logger.error(f"Erro ao listar metas {beneficiario_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar metas do plano produtivo.")
