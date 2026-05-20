@@ -536,7 +536,16 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
     formData.append("file", file);
     formData.append("tipo", tipo);
     
-    if (typeof ui !== 'undefined') ui.mostrarLoading("Enviando documento...");
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Enviando documento...',
+            text: 'Por favor, aguarde enquanto o arquivo é processado.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    }
     
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${benId}/atividades/${atvId}/upload`, {
@@ -544,31 +553,34 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
             body: formData
         });
         
-        if (typeof ui !== 'undefined') ui.esconderLoading();
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.detail || "Erro no upload");
         }
         
         if (typeof Swal !== 'undefined') {
+            Swal.close();
             Swal.fire({
                 icon: 'success',
                 title: 'Sucesso!',
-                text: 'Documento anexado com sucesso.',
+                text: 'Documento anexado à atividade.',
                 timer: 1500,
                 showConfirmButton: false
             });
         } else if (typeof ui !== 'undefined') {
-            ui.feedbackSucesso("Documento anexado com sucesso.");
+            ui.feedbackSucesso("Documento anexado à atividade.");
         }
         
-        // BSF Dropdown Injection: Executa o recarregamento imediato dos dados do beneficiário
-        // limpando o container e redesenhando o dropdown com as novas URLs assinadas.
-        carregarArquivos(beneficiarioIdGlobal);
+        carregarArquivos(benId);
     } catch (e) {
-        if (typeof ui !== 'undefined') ui.esconderLoading();
-        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
-        else console.error(e.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.close();
+            Swal.fire('Erro!', e.message, 'error');
+        } else if (typeof ui !== 'undefined') {
+            ui.feedbackErro(e.message);
+        } else {
+            console.error(e.message);
+        }
     }
 }
 

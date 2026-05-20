@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Habilita logging para os warnings do parser
 logging.basicConfig(level=logging.INFO)
 
-from app.modules.bahia_sem_fome.routers.beneficiarios import parse_links_safe
+from app.modules.bahia_sem_fome.routers.beneficiarios import parse_links_safe  # noqa: E402
 
 def test_parse_links_safe():
     print("Iniciando testes unitários de Null-Safety para parse_links_safe...")
