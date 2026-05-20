@@ -232,6 +232,12 @@
                     <label class="form-label fw-bold">Data *</label>
                     <input type="date" class="form-control" id="atvData" required>
                 </div>
+                <div class="mb-3 d-none" id="bsf-metas-wrapper">
+                    <label class="form-label fw-bold small">Iniciativas do Plano Produtivo</label>
+                    <div id="bsf-iniciativas-checklist-container" class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                        <!-- Checkboxes dynamically rendered here -->
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -512,18 +518,18 @@ async function carregarArquivos(id) {
             html += `
                 <div class="list-group-item px-0 py-3">
                     <div class="d-flex w-100 justify-content-between mb-2 align-items-center">
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-3">
                             <h6 class="mb-0 fw-bold">${atv.tipo_atividade}</h6>
-                            <span class="d-flex gap-2">
-                                <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-edit" onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}')" title="Editar atividade" style="transition: color 0.2s;">
-                                    <i class="fas fa-pencil-alt"></i>
-                                </button>
-                                <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-delete" onclick="excluirAtividade('${atv.id}', '${id}')" title="Excluir atividade" style="transition: color 0.2s;">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </span>
+                            <small class="text-muted">${dataFormatada}</small>
                         </div>
-                        <small class="text-muted">${dataFormatada}</small>
+                        <div class="d-flex gap-2 ms-auto">
+                            <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-edit" onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}', '${(atv.iniciativas_vinculadas || []).join(',')}')" title="Editar atividade" style="transition: color 0.2s;">
+                                <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-delete" onclick="excluirAtividade('${atv.id}', '${id}')" title="Excluir atividade" style="transition: color 0.2s;">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="d-flex flex-wrap">
                         ${renderBtn('Sigater', sigaterLinks)}
@@ -602,10 +608,53 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
     }
 }
 
-function abrirModalNovaAtividade(id) {
+async function obterHtmlChecklistMetas(beneficiarioId, iniciativasMarcadas = []) {
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas`);
+        if (!res.ok) return '';
+        const metas = await res.json();
+        if (!metas || metas.length === 0) return '';
+
+        let html = '';
+        metas.forEach(meta => {
+            if (meta.tipo === 'OBJETIVO') {
+                html += `<div class="fw-bold mt-3 mb-1 text-dark small text-start border-bottom pb-1"><i class="fas fa-bullseye text-success me-1"></i> ${meta.codigo} - ${meta.descricao}</div>`;
+            } else if (meta.tipo === 'INICIATIVA') {
+                const checked = (iniciativasMarcadas || []).includes(meta.codigo) ? 'checked' : '';
+                html += `
+                <div class="form-check ms-3 my-1 text-start">
+                    <input class="form-check-input bsf-iniciativa-chk" type="checkbox" value="${meta.codigo}" id="chk_${meta.codigo}" ${checked}>
+                    <label class="form-check-label small" for="chk_${meta.codigo}">
+                        <span class="text-muted fw-bold">${meta.codigo}</span> - ${meta.descricao}
+                    </label>
+                </div>`;
+            }
+        });
+        return html;
+    } catch (e) {
+        console.error("Erro ao carregar checklist de metas:", e);
+        return '';
+    }
+}
+
+async function abrirModalNovaAtividade(id) {
     document.getElementById('atvBeneficiarioId').value = id;
     document.getElementById('atvTipo').value = 'Visita';
     document.getElementById('atvData').value = new Date().toISOString().split('T')[0];
+    
+    const wrapper = document.getElementById('bsf-metas-wrapper');
+    const container = document.getElementById('bsf-iniciativas-checklist-container');
+    if (wrapper && container) {
+        container.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+        wrapper.classList.remove('d-none');
+        const checklistHtml = await obterHtmlChecklistMetas(id, []);
+        if (checklistHtml) {
+            container.innerHTML = checklistHtml;
+        } else {
+            wrapper.classList.add('d-none');
+            container.innerHTML = '';
+        }
+    }
     
     if (typeof bootstrap !== 'undefined') {
         const modalEl = document.getElementById('modalNovaAtividade');
@@ -625,6 +674,9 @@ async function salvarNovaAtividade() {
         return;
     }
     
+    const chks = document.querySelectorAll('#bsf-iniciativas-checklist-container .bsf-iniciativa-chk:checked');
+    const iniciativas = Array.from(chks).map(c => c.value);
+    
     const btn = document.getElementById('btnSalvarAtv');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>...';
@@ -634,7 +686,7 @@ async function salvarNovaAtividade() {
         const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ tipo_atividade: tipo, data: dataAtv })
+            body: JSON.stringify({ tipo_atividade: tipo, data: dataAtv, iniciativas_vinculadas: iniciativas })
         });
         if (!res.ok) throw new Error("Erro ao salvar");
         
@@ -809,10 +861,36 @@ async function salvarNovoBeneficiario() {
     }
 }
 
-async function editarAtividade(atvId, tipoAtual, dataAtual, benId) {
+async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVinculadasStr) {
     if (typeof Swal === 'undefined') {
         console.error("SweetAlert2 não carregado!");
         return;
+    }
+
+    const marcadas = iniciativasVinculadasStr ? iniciativasVinculadasStr.split(',') : [];
+    
+    Swal.fire({
+        title: 'Carregando metas...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    const checklistHtml = await obterHtmlChecklistMetas(benId, marcadas);
+    
+    Swal.close();
+
+    let metasSection = '';
+    if (checklistHtml) {
+        metasSection = `
+            <div class="mb-3 text-start">
+                <label class="form-label fw-bold small">Iniciativas do Plano Produtivo</label>
+                <div id="swal-checklist-container" class="border rounded p-3 bg-light" style="max-height: 180px; overflow-y: auto;">
+                    ${checklistHtml}
+                </div>
+            </div>
+        `;
     }
 
     const { value: formValues } = await Swal.fire({
@@ -831,6 +909,7 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId) {
                 <label class="form-label fw-bold small">Data da Atividade</label>
                 <input id="swal-data-atividade" type="date" class="form-select" value="${dataAtual}">
             </div>
+            ${metasSection}
         `,
         focusConfirm: false,
         showCancelButton: true,
@@ -843,7 +922,11 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId) {
                 Swal.showValidationMessage('Ambos os campos são obrigatórios');
                 return false;
             }
-            return { tipo_atividade: tipo, data: data };
+            
+            const chks = document.querySelectorAll('#swal-checklist-container .bsf-iniciativa-chk:checked');
+            const iniciativas = Array.from(chks).map(c => c.value);
+            
+            return { tipo_atividade: tipo, data: data, iniciativas_vinculadas: iniciativas };
         }
     });
 

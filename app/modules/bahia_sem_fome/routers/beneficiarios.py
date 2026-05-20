@@ -27,10 +27,12 @@ class BeneficiarioBSFCreate(BaseModel):
 class AtividadeCreate(BaseModel):
     tipo_atividade: str
     data: str
+    iniciativas_vinculadas: Optional[list] = None
 
 class AtividadeUpdate(BaseModel):
     tipo_atividade: str
     data: str
+    iniciativas_vinculadas: Optional[list] = None
 
 router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 
@@ -214,13 +216,33 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
             a["link_colletum"] = parse_links_safe(a.get("link_colletum"), supabase, f"colletum {context}")
             a["link_ateste"] = parse_links_safe(a.get("link_ateste"), supabase, f"ateste {context}")
             
-            # Retrocompatibilidade no response para o frontend (que lê atv.data)
+            # Retrocompatibilidade no response para o frontend (que lê atv.data e iniciativas_vinculadas)
             a["data"] = a.get("data_atividade")
+            a["iniciativas_vinculadas"] = a.get("iniciativas_vinculadas") or []
             
         return atividades
     except Exception as e:
         logger.error(f"Erro ao listar atividades {beneficiario_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar atividades.")
+
+@router.get("/{beneficiario_id}/metas")
+async def listar_metas_beneficiario(beneficiario_id: int):
+    """Retorna as metas e iniciativas associadas a um beneficiário."""
+    try:
+        supabase = get_supabase()
+        res = supabase.table("bsf_metas_plano").select("*").eq("beneficiario_id", beneficiario_id).execute()
+        metas = res.data or []
+        
+        # Ordenação natural pelo código
+        import re
+        def natural_key(code):
+            return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', code or "")]
+            
+        metas.sort(key=lambda x: natural_key(x.get("codigo", "")))
+        return metas
+    except Exception as e:
+        logger.error(f"Erro ao listar metas {beneficiario_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar metas do plano produtivo.")
 
 @router.post("/{beneficiario_id}/atividades")
 async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
@@ -231,6 +253,7 @@ async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
             "beneficiario_id": beneficiario_id,
             "tipo_atividade": dados.tipo_atividade,
             "data_atividade": dados.data,
+            "iniciativas_vinculadas": dados.iniciativas_vinculadas or [],
             "link_sigater": [],
             "link_colletum": [],
             "link_ateste": []
@@ -243,12 +266,13 @@ async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
 
 @router.put("/atividades/{atividade_id}")
 async def atualizar_atividade(atividade_id: int, dados: AtividadeUpdate):
-    """Atualiza o tipo e a data da atividade específica."""
+    """Atualiza o tipo, a data e as iniciativas vinculadas da atividade específica."""
     try:
         supabase = get_supabase()
         payload = {
             "tipo_atividade": dados.tipo_atividade,
-            "data_atividade": dados.data
+            "data_atividade": dados.data,
+            "iniciativas_vinculadas": dados.iniciativas_vinculadas or []
         }
         res = supabase.table("bsf_atividades").update(payload).eq("id", atividade_id).execute()
         if not res.data:
@@ -465,6 +489,9 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         col_mun = find_col(['MUNICIPIO', 'CIDADE'])
         col_com = find_col(['COMUNIDADE', 'LOCALIDADE'])
         col_tec = find_col(['TECNICO', 'RESPONSAVEL'])
+        col_cod_plano = find_col(['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO'])
+        col_objetivo = find_col(['Objetivo', 'OBJETIVO_GERAL', 'OBJETIVO'])
+        col_iniciativa = find_col(['Iniciativa', 'INICIATIVA'])
         
         supabase = get_supabase()
         count_novos = 0
@@ -481,6 +508,10 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 com = row.get(col_com)
                 tec = row.get(col_tec)
                 
+                raw_cod_plano = row.get(col_cod_plano) if col_cod_plano else None
+                raw_objetivo = row.get(col_objetivo) if col_objetivo else None
+                raw_iniciativa = row.get(col_iniciativa) if col_iniciativa else None
+                
                 if not cpf_limpo and not raw_caf:
                     continue 
                     
@@ -493,6 +524,8 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 }
                 if raw_caf:
                     payload["caf"] = raw_caf
+                if raw_cod_plano:
+                    payload["codigo_plano"] = raw_cod_plano.strip()
                 
                 query = supabase.table("beneficiarios").select("id, projeto")
                 if cpf_limpo:
@@ -502,17 +535,62 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                     
                 res = query.execute()
                 
+                beneficiario_id = None
                 if res.data:
                     existente = res.data[0]
+                    beneficiario_id = existente["id"]
                     if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
-                        supabase.table("beneficiarios").update(payload).eq("id", existente["id"]).execute()
+                        supabase.table("beneficiarios").update(payload).eq("id", beneficiario_id).execute()
                         count_atualizados += 1
                 else:
                     if cpf_limpo:
                         payload["cpf"] = cpf_limpo
                     payload["status"] = "IMPORTADO"
-                    supabase.table("beneficiarios").insert(payload).execute()
+                    res_ins = supabase.table("beneficiarios").insert(payload).execute()
+                    if res_ins.data:
+                        beneficiario_id = res_ins.data[0]["id"]
                     count_novos += 1
+                
+                if beneficiario_id and raw_cod_plano:
+                    cod_iniciativa = raw_cod_plano.strip()
+                    partes = cod_iniciativa.split('.')
+                    if len(partes) > 1:
+                        partes[-1] = '0'
+                        cod_objetivo = '.'.join(partes)
+                    else:
+                        cod_objetivo = cod_iniciativa + ".0"
+                        
+                    # Processa o OBJETIVO
+                    if raw_objetivo:
+                        desc_obj = raw_objetivo.strip()
+                        res_obj = supabase.table("bsf_metas_plano").select("id, descricao").eq("beneficiario_id", beneficiario_id).eq("codigo", cod_objetivo).eq("tipo", "OBJETIVO").execute()
+                        if res_obj.data:
+                            obj_id = res_obj.data[0]["id"]
+                            if res_obj.data[0]["descricao"] != desc_obj:
+                                supabase.table("bsf_metas_plano").update({"descricao": desc_obj}).eq("id", obj_id).execute()
+                        else:
+                            supabase.table("bsf_metas_plano").insert({
+                                "beneficiario_id": beneficiario_id,
+                                "codigo": cod_objetivo,
+                                "tipo": "OBJETIVO",
+                                "descricao": desc_obj
+                            }).execute()
+                            
+                    # Processa a INICIATIVA
+                    if raw_iniciativa:
+                        desc_ini = raw_iniciativa.strip()
+                        res_ini = supabase.table("bsf_metas_plano").select("id, descricao").eq("beneficiario_id", beneficiario_id).eq("codigo", cod_iniciativa).eq("tipo", "INICIATIVA").execute()
+                        if res_ini.data:
+                            ini_id = res_ini.data[0]["id"]
+                            if res_ini.data[0]["descricao"] != desc_ini:
+                                supabase.table("bsf_metas_plano").update({"descricao": desc_ini}).eq("id", ini_id).execute()
+                        else:
+                            supabase.table("bsf_metas_plano").insert({
+                                "beneficiario_id": beneficiario_id,
+                                "codigo": cod_iniciativa,
+                                "tipo": "INICIATIVA",
+                                "descricao": desc_ini
+                            }).execute()
             except Exception as e:
                 error_msg = str(e).lower()
                 if 'pgrst204' in error_msg or 'caf' in error_msg:
