@@ -588,12 +588,16 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                         return real_col_name
             return None
 
-        col_cpf = find_col(['CPF', 'DOCUMENTO', 'DOC'])
-        col_caf = find_col(['CAF', 'DAP', 'NIS'])
-        col_nome = find_col(['NOME', 'BENEFICIARIO'])
+        # Força a busca explícita pelo documento e nome do FAMILIAR/BENEFICIÁRIO primeiro
+        col_nome = find_col(['Dados do Grupo Familiar > Nome', 'NOME_COMPLETO', 'BENEFICIARIO', 'NOME'])
+        col_cpf = find_col(['Dados do Grupo Familiar > CPF', 'CPF_BENEFICIARIO', 'CPF'])
+        col_caf = find_col(['DAP / CAF', 'CAF', 'DAP'])
+        
+        # Isola os dados do técnico para que não colidam
+        col_tec = find_col(['Nome do(a) técnico(a) responsável', 'TECNICO', 'RESPONSAVEL'])
         col_mun = find_col(['MUNICIPIO', 'CIDADE'])
-        col_com = find_col(['COMUNIDADE', 'LOCALIDADE'])
-        col_tec = find_col(['TECNICO', 'RESPONSAVEL'])
+        col_com = find_col(['Comunidade', 'LOCALIDADE'])
+        
         col_cod_plano = find_col(['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO'])
         col_objetivo = find_col(['Objetivo', 'OBJETIVO_GERAL', 'OBJETIVO'])
         col_iniciativa = find_col(['Iniciativa', 'INICIATIVA'])
