@@ -280,6 +280,10 @@
 
 <script>
 let beneficiarioIdGlobal = null;
+
+// ==========================================
+// SEÇÃO A: INICIALIZAÇÃO E VARIÁVEIS GLOBAIS
+// ==========================================
 let atvIdGlobalSalvaEdicao = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
@@ -319,6 +323,9 @@ async function carregarFiltros() {
     }
 }
 
+// ==========================================
+// SEÇÃO B: CONTROLE E IMPORTAÇÃO DE BENEFICIÁRIOS
+// ==========================================
 async function carregarBeneficiarios(page) {
     if (page) currentPage = page;
 
@@ -421,6 +428,9 @@ function renderPaginacao(page, totalPages) {
     }
 }
 
+// ==========================================
+// SEÇÃO C: CONTROLE DE ATIVIDADES E DOCUMENTOS BSF
+// ==========================================
 async function verDetalhe(id) {
     beneficiarioIdGlobal = id;
     const modalEl = document.getElementById('modalDetalhe');
@@ -1124,6 +1134,9 @@ async function excluirAtividade(atvId, benId) {
     }
 }
 
+// ==========================================
+// SEÇÃO D: METAS DO POWERBI E CATEGORIAS DINÂMICAS (CRUD)
+// ==========================================
 // --- GERENCIAMENTO DINÂMICO DE CATEGORIAS (CRUD) ---
 
 async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 'Visita') {
@@ -1321,9 +1334,6 @@ async function alternarStatusCategoria(id, statusAtual, ehDaEdicao = false, back
             abrirModalGestaoCategorias(ehDaEdicao);
         });
     }
-}
-// ----------------------------------------------------
-
 }
 </script>
 {% endblock %}
