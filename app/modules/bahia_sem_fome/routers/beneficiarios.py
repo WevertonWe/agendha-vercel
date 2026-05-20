@@ -577,6 +577,16 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 return ""
             return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
 
+        def padronizar_cpf(raw_val):
+            if not raw_val:
+                return None
+            # Remove pontos, traços, espaços e barras de forma resiliente
+            apenas_numeros = "".join(c for c in str(raw_val) if c.isdigit())
+            if not apenas_numeros:
+                return None
+            # Preenche com zeros à esquerda (padding) caso o Excel tenha cortado, fixando em 11 dígitos
+            return apenas_numeros.zfill(11)
+
         def find_col(candidates):
             cols_map = {remove_accents(str(c).strip().upper()): c for c in fieldnames if c is not None}
             for cand in candidates:
@@ -611,7 +621,9 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
             try:
                 raw_cpf = row.get(col_cpf) if col_cpf else None
                 raw_caf = row.get(col_caf) if col_caf else None
-                cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
+                
+                # Passa o dado bruto pela nova inteligência de padronização
+                cpf_limpo = padronizar_cpf(raw_cpf)
                 
                 nome = (row.get(col_nome) or "Desconhecido").strip()
                 mun = row.get(col_mun)
