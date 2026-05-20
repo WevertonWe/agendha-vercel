@@ -605,8 +605,9 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         supabase = get_supabase()
         count_novos = 0
         count_atualizados = 0
+        linhas_descartadas = [] # Guarda o motivo do descarte de cada linha
         
-        for row in linhas:
+        for idx, row in enumerate(linhas, start=2):
             try:
                 raw_cpf = row.get(col_cpf) if col_cpf else None
                 raw_caf = row.get(col_caf) if col_caf else None
@@ -622,7 +623,12 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 raw_iniciativa = row.get(col_iniciativa) if col_iniciativa else None
                 
                 if not cpf_limpo and not raw_caf:
-                    continue 
+                    linhas_descartadas.append({
+                        "linha": idx,
+                        "nome": nome,
+                        "motivo": "Linha sem CPF e sem CAF válidos no Grupo Familiar."
+                    })
+                    continue
                     
                 payload = {
                     "nome_completo": nome,
@@ -709,8 +715,19 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                         pass
                     return JSONResponse(content={"error": "O esquema do banco de dados foi atualizado. Por favor, tente novamente em 5 segundos."}, status_code=500)
                 logger.error(f"Erro na linha durante importação BSF: {e}")
+                linhas_descartadas.append({
+                    "linha": idx,
+                    "nome": nome if 'nome' in locals() else "Desconhecido",
+                    "motivo": f"Erro inesperado: {str(e)}"
+                })
                 
-        return {"message": "Importação concluída", "novos": count_novos, "atualizados": count_atualizados}
+        return {
+            "message": "Importação de beneficiários concluída",
+            "novos_inseridos": count_novos,
+            "atualizados": count_atualizados,
+            "linhas_ignoradas_count": len(linhas_descartadas),
+            "diagnostico_descartes": linhas_descartadas
+        }
     except Exception as e:
         logger.error(f"Erro importar bsf: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
