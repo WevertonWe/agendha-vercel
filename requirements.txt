@@ -21,3 +21,4 @@ pymupdf
 pdfplumber
 docxtpl
 pandas
+# openpyxl is explicitly included to ensure seamless parse processing of Excel metas in the BSF module (bahia_sem_fome) on Vercel deployment
