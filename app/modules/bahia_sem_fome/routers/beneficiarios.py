@@ -34,9 +34,101 @@ class AtividadeUpdate(BaseModel):
     data: str
     iniciativas_vinculadas: Optional[list] = None
 
+class TipoAtividadeCreate(BaseModel):
+    nome: str
+
+class TipoAtividadeUpdate(BaseModel):
+    nome: Optional[str] = None
+    ativo: Optional[bool] = None
+
 router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 
 logger = logging.getLogger(__name__)
+
+
+@router.get("/tipos-atividade")
+async def listar_tipos_atividade(somente_ativos: bool = True):
+    """Retorna a lista de tipos de atividade (ativos ou todos)."""
+    try:
+        supabase = get_supabase()
+        query = supabase.table("bsf_tipos_atividade").select("*")
+        if somente_ativos:
+            query = query.eq("ativo", True)
+        res = query.order("nome", desc=False).execute()
+        return res.data or []
+    except Exception as e:
+        logger.error(f"Erro ao listar tipos de atividade BSF: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao carregar categorias de atividades.")
+
+@router.post("/tipos-atividade")
+async def criar_tipo_atividade(dados: TipoAtividadeCreate):
+    """Cria um novo tipo de atividade."""
+    try:
+        supabase = get_supabase()
+        nome_limpo = dados.nome.strip()
+        if not nome_limpo:
+            raise HTTPException(status_code=400, detail="O nome do tipo de atividade não pode ser vazio.")
+        
+        # Verificar se já existe (mesmo inativo)
+        res_check = supabase.table("bsf_tipos_atividade").select("*").ilike("nome", nome_limpo).execute()
+        if res_check.data:
+            existente = res_check.data[0]
+            # Se estiver inativo, reativar
+            if not existente.get("ativo"):
+                res_upd = supabase.table("bsf_tipos_atividade").update({"ativo": True, "nome": nome_limpo}).eq("id", existente["id"]).execute()
+                return res_upd.data[0]
+            raise HTTPException(status_code=400, detail="Esta categoria já existe e está ativa.")
+            
+        payload = {"nome": nome_limpo, "ativo": True}
+        res = supabase.table("bsf_tipos_atividade").insert(payload).execute()
+        return res.data[0]
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao criar tipo de atividade: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao criar tipo de atividade.")
+
+@router.put("/tipos-atividade/{id}")
+async def atualizar_tipo_atividade(id: int, dados: TipoAtividadeUpdate):
+    """Atualiza o nome e/ou status ativo de um tipo de atividade."""
+    try:
+        supabase = get_supabase()
+        payload = {}
+        if dados.nome is not None:
+            nome_limpo = dados.nome.strip()
+            if not nome_limpo:
+                raise HTTPException(status_code=400, detail="O nome não pode ser vazio.")
+            payload["nome"] = nome_limpo
+        if dados.ativo is not None:
+            payload["ativo"] = dados.ativo
+            
+        if not payload:
+            raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualização.")
+            
+        res = supabase.table("bsf_tipos_atividade").update(payload).eq("id", id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Tipo de atividade não encontrado.")
+        return res.data[0]
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao atualizar tipo de atividade {id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao atualizar tipo de atividade.")
+
+@router.delete("/tipos-atividade/{id}")
+async def deletar_tipo_atividade(id: int):
+    """Soft delete: desativa a categoria de atividade no banco."""
+    try:
+        supabase = get_supabase()
+        res = supabase.table("bsf_tipos_atividade").update({"ativo": False}).eq("id", id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Tipo de atividade não encontrado.")
+        return {"status": "success", "message": "Categoria desativada com sucesso."}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao desativar tipo de atividade {id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao desativar tipo de atividade.")
 
 
 def parse_links_safe(paths, supabase, context_info: str = "") -> list:

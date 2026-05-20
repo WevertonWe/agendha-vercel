@@ -221,12 +221,14 @@
                 <input type="hidden" id="atvBeneficiarioId">
                 <div class="mb-3">
                     <label class="form-label fw-bold">Tipo de Atividade *</label>
-                    <select class="form-select" id="atvTipo">
-                        <option value="Visita">Visita</option>
-                        <option value="Caracterização">Caracterização</option>
-                        <option value="Acompanhamento">Acompanhamento</option>
-                        <option value="Outro">Outro</option>
-                    </select>
+                    <div class="input-group">
+                        <select class="form-select" id="atvTipo">
+                            <option value="">Carregando categorias...</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-secondary" onclick="abrirModalGestaoCategorias(false)" title="Gerenciar Categorias">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold">Data *</label>
@@ -250,6 +252,7 @@
 
 <script>
 let beneficiarioIdGlobal = null;
+let atvIdGlobalSalvaEdicao = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
@@ -637,8 +640,10 @@ async function obterHtmlChecklistMetas(beneficiarioId, iniciativasMarcadas = [])
 
 async function abrirModalNovaAtividade(id) {
     document.getElementById('atvBeneficiarioId').value = id;
-    document.getElementById('atvTipo').value = 'Visita';
     document.getElementById('atvData').value = new Date().toISOString().split('T')[0];
+    
+    // Carrega dinamicamente os tipos de atividade ativos no select
+    await carregarTiposAtividadeSelect('atvTipo', 'Visita');
     
     const wrapper = document.getElementById('bsf-metas-wrapper');
     if (wrapper) {
@@ -860,6 +865,8 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
         return;
     }
 
+    // Salva o id da atividade globalmente para reabrir a edição caso o usuário gerencie categorias
+    atvIdGlobalSalvaEdicao = atvId;
     const marcadas = iniciativasVinculadasStr ? iniciativasVinculadasStr.split(',') : [];
 
     const { value: formValues } = await Swal.fire({
@@ -867,12 +874,14 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
         html: `
             <div class="mb-3 text-start">
                 <label class="form-label fw-bold small">Tipo de Atividade</label>
-                <select id="swal-tipo-atividade" class="form-select">
-                    <option value="Visita" ${tipoAtual === 'Visita' ? 'selected' : ''}>Visita</option>
-                    <option value="Caracterização" ${tipoAtual === 'Caracterização' ? 'selected' : ''}>Caracterização</option>
-                    <option value="Acompanhamento" ${tipoAtual === 'Acompanhamento' ? 'selected' : ''}>Acompanhamento</option>
-                    <option value="Outro" ${tipoAtual === 'Outro' ? 'selected' : ''}>Outro</option>
-                </select>
+                <div class="input-group">
+                    <select id="swal-tipo-atividade" class="form-select">
+                        <option value="">Carregando categorias...</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary" onclick="abrirModalGestaoCategorias(true)" title="Gerenciar Categorias">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
             </div>
             <div class="mb-3 text-start">
                 <label class="form-label fw-bold small">Data da Atividade</label>
@@ -890,6 +899,33 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
         confirmButtonText: 'Salvar',
         cancelButtonText: 'Cancelar',
         didOpen: async () => {
+            // Carrega os tipos de atividade dinamicamente no select
+            const selectTipo = document.getElementById('swal-tipo-atividade');
+            if (selectTipo) {
+                try {
+                    const resTipos = await fetch('/api/bsf/beneficiarios/tipos-atividade');
+                    const tipos = await resTipos.json();
+                    selectTipo.innerHTML = '';
+                    
+                    // Caso o tipo da atividade cadastrada no banco esteja inativo ou removido, garante a exibição
+                    let tipoAtualExiste = tipos.some(t => t.nome === tipoAtual);
+                    if (!tipoAtualExiste && tipoAtual) {
+                        tipos.push({ nome: tipoAtual, ativo: true });
+                    }
+                    
+                    tipos.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.nome;
+                        opt.textContent = t.nome;
+                        if (t.nome === tipoAtual) opt.selected = true;
+                        selectTipo.appendChild(opt);
+                    });
+                } catch (errTipos) {
+                    console.error("Erro ao carregar tipos de atividade no SweetAlert:", errTipos);
+                    selectTipo.innerHTML = `<option value="${tipoAtual}">${tipoAtual}</option>`;
+                }
+            }
+
             const container = document.getElementById('bsf-metas-wrapper-edit');
             if (container) {
                 // Utiliza beneficiarioIdGlobal para a busca de metas homologada no Socratic Gate
@@ -1004,6 +1040,212 @@ async function excluirAtividade(atvId, benId) {
         });
 
         carregarArquivos(benId);
+    } catch (e) {
+        Swal.close();
+        Swal.fire('Erro!', e.message, 'error');
+    }
+}
+
+// --- GERENCIAMENTO DINÂMICO DE CATEGORIAS (CRUD) ---
+
+async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 'Visita') {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">Carregando categorias...</option>';
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/tipos-atividade');
+        const tipos = await res.json();
+        select.innerHTML = '';
+        
+        if (!tipos.length) {
+            select.innerHTML = '<option value="">Nenhuma categoria ativa</option>';
+            return;
+        }
+        
+        tipos.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.nome;
+            opt.textContent = t.nome;
+            if (t.nome === selectValue) opt.selected = true;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error("Erro ao carregar categorias no select:", e);
+        select.innerHTML = '<option value="">Erro ao carregar</option>';
+    }
+}
+
+async function abrirModalGestaoCategorias(ehDaEdicao = false) {
+    let backupEdicao = null;
+    if (ehDaEdicao) {
+        const selectTipo = document.getElementById('swal-tipo-atividade');
+        const inputData = document.getElementById('swal-data-atividade');
+        const chks = document.querySelectorAll('#bsf-metas-wrapper-edit .bsf-iniciativa-chk:checked');
+        backupEdicao = {
+            tipo: selectTipo ? selectTipo.value : '',
+            data: inputData ? inputData.value : '',
+            iniciativas: Array.from(chks).map(c => c.value).join(',')
+        };
+    }
+
+    let categorias = [];
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/tipos-atividade?somente_ativos=false');
+        categorias = await res.json();
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Erro!', 'Não foi possível carregar as categorias.', 'error');
+        return;
+    }
+
+    let listaHtml = '<div class="list-group list-group-flush mb-3 border rounded text-start" style="max-height: 250px; overflow-y: auto;">';
+    if (!categorias.length) {
+        listaHtml += '<div class="list-group-item text-center text-muted py-3 small">Nenhuma categoria cadastrada.</div>';
+    } else {
+        categorias.forEach(cat => {
+            const statusBtnClass = cat.ativo ? 'btn-success' : 'btn-secondary';
+            const statusText = cat.ativo ? 'Ativa' : 'Inativa';
+            const statusIcon = cat.ativo ? 'fa-toggle-on' : 'fa-toggle-off';
+            
+            listaHtml += `
+                <div class="list-group-item d-flex align-items-center justify-content-between py-2 px-3 small">
+                    <span class="fw-semibold text-dark flex-grow-1 text-truncate me-2">${cat.nome}</span>
+                    <div class="d-flex align-items-center gap-1">
+                        <button onclick="editarNomeCategoria(${cat.id}, '${cat.nome}', ${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})" class="btn btn-sm btn-outline-warning p-1" title="Editar nome" style="width:28px;height:28px;">
+                            <i class="fas fa-pencil-alt fa-xs"></i>
+                        </button>
+                        <button onclick="alternarStatusCategoria(${cat.id}, ${cat.ativo}, ${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})" class="btn btn-sm ${statusBtnClass} p-1" title="Status: ${statusText}" style="width:28px;height:28px;">
+                            <i class="fas ${statusIcon} fa-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    listaHtml += '</div>';
+
+    Swal.fire({
+        title: 'Gerenciar Categorias BSF',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label fw-bold small">Nova Categoria</label>
+                <div class="input-group input-group-sm">
+                    <input type="text" id="nova-categoria-nome" class="form-control" placeholder="Ex: Acompanhamento de Produção">
+                    <button type="button" class="btn btn-success text-white" onclick="salvarNovaCategoria(${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})">
+                        <i class="fas fa-plus"></i> Cadastrar
+                    </button>
+                </div>
+            </div>
+            <div class="text-start">
+                <label class="form-label fw-bold small">Categorias Cadastradas</label>
+                ${listaHtml}
+            </div>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'Fechar',
+        allowOutsideClick: false,
+        willClose: () => {
+            if (ehDaEdicao && backupEdicao && atvIdGlobalSalvaEdicao !== null) {
+                editarAtividade(atvIdGlobalSalvaEdicao, backupEdicao.tipo, backupEdicao.data, beneficiarioIdGlobal, backupEdicao.iniciativas);
+            } else {
+                carregarTiposAtividadeSelect('atvTipo', 'Visita');
+            }
+        }
+    });
+}
+
+async function salvarNovaCategoria(ehDaEdicao = false, backupEdicao = null) {
+    const input = document.getElementById('nova-categoria-nome');
+    if (!input) return;
+    const nome = input.value.trim();
+    if (!nome) {
+        Swal.showValidationMessage('Digite o nome da categoria.');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/tipos-atividade', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nome: nome })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao salvar categoria");
+        }
+
+        abrirModalGestaoCategorias(ehDaEdicao);
+    } catch (e) {
+        Swal.showValidationMessage(e.message);
+    }
+}
+
+async function editarNomeCategoria(id, nomeAtual, ehDaEdicao = false, backupEdicao = null) {
+    const { value: novoNome } = await Swal.fire({
+        title: 'Editar Nome da Categoria',
+        input: 'text',
+        inputValue: nomeAtual,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value.trim()) {
+                return 'O nome não pode ser vazio!';
+            }
+        }
+    });
+
+    if (!novoNome) {
+        abrirModalGestaoCategorias(ehDaEdicao);
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/tipos-atividade/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nome: novoNome })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao editar categoria");
+        }
+
+        abrirModalGestaoCategorias(ehDaEdicao);
+    } catch (e) {
+        Swal.fire('Erro!', e.message, 'error').then(() => {
+            abrirModalGestaoCategorias(ehDaEdicao);
+        });
+    }
+}
+
+async function alternarStatusCategoria(id, statusAtual, ehDaEdicao = false, backupEdicao = null) {
+    const novoStatus = !statusAtual;
+    
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/tipos-atividade/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ativo: novoStatus })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao atualizar status");
+        }
+
+        abrirModalGestaoCategorias(ehDaEdicao);
+    } catch (e) {
+        Swal.fire('Erro!', e.message, 'error').then(() => {
+            abrirModalGestaoCategorias(ehDaEdicao);
+        });
+    }
+}
+// ----------------------------------------------------
+
     } catch (e) {
         Swal.close();
         Swal.fire('Erro!', e.message, 'error');
