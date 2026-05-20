@@ -1168,6 +1168,14 @@ async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 
 }
 
 async function abrirModalGestaoCategorias(ehDaEdicao = false) {
+    // Remove temporariamente a imposição de foco do Bootstrap para liberar o teclado no SweetAlert2
+    if (typeof $ !== 'undefined' && $.fn && $.fn.modal && $.fn.modal.Constructor) {
+        $.fn.modal.Constructor.prototype._enforceFocus = function() {};
+    }
+    document.querySelectorAll('.modal').forEach(modalEl => {
+        modalEl.removeAttribute('tabindex');
+    });
+
     let backupEdicao = null;
     if (ehDaEdicao) {
         const selectTipo = document.getElementById('swal-tipo-atividade');
@@ -1236,7 +1244,19 @@ async function abrirModalGestaoCategorias(ehDaEdicao = false) {
         showConfirmButton: true,
         confirmButtonText: 'Fechar',
         allowOutsideClick: false,
+        didOpen: () => {
+            setTimeout(() => {
+                const inputNovo = document.getElementById('nova-categoria-nome');
+                if (inputNovo) {
+                    inputNovo.focus();
+                    inputNovo.removeAttribute('disabled');
+                }
+            }, 200);
+        },
         willClose: () => {
+            document.querySelectorAll('.modal').forEach(modalEl => {
+                modalEl.setAttribute('tabindex', '-1');
+            });
             if (ehDaEdicao && backupEdicao && atvIdGlobalSalvaEdicao !== null) {
                 editarAtividade(atvIdGlobalSalvaEdicao, backupEdicao.tipo, backupEdicao.data, beneficiarioIdGlobal, backupEdicao.iniciativas);
             } else {
