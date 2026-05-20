@@ -276,12 +276,6 @@ app.include_router(bsf_atestes.router)
 app.include_router(bsf_beneficiarios.router)
 app.include_router(bsf_views.router)
 
-print("\n🔍 ====== MAPA DE ROTAS ATIVAS NO FASTAPI ======")
-for route in app.routes:
-    if hasattr(route, "path"):
-        print(f"➡️  Rota: {route.path} | Métodos: {route.methods}")
-print("================================================\n")
-
 
 # --- Endpoint WebSocket ---
 @app.websocket("/ws")
