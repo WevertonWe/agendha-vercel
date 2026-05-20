@@ -28,6 +28,10 @@ class AtividadeCreate(BaseModel):
     tipo_atividade: str
     data: str
 
+class AtividadeUpdate(BaseModel):
+    tipo_atividade: str
+    data: str
+
 router = APIRouter(prefix="/api/bsf/beneficiarios", tags=["BSF Beneficiários"])
 
 logger = logging.getLogger(__name__)
@@ -74,13 +78,21 @@ def parse_links_safe(paths, supabase, context_info: str = "") -> list:
         if p_str.startswith("http"):
             sanitized_links.append(p_str)
         else:
-            # Assumir que é um caminho do storage. Usar try-except preventivo.
+            # Assumir que é um caminho do storage. Usar try-except preventivo com signed url.
             try:
-                public_url = supabase.storage.from_("agendha-uploads").get_public_url(p_str)
-                if public_url:
-                    sanitized_links.append(public_url)
+                # Gera uma URL assinada válida por 1 ano (31536000 segundos)
+                res_url = supabase.storage.from_("agendha-uploads").create_signed_url(p_str, 31536000)
+                url_final = res_url if isinstance(res_url, str) else res_url.get("signedUrl")
+                sanitized_links.append(url_final)
             except Exception as ex:
-                logger.warning(f"Erro preventivo ao gerar URL pública para o caminho '{p_str}' {context_info}: {ex}")
+                logger.warning(f"Erro ao gerar URL assinada para '{p_str}', usando fallback público {context_info}: {ex}")
+                # Fallback de segurança para URL pública caso o método falhe
+                try:
+                    public_url = supabase.storage.from_("agendha-uploads").get_public_url(p_str)
+                    if public_url:
+                        sanitized_links.append(public_url)
+                except Exception as ex_fallback:
+                    logger.warning(f"Erro no fallback público de '{p_str}' {context_info}: {ex_fallback}")
                 
     return sanitized_links
 
@@ -228,6 +240,40 @@ async def criar_atividade(beneficiario_id: int, dados: AtividadeCreate):
     except Exception as e:
         logger.error(f"Erro ao criar atividade: {e}")
         raise HTTPException(status_code=500, detail="Erro ao criar atividade.")
+
+@router.put("/atividades/{atividade_id}")
+async def atualizar_atividade(atividade_id: int, dados: AtividadeUpdate):
+    """Atualiza o tipo e a data da atividade específica."""
+    try:
+        supabase = get_supabase()
+        payload = {
+            "tipo_atividade": dados.tipo_atividade,
+            "data_atividade": dados.data
+        }
+        res = supabase.table("bsf_atividades").update(payload).eq("id", atividade_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+        return res.data[0]
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao atualizar atividade {atividade_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao atualizar atividade.")
+
+@router.delete("/atividades/{atividade_id}")
+async def deletar_atividade(atividade_id: int):
+    """Remove a atividade específica do banco."""
+    try:
+        supabase = get_supabase()
+        res = supabase.table("bsf_atividades").delete().eq("id", atividade_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+        return {"status": "success", "message": "Atividade removida com sucesso."}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao deletar atividade {atividade_id}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao remover atividade.")
 
 @router.post("/{beneficiario_id}/atividades/{atividade_id}/upload")
 async def upload_documento_atividade(

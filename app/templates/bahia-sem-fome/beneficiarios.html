@@ -3,6 +3,14 @@
 {% block title %}Gestão de Beneficiários - BSF{% endblock %}
 
 {% block bsf_content %}
+<style>
+.bsf-action-btn-edit:hover {
+    color: #0d6efd !important; /* text-primary */
+}
+.bsf-action-btn-delete:hover {
+    color: #dc3545 !important; /* text-danger */
+}
+</style>
 <div class="container py-4">
     <!-- Page Header -->
     <div class="text-center mb-4">
@@ -494,7 +502,7 @@ async function carregarArquivos(id) {
                     </ul>
                     <label class="btn btn-outline-primary mb-0" title="Upload">
                         <i class="fas fa-upload"></i>
-                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(beneficiarioIdGlobal, ${atv.id}, '${tipo.toLowerCase()}', this)">
+                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento('${id}', '${atv.id}', '${tipo.toLowerCase()}', this)">
                     </label>
                 </div>`;
                 return btnHtml;
@@ -503,8 +511,18 @@ async function carregarArquivos(id) {
             const dataFormatada = new Date(atv.data + 'T00:00:00').toLocaleDateString('pt-BR');
             html += `
                 <div class="list-group-item px-0 py-3">
-                    <div class="d-flex w-100 justify-content-between mb-2">
-                        <h6 class="mb-1 fw-bold">${atv.tipo_atividade}</h6>
+                    <div class="d-flex w-100 justify-content-between mb-2 align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <h6 class="mb-0 fw-bold">${atv.tipo_atividade}</h6>
+                            <span class="d-flex gap-2">
+                                <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-edit" onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}')" title="Editar atividade" style="transition: color 0.2s;">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button class="btn btn-link btn-sm p-0 text-muted bsf-action-btn-delete" onclick="excluirAtividade('${atv.id}', '${id}')" title="Excluir atividade" style="transition: color 0.2s;">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </span>
+                        </div>
                         <small class="text-muted">${dataFormatada}</small>
                     </div>
                     <div class="d-flex flex-wrap">
@@ -788,6 +806,142 @@ async function salvarNovoBeneficiario() {
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
+    }
+}
+
+async function editarAtividade(atvId, tipoAtual, dataAtual, benId) {
+    if (typeof Swal === 'undefined') {
+        console.error("SweetAlert2 não carregado!");
+        return;
+    }
+
+    const { value: formValues } = await Swal.fire({
+        title: 'Editar Atividade',
+        html: `
+            <div class="mb-3 text-start">
+                <label class="form-label fw-bold small">Tipo de Atividade</label>
+                <select id="swal-tipo-atividade" class="form-select">
+                    <option value="Visita" ${tipoAtual === 'Visita' ? 'selected' : ''}>Visita</option>
+                    <option value="Caracterização" ${tipoAtual === 'Caracterização' ? 'selected' : ''}>Caracterização</option>
+                    <option value="Acompanhamento" ${tipoAtual === 'Acompanhamento' ? 'selected' : ''}>Acompanhamento</option>
+                    <option value="Outro" ${tipoAtual === 'Outro' ? 'selected' : ''}>Outro</option>
+                </select>
+            </div>
+            <div class="mb-3 text-start">
+                <label class="form-label fw-bold small">Data da Atividade</label>
+                <input id="swal-data-atividade" type="date" class="form-select" value="${dataAtual}">
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Salvar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const tipo = document.getElementById('swal-tipo-atividade').value;
+            const data = document.getElementById('swal-data-atividade').value;
+            if (!tipo || !data) {
+                Swal.showValidationMessage('Ambos os campos são obrigatórios');
+                return false;
+            }
+            return { tipo_atividade: tipo, data: data };
+        }
+    });
+
+    if (!formValues) return;
+
+    Swal.fire({
+        title: 'Salvando alterações...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/atividades/${atvId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(formValues)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao atualizar atividade");
+        }
+
+        Swal.close();
+        Swal.fire({
+            icon: 'success',
+            title: 'Salvo!',
+            text: 'Atividade atualizada com sucesso.',
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        carregarArquivos(benId);
+    } catch (e) {
+        Swal.close();
+        Swal.fire('Erro!', e.message, 'error');
+    }
+}
+
+async function excluirAtividade(atvId, benId) {
+    if (typeof Swal === 'undefined') {
+        console.error("SweetAlert2 não carregado!");
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: 'Confirmar exclusão?',
+        text: "Esta atividade e todos os seus anexos serão removidos permanentemente.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+        title: 'Excluindo...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    try {
+        const res = await fetch(`/api/bsf/beneficiarios/atividades/${atvId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Erro ao excluir atividade");
+        }
+
+        Swal.close();
+        Swal.fire({
+            icon: 'success',
+            title: 'Excluído!',
+            text: 'Atividade excluída com sucesso.',
+            timer: 1500,
+            showConfirmButton: false
+        });
+
+        carregarArquivos(benId);
+    } catch (e) {
+        Swal.close();
+        Swal.fire('Erro!', e.message, 'error');
     }
 }
 </script>
