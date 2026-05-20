@@ -490,10 +490,18 @@ async function verDetalhe(id) {
             <div id="docsContainer" class="mt-2">
                 <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
             </div>
+            <div class="card mt-3 shadow-sm border-start border-info border-4">
+                <div class="card-header bg-white fw-bold d-flex align-items-center">
+                    <i class="fas fa-project-diagram text-info me-2"></i> Plano Produtivo Individual (PowerBI)
+                </div>
+                <div class="card-body bg-light" id="bsf-plano-detalhado-container" style="max-height: 350px; overflow-y: auto;">
+                </div>
+            </div>
         `;
 
         // Load file associations
         carregarArquivos(id);
+        carregarPlanoProdutivo(id);
 
     } catch (e) {
         body.innerHTML = '<p class="text-danger">Erro ao carregar detalhes.</p>';
@@ -879,14 +887,49 @@ async function importarPlanilhaMetas() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro na importação de metas.");
         
-        if (typeof ui !== 'undefined') {
+        modalImportacaoMetasInst?.hide();
+        carregarBeneficiarios(1);
+
+        let warningsHtml = '';
+        if (data.warnings && data.warnings.length > 0) {
+            warningsHtml = `
+            <div class="mt-3 text-start">
+                <div class="alert alert-warning py-2 mb-2 small fw-bold">
+                    <i class="fas fa-exclamation-triangle me-1"></i> Linhas ignoradas/com avisos (${data.warnings.length}):
+                </div>
+                <div style="max-height: 150px; overflow-y: auto;" class="border rounded p-2 bg-light font-monospace small">
+            `;
+            data.warnings.forEach(w => {
+                warningsHtml += `
+                <div class="mb-1 border-bottom pb-1">
+                    <strong>Linha ${w.linha}:</strong> Código <span class="badge bg-secondary">${w.codigo || '-'}</span> - <span class="text-danger">${w.erro || 'Beneficiário não cadastrado'}</span>
+                </div>`;
+            });
+            warningsHtml += `
+                </div>
+            </div>`;
+        }
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: data.warnings && data.warnings.length > 0 ? 'warning' : 'success',
+                title: 'Importação de Metas Concluída',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-1"><strong>Metas inseridas/atualizadas:</strong> ${data.metas_inseridas || 0}</p>
+                        <p class="mb-0"><strong>Beneficiários com plano atualizado:</strong> ${data.beneficiarios_atualizados || 0}</p>
+                    </div>
+                    ${warningsHtml}
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#0dcaf0'
+            });
+        } else if (typeof ui !== 'undefined') {
             ui.feedbackSucesso(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas para ${data.beneficiarios_atualizados} beneficiários.`);
         } else {
             alert(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas.`);
         }
         
-        modalImportacaoMetasInst?.hide();
-        carregarBeneficiarios(1);
     } catch(e) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
         else alert(e.message);
@@ -1208,6 +1251,166 @@ async function cadastrarCategoriaInline(ehDaEdicao = false) {
     } catch (e) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
         else alert(e.message);
+    }
+}
+
+async function carregarPlanoProdutivo(beneficiarioId) {
+    const container = document.getElementById('bsf-plano-detalhado-container');
+    if (!container) {
+        console.error("bsf-plano-detalhado-container não encontrado no DOM!");
+        return;
+    }
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+            <p class="text-muted small mt-2">Carregando plano produtivo...</p>
+        </div>`;
+    
+    try {
+        const timestamp = new Date().getTime();
+        const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas?_=${timestamp}`);
+        if (!res.ok) throw new Error("Erro ao carregar as metas do plano");
+        
+        const metas = await res.json();
+        
+        if (!metas || metas.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-clipboard-list fa-2x mb-2 text-secondary"></i>
+                    <p class="mb-0 small">Nenhum plano produtivo individual importado para este beneficiário.</p>
+                </div>`;
+            return;
+        }
+        
+        const objetivos = [];
+        const objetivosMap = {};
+        const iniciativasOrfas = [];
+        
+        metas.forEach(meta => {
+            if (meta.tipo === 'OBJETIVO') {
+                const obj = { ...meta, iniciativas: [] };
+                objetivos.push(obj);
+                objetivosMap[meta.codigo] = obj;
+            }
+        });
+        
+        metas.forEach(meta => {
+            if (meta.tipo === 'INICIATIVA') {
+                const parentCode = meta.codigo.split('.').slice(0, -1).join('.');
+                if (objetivosMap[parentCode]) {
+                    objetivosMap[parentCode].iniciativas.push(meta);
+                } else {
+                    let currentParent = parentCode;
+                    let found = false;
+                    while (currentParent.includes('.')) {
+                        if (objetivosMap[currentParent]) {
+                            objetivosMap[currentParent].iniciativas.push(meta);
+                            found = true;
+                            break;
+                        }
+                        currentParent = currentParent.split('.').slice(0, -1).join('.');
+                    }
+                    if (!found) {
+                        const match = objetivos.find(o => meta.codigo.startsWith(o.codigo + '.'));
+                        if (match) {
+                            match.iniciativas.push(meta);
+                        } else {
+                            iniciativasOrfas.push(meta);
+                        }
+                    }
+                }
+            }
+        });
+        
+        let htmlContent = '';
+        
+        objetivos.forEach(obj => {
+            htmlContent += `
+            <div class="mb-3 border-bottom pb-2">
+                <div class="d-flex align-items-start mb-2">
+                    <span class="badge bg-dark text-white me-2 fw-semibold px-2 py-1" style="font-size: 0.75rem;">${obj.codigo}</span>
+                    <strong class="text-dark small d-block" style="line-height: 1.4;">${obj.descricao}</strong>
+                </div>
+            `;
+            
+            if (obj.iniciativas && obj.iniciativas.length > 0) {
+                obj.iniciativas.forEach(init => {
+                    let tarefaHtml = '';
+                    if (init.tarefa && init.tarefa.trim() !== '') {
+                        tarefaHtml = `
+                        <div class="bg-light text-muted p-2 rounded border-start border-secondary small mt-2">
+                            <i class="fas fa-tasks me-2"></i><strong>Tarefa:</strong> ${init.tarefa}
+                        </div>`;
+                    }
+                    
+                    let comoFazerHtml = '';
+                    if (init.como_fazer && init.como_fazer.trim() !== '') {
+                        comoFazerHtml = `
+                        <div class="bg-success-subtle text-success p-2 rounded small mt-1">
+                            <i class="far fa-lightbulb text-success me-2"></i><strong>Como Fazer:</strong> ${init.como_fazer}
+                        </div>`;
+                    }
+                    
+                    htmlContent += `
+                    <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
+                        <div class="small"><span class="fw-bold text-info me-1">${init.codigo}</span> - ${init.descricao}</div>
+                        ${tarefaHtml}
+                        ${comoFazerHtml}
+                    </div>`;
+                });
+            } else {
+                htmlContent += `
+                <div class="ms-3 text-muted small py-1">
+                    Nenhuma iniciativa vinculada a este objetivo.
+                </div>`;
+            }
+            
+            htmlContent += `</div>`;
+        });
+        
+        if (iniciativasOrfas.length > 0) {
+            htmlContent += `
+            <div class="mb-3 border-bottom pb-2">
+                <div class="d-flex align-items-start mb-2">
+                    <span class="badge bg-secondary text-white me-2 fw-semibold px-2 py-1" style="font-size: 0.75rem;">Outros</span>
+                    <strong class="text-dark small d-block" style="line-height: 1.4;">Outras Iniciativas Importadas</strong>
+                </div>
+            `;
+            iniciativasOrfas.forEach(init => {
+                let tarefaHtml = '';
+                if (init.tarefa && init.tarefa.trim() !== '') {
+                    tarefaHtml = `
+                    <div class="bg-light text-muted p-2 rounded border-start border-secondary small mt-2">
+                        <i class="fas fa-tasks me-2"></i><strong>Tarefa:</strong> ${init.tarefa}
+                    </div>`;
+                }
+                
+                let comoFazerHtml = '';
+                if (init.como_fazer && init.como_fazer.trim() !== '') {
+                    comoFazerHtml = `
+                    <div class="bg-success-subtle text-success p-2 rounded small mt-1">
+                        <i class="far fa-lightbulb text-success me-2"></i><strong>Como Fazer:</strong> ${init.como_fazer}
+                    </div>`;
+                }
+                
+                htmlContent += `
+                <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
+                    <div class="small"><span class="fw-bold text-info me-1">${init.codigo}</span> - ${init.descricao}</div>
+                    ${tarefaHtml}
+                    ${comoFazerHtml}
+                </div>`;
+            });
+            htmlContent += `</div>`;
+        }
+        
+        container.innerHTML = htmlContent;
+    } catch (e) {
+        console.error("Erro em carregarPlanoProdutivo:", e);
+        container.innerHTML = `
+            <div class="text-danger small text-center py-4">
+                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                <p class="mb-0">Erro ao carregar o plano produtivo individual.</p>
+            </div>`;
     }
 }
 </script>

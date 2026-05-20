@@ -333,7 +333,9 @@ async def listar_metas_beneficiario(beneficiario_id: int):
                 "beneficiario_id": m.get("beneficiario_id") or 0,
                 "codigo": m.get("codigo") or "",
                 "tipo": m.get("tipo") or "",
-                "descricao": m.get("descricao") or ""
+                "descricao": m.get("descricao") or "",
+                "tarefa": m.get("tarefa") or "",
+                "como_fazer": m.get("como_fazer") or ""
             })
         
         # Ordenação natural pelo código
@@ -774,11 +776,19 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
         if not col_codigo:
             return JSONResponse(content={"error": "Coluna de código de plano/metas não encontrada na planilha."}, status_code=400)
 
+        # Colunas adicionais usando find_col de forma resiliente
+        col_cpf = find_col(['CPF', 'DOCUMENTO', 'DOC', 'CPF_BENEFICIARIO'])
+        col_nome = find_col(['NOME', 'BENEFICIARIO', 'NOME COMPLETO', 'NOME_BENEFICIARIO'])
+        col_tarefa = find_col(['TAREFA', 'ATIVIDADE_TAREFA', 'TAREFA_DESCRICAO'])
+        col_como_fazer = find_col(['COMO FAZER', 'COMO_FAZER', 'METODO', 'ACAO'])
+
         supabase = get_supabase()
         count_metas_inseridas = 0
         beneficiarios_limpos = set()
+        warnings = []
         
-        for row in linhas:
+        for line_num, row in enumerate(linhas, start=2):
+            raw_codigo_str = "N/A"
             try:
                 raw_codigo = row.get(col_codigo)
                 if not raw_codigo:
@@ -791,15 +801,6 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
                 
                 codigo_plano_extraido = partes[0].strip()
                 
-                # Procura descrição de forma extremamente flexível baseada em aproximação de colunas candidatas
-                raw_descricao = None
-                colunas_descricao = ['OBJETIVO', 'INICIATIVA', 'TAREFA', 'COMO FAZER', 'DESCRICAO', 'TEXTO', 'META']
-                for cand in colunas_descricao:
-                    col_cand = find_col([cand])
-                    if col_cand and row.get(col_cand):
-                        raw_descricao = str(row.get(col_cand)).strip()
-                        break
-                
                 # Classifica o Tipo (um ponto = OBJETIVO; dois pontos = INICIATIVA)
                 pontos = raw_codigo_str.count('.')
                 if pontos == 1:
@@ -809,33 +810,85 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
                 else:
                     continue
                 
-                # Busca o ID real do beneficiário pelo codigo_plano
-                res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
-                if not res_ben.data:
+                # Extração resiliente de dados do beneficiário
+                raw_cpf = row.get(col_cpf) if col_cpf else None
+                cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
+                raw_nome = row.get(col_nome) if col_nome else None
+                nome_limpo = raw_nome.strip() if raw_nome else None
+                
+                beneficiario_id = None
+                
+                # 1. Match por CPF primeiro (se fornecido)
+                if cpf_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").eq("cpf", cpf_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # 2. Match por Nome Completo segundo (case-insensitive)
+                if not beneficiario_id and nome_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").ilike("nome_completo", nome_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # 3. Match por codigo_plano atual
+                if not beneficiario_id and codigo_plano_extraido:
+                    res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # Se não encontrado por nenhuma das formas:
+                if not beneficiario_id:
+                    warnings.append({
+                        "linha": line_num,
+                        "codigo": raw_codigo_str,
+                        "erro": f"Beneficiário não encontrado para CPF: {raw_cpf or 'N/A'}, Nome: {raw_nome or 'N/A'}, Código do Plano: {codigo_plano_extraido}."
+                    })
                     continue
                 
-                beneficiario_id = res_ben.data[0]["id"]
+                # Atualizar o codigo_plano na tabela beneficiarios com a parte puramente numérica
+                if codigo_plano_extraido:
+                    supabase.table("beneficiarios").update({"codigo_plano": codigo_plano_extraido}).eq("id", beneficiario_id).execute()
                 
                 # Sobrescrita exclusiva: limpa as metas na primeira aparição do beneficiário
                 if beneficiario_id not in beneficiarios_limpos:
                     supabase.table("bsf_metas_plano").delete().eq("beneficiario_id", beneficiario_id).execute()
                     beneficiarios_limpos.add(beneficiario_id)
                 
+                # Procura descrição de forma flexível de acordo com o tipo
+                raw_descricao = None
+                colunas_descricao = ['OBJETIVO', 'INICIATIVA', 'DESCRICAO', 'TEXTO', 'META']
+                for cand in colunas_descricao:
+                    col_cand = find_col([cand])
+                    if col_cand and row.get(col_cand):
+                        raw_descricao = str(row.get(col_cand)).strip()
+                        break
+                
+                raw_tarefa = str(row.get(col_tarefa)).strip() if col_tarefa and row.get(col_tarefa) else None
+                raw_como_fazer = str(row.get(col_como_fazer)).strip() if col_como_fazer and row.get(col_como_fazer) else None
+                
                 # Insere a nova meta limpa
                 payload_meta = {
                     "beneficiario_id": beneficiario_id,
                     "codigo": raw_codigo_str,
                     "tipo": tipo,
-                    "descricao": raw_descricao or ""
+                    "descricao": raw_descricao or "",
+                    "tarefa": raw_tarefa or "",
+                    "como_fazer": raw_como_fazer or ""
                 }
                 supabase.table("bsf_metas_plano").insert(payload_meta).execute()
                 count_metas_inseridas += 1
                 
             except Exception as e:
-                logger.error(f"Erro ao processar linha de metas: {e}")
+                logger.error(f"Erro ao processar linha de metas {line_num}: {e}")
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": raw_codigo_str,
+                    "erro": f"Erro inesperado: {str(e)}"
+                })
                 
         return {
             "message": "Importação de metas concluída com sucesso",
+            "warnings": warnings,
             "metas_inseridas": count_metas_inseridas,
             "beneficiarios_atualizados": len(beneficiarios_limpos)
         }
