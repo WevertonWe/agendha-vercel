@@ -249,13 +249,12 @@
                 <input type="hidden" id="atvBeneficiarioId">
                 <div class="mb-3">
                     <label class="form-label fw-bold">Tipo de Atividade *</label>
-                    <div class="input-group">
-                        <select class="form-select" id="atvTipo">
-                            <option value="">Carregando categorias...</option>
-                        </select>
-                        <button type="button" class="btn btn-outline-secondary" onclick="abrirModalGestaoCategorias(false)" title="Gerenciar Categorias">
-                            <i class="fas fa-cog"></i>
-                        </button>
+                    <select class="form-select" id="atvTipo">
+                        <option value="">Carregando categorias...</option>
+                    </select>
+                    <div class="mt-2 d-flex gap-1">
+                        <input type="text" id="input-nova-categoria-inline" class="form-control form-control-sm" placeholder="Nova categoria...">
+                        <button type="button" class="btn btn-sm btn-dark" onclick="cadastrarCategoriaInline(false)">+</button>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -963,13 +962,12 @@ async function editarAtividade(atvId, tipoAtual, dataAtual, benId, iniciativasVi
         html: `
             <div class="mb-3 text-start">
                 <label class="form-label fw-bold small">Tipo de Atividade</label>
-                <div class="input-group">
-                    <select id="swal-tipo-atividade" class="form-select">
-                        <option value="">Carregando categorias...</option>
-                    </select>
-                    <button type="button" class="btn btn-outline-secondary" onclick="abrirModalGestaoCategorias(true)" title="Gerenciar Categorias">
-                        <i class="fas fa-cog"></i>
-                    </button>
+                <select id="swal-tipo-atividade" class="form-select">
+                    <option value="">Carregando categorias...</option>
+                </select>
+                <div class="mt-2 d-flex gap-1">
+                    <input type="text" id="input-nova-categoria-inline-edit" class="form-control form-control-sm" placeholder="Nova categoria...">
+                    <button type="button" class="btn btn-sm btn-dark" onclick="cadastrarCategoriaInline(true)">+</button>
                 </div>
             </div>
             <div class="mb-3 text-start">
@@ -1174,111 +1172,15 @@ async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 
     }
 }
 
-async function abrirModalGestaoCategorias(ehDaEdicao = false) {
-    // Remove temporariamente a imposição de foco do Bootstrap para liberar o teclado no SweetAlert2
-    if (typeof $ !== 'undefined' && $.fn && $.fn.modal && $.fn.modal.Constructor) {
-        $.fn.modal.Constructor.prototype._enforceFocus = function() {};
-    }
-    document.querySelectorAll('.modal').forEach(modalEl => {
-        modalEl.removeAttribute('tabindex');
-    });
-
-    let backupEdicao = null;
-    if (ehDaEdicao) {
-        const selectTipo = document.getElementById('swal-tipo-atividade');
-        const inputData = document.getElementById('swal-data-atividade');
-        const chks = document.querySelectorAll('#bsf-metas-wrapper-edit .bsf-iniciativa-chk:checked');
-        backupEdicao = {
-            tipo: selectTipo ? selectTipo.value : '',
-            data: inputData ? inputData.value : '',
-            iniciativas: Array.from(chks).map(c => c.value).join(',')
-        };
-    }
-
-    let categorias = [];
-    try {
-        const res = await fetch('/api/bsf/beneficiarios/tipos-atividade?somente_ativos=false');
-        categorias = await res.json();
-    } catch (e) {
-        console.error(e);
-        Swal.fire('Erro!', 'Não foi possível carregar as categorias.', 'error');
-        return;
-    }
-
-    let listaHtml = '<div class="list-group list-group-flush mb-3 border rounded text-start" style="max-height: 250px; overflow-y: auto;">';
-    if (!categorias.length) {
-        listaHtml += '<div class="list-group-item text-center text-muted py-3 small">Nenhuma categoria cadastrada.</div>';
-    } else {
-        categorias.forEach(cat => {
-            const statusBtnClass = cat.ativo ? 'btn-success' : 'btn-secondary';
-            const statusText = cat.ativo ? 'Ativa' : 'Inativa';
-            const statusIcon = cat.ativo ? 'fa-toggle-on' : 'fa-toggle-off';
-            
-            listaHtml += `
-                <div class="list-group-item d-flex align-items-center justify-content-between py-2 px-3 small">
-                    <span class="fw-semibold text-dark flex-grow-1 text-truncate me-2">${cat.nome}</span>
-                    <div class="d-flex align-items-center gap-1">
-                        <button onclick="editarNomeCategoria(${cat.id}, '${cat.nome}', ${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})" class="btn btn-sm btn-outline-warning p-1" title="Editar nome" style="width:28px;height:28px;">
-                            <i class="fas fa-pencil-alt fa-xs"></i>
-                        </button>
-                        <button onclick="alternarStatusCategoria(${cat.id}, ${cat.ativo}, ${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})" class="btn btn-sm ${statusBtnClass} p-1" title="Status: ${statusText}" style="width:28px;height:28px;">
-                            <i class="fas ${statusIcon} fa-xs"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-    }
-    listaHtml += '</div>';
-
-    Swal.fire({
-        title: 'Gerenciar Categorias BSF',
-        html: `
-            <div class="mb-3 text-start">
-                <label class="form-label fw-bold small">Nova Categoria</label>
-                <div class="input-group input-group-sm">
-                    <input type="text" id="nova-categoria-nome" class="form-control" placeholder="Ex: Acompanhamento de Produção">
-                    <button type="button" class="btn btn-success text-white" onclick="salvarNovaCategoria(${ehDaEdicao}, ${backupEdicao ? JSON.stringify(backupEdicao).replace(/"/g, '&quot;') : 'null'})">
-                        <i class="fas fa-plus"></i> Cadastrar
-                    </button>
-                </div>
-            </div>
-            <div class="text-start">
-                <label class="form-label fw-bold small">Categorias Cadastradas</label>
-                ${listaHtml}
-            </div>
-        `,
-        showConfirmButton: true,
-        confirmButtonText: 'Fechar',
-        allowOutsideClick: false,
-        didOpen: () => {
-            setTimeout(() => {
-                const inputNovo = document.getElementById('nova-categoria-nome');
-                if (inputNovo) {
-                    inputNovo.focus();
-                    inputNovo.removeAttribute('disabled');
-                }
-            }, 200);
-        },
-        willClose: () => {
-            document.querySelectorAll('.modal').forEach(modalEl => {
-                modalEl.setAttribute('tabindex', '-1');
-            });
-            if (ehDaEdicao && backupEdicao && atvIdGlobalSalvaEdicao !== null) {
-                editarAtividade(atvIdGlobalSalvaEdicao, backupEdicao.tipo, backupEdicao.data, beneficiarioIdGlobal, backupEdicao.iniciativas);
-            } else {
-                carregarTiposAtividadeSelect('atvTipo', 'Visita');
-            }
-        }
-    });
-}
-
-async function salvarNovaCategoria(ehDaEdicao = false, backupEdicao = null) {
-    const input = document.getElementById('nova-categoria-nome');
+async function cadastrarCategoriaInline(ehDaEdicao = false) {
+    const inputId = ehDaEdicao ? 'input-nova-categoria-inline-edit' : 'input-nova-categoria-inline';
+    const input = document.getElementById(inputId);
     if (!input) return;
+    
     const nome = input.value.trim();
     if (!nome) {
-        Swal.showValidationMessage('Digite o nome da categoria.');
+        if (typeof ui !== 'undefined') ui.feedbackErro("Digite o nome da categoria.");
+        else alert("Digite o nome da categoria.");
         return;
     }
 
@@ -1294,72 +1196,18 @@ async function salvarNovaCategoria(ehDaEdicao = false, backupEdicao = null) {
             throw new Error(err.detail || "Erro ao salvar categoria");
         }
 
-        abrirModalGestaoCategorias(ehDaEdicao);
-    } catch (e) {
-        Swal.showValidationMessage(e.message);
-    }
-}
-
-async function editarNomeCategoria(id, nomeAtual, ehDaEdicao = false, backupEdicao = null) {
-    const { value: novoNome } = await Swal.fire({
-        title: 'Editar Nome da Categoria',
-        input: 'text',
-        inputValue: nomeAtual,
-        showCancelButton: true,
-        confirmButtonText: 'Salvar',
-        cancelButtonText: 'Cancelar',
-        inputValidator: (value) => {
-            if (!value.trim()) {
-                return 'O nome não pode ser vazio!';
-            }
+        input.value = '';
+        if (typeof ui !== 'undefined') ui.feedbackSucesso("Categoria cadastrada!");
+        
+        // Atualiza a lista na hora com a nova categoria selecionada
+        if (ehDaEdicao) {
+            await carregarTiposAtividadeSelect('swal-tipo-atividade', nome);
+        } else {
+            await carregarTiposAtividadeSelect('atvTipo', nome);
         }
-    });
-
-    if (!novoNome) {
-        abrirModalGestaoCategorias(ehDaEdicao);
-        return;
-    }
-
-    try {
-        const res = await fetch(`/api/bsf/beneficiarios/tipos-atividade/${id}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ nome: novoNome })
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Erro ao editar categoria");
-        }
-
-        abrirModalGestaoCategorias(ehDaEdicao);
     } catch (e) {
-        Swal.fire('Erro!', e.message, 'error').then(() => {
-            abrirModalGestaoCategorias(ehDaEdicao);
-        });
-    }
-}
-
-async function alternarStatusCategoria(id, statusAtual, ehDaEdicao = false, backupEdicao = null) {
-    const novoStatus = !statusAtual;
-    
-    try {
-        const res = await fetch(`/api/bsf/beneficiarios/tipos-atividade/${id}`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ ativo: novoStatus })
-        });
-
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.detail || "Erro ao atualizar status");
-        }
-
-        abrirModalGestaoCategorias(ehDaEdicao);
-    } catch (e) {
-        Swal.fire('Erro!', e.message, 'error').then(() => {
-            abrirModalGestaoCategorias(ehDaEdicao);
-        });
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+        else alert(e.message);
     }
 }
 </script>
