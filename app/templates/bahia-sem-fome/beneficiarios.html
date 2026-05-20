@@ -236,6 +236,7 @@
 </div>
 
 <script>
+let beneficiarioIdGlobal = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
@@ -376,6 +377,7 @@ function renderPaginacao(page, totalPages) {
 }
 
 async function verDetalhe(id) {
+    beneficiarioIdGlobal = id;
     const modalEl = document.getElementById('modalDetalhe');
     const body = document.getElementById('modalDetalheBody');
     body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
@@ -492,7 +494,7 @@ async function carregarArquivos(id) {
                     </ul>
                     <label class="btn btn-outline-primary mb-0" title="Upload">
                         <i class="fas fa-upload"></i>
-                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(${id}, ${atv.id}, '${tipo.toLowerCase()}', this)">
+                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento(beneficiarioIdGlobal, ${atv.id}, '${tipo.toLowerCase()}', this)">
                     </label>
                 </div>`;
                 return btnHtml;
@@ -526,7 +528,7 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
     
     if (file.type !== "application/pdf") {
         if (typeof ui !== 'undefined') ui.feedbackErro("Apenas PDFs permitidos.");
-        else alert("Apenas PDFs permitidos.");
+        else console.error("Apenas PDFs permitidos.");
         return;
     }
     
@@ -548,16 +550,25 @@ async function fazerUploadDocumento(benId, atvId, tipo, input) {
             throw new Error(err.detail || "Erro no upload");
         }
         
-        if (typeof ui !== 'undefined') ui.feedbackSucesso("Sucesso! Documento anexado à atividade.");
-        else alert("Sucesso! Documento anexado à atividade.");
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Sucesso!',
+                text: 'Documento anexado com sucesso.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        } else if (typeof ui !== 'undefined') {
+            ui.feedbackSucesso("Documento anexado com sucesso.");
+        }
         
         // BSF Dropdown Injection: Executa o recarregamento imediato dos dados do beneficiário
         // limpando o container e redesenhando o dropdown com as novas URLs assinadas.
-        carregarArquivos(benId);
+        carregarArquivos(beneficiarioIdGlobal);
     } catch (e) {
         if (typeof ui !== 'undefined') ui.esconderLoading();
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
-        else alert(e.message);
+        else console.error(e.message);
     }
 }
 
