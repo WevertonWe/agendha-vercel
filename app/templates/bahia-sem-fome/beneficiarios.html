@@ -1140,30 +1140,35 @@ async function excluirAtividade(atvId, benId) {
 // --- GERENCIAMENTO DINÂMICO DE CATEGORIAS (CRUD) ---
 
 async function carregarTiposAtividadeSelect(selectId = 'atvTipo', selectValue = 'Visita') {
-    const select = document.getElementById(selectId);
-    if (!select) return;
-    select.innerHTML = '<option value="">Carregando categorias...</option>';
+    const selectEl = document.getElementById(selectId);
+    if (!selectEl) return;
+    selectEl.innerHTML = '<option value="">Carregando categorias...</option>';
     
     try {
-        const res = await fetch('/api/bsf/beneficiarios/tipos-atividade');
-        const tipos = await res.json();
-        select.innerHTML = '';
+        const response = await fetch('/api/bsf/beneficiarios/tipos-atividade?somente_ativos=true');
+        if (!response.ok) throw new Error("Erro ao buscar tipos de atividade");
+        const dados = await response.json();
+        
+        // Garante que se 'dados' não for um array, o script não quebra
+        const tipos = Array.isArray(dados) ? dados : (dados.tipos || []);
+        
+        selectEl.innerHTML = '';
         
         if (!tipos.length) {
-            select.innerHTML = '<option value="">Nenhuma categoria ativa</option>';
+            selectEl.innerHTML = '<option value="">Nenhuma categoria ativa</option>';
             return;
         }
         
-        tipos.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.nome;
-            opt.textContent = t.nome;
-            if (t.nome === selectValue) opt.selected = true;
-            select.appendChild(opt);
+        tipos.forEach(tipo => {
+            const option = document.createElement('option');
+            option.value = tipo.nome;
+            option.textContent = tipo.nome;
+            if (tipo.nome === selectValue) option.selected = true;
+            selectEl.appendChild(option);
         });
     } catch (e) {
         console.error("Erro ao carregar categorias no select:", e);
-        select.innerHTML = '<option value="">Erro ao carregar</option>';
+        selectEl.innerHTML = '<option value="">Erro ao carregar</option>';
     }
 }
 
