@@ -1118,8 +1118,12 @@ async def vincular_codigos_plano(file: UploadFile = File(...)):
                 continue
                 
             raw_codigo_str = str(raw_codigo).strip()
-            # Extrair a parte base numérica do código do plano (ex: 31646.1.1 -> 31646)
-            codigo_plano_extraido = raw_codigo_str.split('.')[0].strip()
+            # Extrair os dois primeiros segmentos separados por ponto (ex: 31646.6.1 -> 31646.6)
+            partes = raw_codigo_str.split('.')
+            if len(partes) >= 2:
+                codigo_plano_extraido = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_plano_extraido = raw_codigo_str
             if not codigo_plano_extraido:
                 continue
                 
