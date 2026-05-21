@@ -538,8 +538,18 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         
         if filename.endswith('.xlsx'):
             import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-            sheet = wb.active
+            from zipfile import BadZipFile
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+                sheet = wb.active
+            except BadZipFile as bz:
+                logger.error(f"❌ [INVESTIGAÇÃO] Arquivo XLSX corrompido fisicamente: {bz}")
+                print(f"❌ [INVESTIGAÇÃO] XLSX CORROMPIDO ZIP: {bz}")
+                return JSONResponse(content={"error": f"Arquivo Excel corrompido (Zip inválido): {str(bz)}"}, status_code=400)
+            except Exception as ex:
+                logger.error(f"❌ [INVESTIGAÇÃO] Erro desconhecido no parser XLSX: {ex}")
+                print(f"❌ [INVESTIGAÇÃO] PARSER XLSX FALHOU: {ex}")
+                return JSONResponse(content={"error": f"Erro ao ler Excel: {str(ex)}"}, status_code=400)
             
             # Pegando cabeçalhos na primeira linha
             headers = [cell.value for cell in sheet[1]]
@@ -560,17 +570,34 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
             return JSONResponse(content={"error": "Formato .xls legado não suportado. Use .xlsx ou .csv."}, status_code=400)
             
         else:
-            decoded = content.decode('utf-8-sig')
-            sniffer = csv.Sniffer()
             try:
-                dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
-                delimiter = dialect.delimiter
-            except csv.Error:
-                delimiter = ';' if ';' in decoded[:100] else ','
+                decoded = content.decode('utf-8-sig')
+            except UnicodeDecodeError as ude:
+                logger.error(f"❌ [INVESTIGAÇÃO] Erro de decodificação UTF-8 no CSV: {ude}")
+                print(f"❌ [INVESTIGAÇÃO] UTF-8 DECODE FAILED: {ude}")
+                # Tenta decodificar em ISO-8859-1 como fallback de segurança
+                try:
+                    decoded = content.decode('iso-8859-1')
+                    logger.warning("🔍 [INVESTIGAÇÃO] Fallback para decodificação ISO-8859-1 obteve sucesso.")
+                except Exception as fallback_err:
+                    return JSONResponse(content={"error": f"Erro de codificação de caracteres no CSV: {str(ude)}"}, status_code=400)
+                    
+            try:
+                sniffer = csv.Sniffer()
+                try:
+                    dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+                    delimiter = dialect.delimiter
+                except csv.Error as ce:
+                    logger.warning(f"⚠️ [INVESTIGAÇÃO] Sniffer falhou em detectar delimitador, usando delimitador de segurança: {ce}")
+                    delimiter = ';' if ';' in decoded[:100] else ','
                 
-            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
-            linhas = list(csv_reader)
-            fieldnames = csv_reader.fieldnames or []
+                csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+                linhas = list(csv_reader)
+                fieldnames = csv_reader.fieldnames or []
+            except csv.Error as csv_err:
+                logger.error(f"❌ [INVESTIGAÇÃO] Falha estrutural no processador CSV: {csv_err}")
+                print(f"❌ [INVESTIGAÇÃO] PARSER CSV FALHOU: {csv_err}")
+                return JSONResponse(content={"error": f"Erro na estrutura interna do arquivo CSV: {str(csv_err)}"}, status_code=400)
 
         def remove_accents(text):
             if not text:
@@ -621,8 +648,16 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         count_atualizados = 0
         linhas_descartadas = [] # Guarda o motivo do descarte de cada linha
         
+        # LOG DE DIAGNÓSTICO DE MEMÓRIA BRUTA
+        total_linhas_detectadas = len(linhas)
+        logger.info(f"🔍 [INVESTIGAÇÃO] O parser leu um total bruto de {total_linhas_detectadas} linhas do arquivo enviado.")
+        print(f"🔍 [INVESTIGAÇÃO] QUANTIDADE DE LINHAS ENXERGADAS PELO PYTHON: {total_linhas_detectadas}")
+        
         for idx, row in enumerate(linhas, start=2):
             try:
+                nome_print = row.get(col_nome) if col_nome else "NOME_NAO_ENCONTRADO"
+                print(f"➔ [LINHA {idx}] Processando beneficiário: {nome_print}")
+                
                 raw_cpf = row.get(col_cpf) if col_cpf else None
                 raw_caf = row.get(col_caf) if col_caf else None
                 
@@ -744,17 +779,19 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                     except Exception:
                         pass
                     return JSONResponse(content={"error": "O esquema do banco de dados foi atualizado. Por favor, tente novamente em 5 segundos."}, status_code=500)
-                logger.error(f"Erro na linha durante importação BSF: {e}")
+                logger.error(f"❌ [ERRO CRÍTICO LINHA {idx}]: {str(e)}")
+                print(f"❌ [ERRO CRÍTICO LINHA {idx}]: {str(e)}")
                 linhas_descartadas.append({
                     "linha": idx,
                     "nome": nome if 'nome' in locals() else "Desconhecido",
-                    "motivo": f"Erro inesperado: {str(e)}"
+                    "motivo": f"Erro de runtime: {str(e)}"
                 })
                 
         return {
             "message": "Importação de beneficiários concluída",
             "novos_inseridos": count_novos,
             "atualizados": count_atualizados,
+            "total_linhas_detectadas": total_linhas_detectadas,
             "linhas_ignoradas_count": len(linhas_descartadas),
             "diagnostico_descartes": linhas_descartadas
         }
