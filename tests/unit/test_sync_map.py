@@ -8,7 +8,7 @@ sys.path.append('d:/Cursos/agendha')
 
 from app.dependencies import get_db_connection
 
-def test_sync():
+def _test_sync():
     conn_gen = get_db_connection()
     conn = next(conn_gen)
     conn.row_factory = sqlite3.Row
@@ -88,4 +88,5 @@ def test_sync():
     conn.commit()
     print("Test Point Cleaned Up.")
 
-test_sync()
+if __name__ == "__main__":
+    _test_sync()
