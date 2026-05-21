@@ -1199,7 +1199,11 @@ async def importar_objetivos(file: UploadFile = File(...)):
                 continue
                 
             codigo_bruto = str(raw_codigo).strip()
-            codigo_base = codigo_bruto.split('.')[0] if '.' in codigo_bruto else codigo_bruto
+            partes = codigo_bruto.split('.')
+            if len(partes) >= 2:
+                codigo_base = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_base = codigo_bruto
             if not codigo_base:
                 continue
                 
@@ -1309,7 +1313,11 @@ async def importar_iniciativas(file: UploadFile = File(...)):
                 continue
                 
             codigo_bruto = str(raw_codigo).strip()
-            codigo_base = codigo_bruto.split('.')[0] if '.' in codigo_bruto else codigo_bruto
+            partes = codigo_bruto.split('.')
+            if len(partes) >= 2:
+                codigo_base = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_base = codigo_bruto
             if not codigo_base:
                 continue
                 
