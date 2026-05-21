@@ -577,14 +577,18 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 return ""
             return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
 
+        def normalizar_nome(t):
+            if not t:
+                return ""
+            t_sem_acentos = remove_accents(t)
+            return " ".join(t_sem_acentos.upper().split())
+
         def padronizar_cpf(raw_val):
             if not raw_val:
                 return None
-            # Remove pontos, traços, espaços e barras de forma resiliente
             apenas_numeros = "".join(c for c in str(raw_val) if c.isdigit())
             if not apenas_numeros:
                 return None
-            # Preenche com zeros à esquerda (padding) caso o Excel tenha cortado, fixando em 11 dígitos
             return apenas_numeros.zfill(11)
 
         def find_col(candidates):
@@ -634,44 +638,58 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 raw_objetivo = row.get(col_objetivo) if col_objetivo else None
                 raw_iniciativa = row.get(col_iniciativa) if col_iniciativa else None
                 
-                if not cpf_limpo and not raw_caf:
-                    linhas_descartadas.append({
-                        "linha": idx,
-                        "nome": nome,
-                        "motivo": "Linha sem CPF e sem CAF válidos no Grupo Familiar."
-                    })
-                    continue
-                    
                 payload = {
                     "nome_completo": nome,
-                    "municipio": mun,
-                    "comunidade": com,
-                    "nome_tecnico": tec,
-                    "projeto": "Bahia Sem Fome"
+                    "municipio": mun if mun else None,
+                    "comunidade": com if com else None,
+                    "nome_tecnico": tec if tec else None,
+                    "projeto": "Bahia Sem Fome",
+                    "cpf": cpf_limpo if cpf_limpo else None,
+                    "caf": raw_caf if raw_caf else None
                 }
-                if raw_caf:
-                    payload["caf"] = raw_caf
                 if raw_cod_plano:
                     payload["codigo_plano"] = raw_cod_plano.strip()
                 
-                query = supabase.table("beneficiarios").select("id, projeto")
-                if cpf_limpo:
-                    query = query.eq("cpf", cpf_limpo)
-                else:
-                    query = query.eq("caf", raw_caf)
-                    
-                res = query.execute()
-                
                 beneficiario_id = None
-                if res.data:
-                    existente = res.data[0]
-                    beneficiario_id = existente["id"]
+                existente = None
+
+                # Passo A: Se tiver cpf_limpo, busca por CPF.
+                if cpf_limpo:
+                    res_check = supabase.table("beneficiarios").select("id, projeto, cpf").eq("cpf", cpf_limpo).execute()
+                    if res_check.data:
+                        existente = res_check.data[0]
+                        beneficiario_id = existente["id"]
+
+                # Passo B: Se não tiver CPF mas tiver raw_caf, busca por CAF.
+                if not beneficiario_id and raw_caf:
+                    res_check = supabase.table("beneficiarios").select("id, projeto, caf").eq("caf", raw_caf).execute()
+                    if res_check.data:
+                        existente = res_check.data[0]
+                        beneficiario_id = existente["id"]
+
+                # Passo C: Se não tiver nenhum dos dois, busca por correspondência exata de nome_completo e municipio para evitar duplicar.
+                if not beneficiario_id:
+                    nome_norm = normalizar_nome(nome)
+                    mun_norm = normalizar_nome(mun)
+                    
+                    query_mun = supabase.table("beneficiarios").select("id, nome_completo, municipio, projeto").eq("projeto", "Bahia Sem Fome")
+                    if mun:
+                        query_mun = query_mun.ilike("municipio", mun.strip())
+                    res_mun = query_mun.execute()
+                    
+                    for b in (res_mun.data or []):
+                        b_nome_norm = normalizar_nome(b.get("nome_completo"))
+                        b_mun_norm = normalizar_nome(b.get("municipio"))
+                        if b_nome_norm == nome_norm and b_mun_norm == mun_norm:
+                            existente = b
+                            beneficiario_id = b["id"]
+                            break
+
+                if beneficiario_id:
                     if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
                         supabase.table("beneficiarios").update(payload).eq("id", beneficiario_id).execute()
                         count_atualizados += 1
                 else:
-                    if cpf_limpo:
-                        payload["cpf"] = cpf_limpo
                     payload["status"] = "IMPORTADO"
                     res_ins = supabase.table("beneficiarios").insert(payload).execute()
                     if res_ins.data:
