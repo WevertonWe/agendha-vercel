@@ -1578,8 +1578,9 @@ async function carregarPlanoProdutivo(beneficiarioId) {
             htmlContent += `
             <div class="mb-3 border-bottom pb-2">
                 <div class="d-flex align-items-start mb-2">
-                    <span class="badge bg-dark text-white me-2 fw-semibold px-2 py-1" style="font-size: 0.75rem;">${obj.codigo}</span>
-                    <strong class="text-dark small d-block" style="line-height: 1.4;">${obj.descricao}</strong>
+                    <strong class="text-dark small d-block" style="line-height: 1.4;">
+                        <span class="badge bg-dark text-white me-2 px-2 py-1 fw-bold">[${obj.codigo}]</span>${obj.descricao}
+                    </strong>
                 </div>
             `;
             
@@ -1603,7 +1604,9 @@ async function carregarPlanoProdutivo(beneficiarioId) {
                     
                     htmlContent += `
                     <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
-                        <div class="small"><span class="fw-bold text-info me-1">${init.codigo}</span> - ${init.descricao}</div>
+                        <div class="small text-secondary fw-semibold">
+                            • <span class="badge bg-dark text-white mx-1 fw-semibold px-2 py-1" style="font-size: 0.75rem;">[${init.codigo}]</span> ${init.descricao}
+                        </div>
                         ${tarefaHtml}
                         ${comoFazerHtml}
                     </div>`;
@@ -1645,7 +1648,9 @@ async function carregarPlanoProdutivo(beneficiarioId) {
                 
                 htmlContent += `
                 <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
-                    <div class="small"><span class="fw-bold text-info me-1">${init.codigo}</span> - ${init.descricao}</div>
+                    <div class="small text-secondary fw-semibold">
+                        • <span class="badge bg-dark text-white mx-1 fw-semibold px-2 py-1" style="font-size: 0.75rem;">[${init.codigo}]</span> ${init.descricao}
+                    </div>
                     ${tarefaHtml}
                     ${comoFazerHtml}
                 </div>`;

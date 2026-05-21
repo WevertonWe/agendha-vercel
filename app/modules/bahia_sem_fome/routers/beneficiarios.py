@@ -1190,7 +1190,7 @@ async def importar_objetivos(file: UploadFile = File(...)):
             
         supabase = get_supabase()
         count_sucesso = 0
-        beneficiarios_limpos = set()
+        beneficiarios_resetados = set()
         warnings = []
         
         for line_num, row in enumerate(linhas, start=2):
@@ -1198,20 +1198,18 @@ async def importar_objetivos(file: UploadFile = File(...)):
             if not raw_codigo:
                 continue
                 
-            raw_codigo_str = str(raw_codigo).strip()
-            partes = raw_codigo_str.split('.')
-            if not partes or not partes[0]:
+            codigo_bruto = str(raw_codigo).strip()
+            codigo_base = codigo_bruto.split('.')[0] if '.' in codigo_bruto else codigo_bruto
+            if not codigo_base:
                 continue
                 
-            codigo_plano_extraido = partes[0].strip()
-            
             # Buscar beneficiário pelo código do plano
-            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
+            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_base).eq("projeto", "Bahia Sem Fome").execute()
             if not res_ben.data:
                 warnings.append({
                     "linha": line_num,
-                    "codigo": raw_codigo_str,
-                    "erro": f"Beneficiário não cadastrado para o código de plano: {codigo_plano_extraido}."
+                    "codigo": codigo_bruto,
+                    "erro": f"Beneficiário com código de plano {codigo_base} não encontrado."
                 })
                 continue
                 
@@ -1223,22 +1221,23 @@ async def importar_objetivos(file: UploadFile = File(...)):
             desc_obj = str(raw_objetivo).strip() if raw_objetivo else None
             desc_meta = str(raw_meta).strip() if raw_meta else None
             
+            partes = codigo_bruto.split('.')
             # Formatação do código do objetivo correspondente (ex: 31646.1.1 -> 31646.1.0)
             if len(partes) > 1:
                 partes_obj = partes.copy()
                 partes_obj[-1] = '0'
                 cod_objetivo = '.'.join(partes_obj)
             else:
-                cod_objetivo = raw_codigo_str + ".0"
+                cod_objetivo = codigo_bruto + ".0"
                 
-            cod_iniciativa = raw_codigo_str
+            cod_iniciativa = codigo_bruto
             
             try:
                 for ben_id in beneficiario_ids:
                     # Limpeza das metas na primeira aparição do beneficiário nesta importação (sobrescrita limpa)
-                    if ben_id not in beneficiarios_limpos:
+                    if ben_id not in beneficiarios_resetados:
                         supabase.table("bsf_metas_plano").delete().eq("beneficiario_id", ben_id).execute()
-                        beneficiarios_limpos.add(ben_id)
+                        beneficiarios_resetados.add(ben_id)
                         
                     # 1. Inserir Objetivo (nó pai - tipo OBJETIVO)
                     if desc_obj:
@@ -1268,7 +1267,7 @@ async def importar_objetivos(file: UploadFile = File(...)):
                 logger.error(f"Erro ao processar Passo 3 na linha {line_num}: {e}")
                 warnings.append({
                     "linha": line_num,
-                    "codigo": raw_codigo_str,
+                    "codigo": codigo_bruto,
                     "erro": f"Erro inesperado: {str(e)}"
                 })
                 
@@ -1301,6 +1300,7 @@ async def importar_iniciativas(file: UploadFile = File(...)):
             
         supabase = get_supabase()
         count_sucesso = 0
+        beneficiarios_resetados = set()
         warnings = []
         
         for line_num, row in enumerate(linhas, start=2):
@@ -1308,20 +1308,18 @@ async def importar_iniciativas(file: UploadFile = File(...)):
             if not raw_codigo:
                 continue
                 
-            raw_codigo_str = str(raw_codigo).strip()
-            partes = raw_codigo_str.split('.')
-            if not partes or not partes[0]:
+            codigo_bruto = str(raw_codigo).strip()
+            codigo_base = codigo_bruto.split('.')[0] if '.' in codigo_bruto else codigo_bruto
+            if not codigo_base:
                 continue
                 
-            codigo_plano_extraido = partes[0].strip()
-            
             # Buscar beneficiário pelo código do plano
-            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
+            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_base).eq("projeto", "Bahia Sem Fome").execute()
             if not res_ben.data:
                 warnings.append({
                     "linha": line_num,
-                    "codigo": raw_codigo_str,
-                    "erro": f"Beneficiário com código de plano {codigo_plano_extraido} não encontrado."
+                    "codigo": codigo_bruto,
+                    "erro": f"Beneficiário com código de plano {codigo_base} não encontrado."
                 })
                 continue
                 
@@ -1339,13 +1337,23 @@ async def importar_iniciativas(file: UploadFile = File(...)):
             
             try:
                 for ben_id in beneficiario_ids:
+                    # Reset técnico preventivo na primeira aparição
+                    if ben_id not in beneficiarios_resetados:
+                        supabase.table("bsf_metas_plano").update({
+                            "tarefa": None,
+                            "como_fazer": None,
+                            "entrega": None,
+                            "recursos_necessarios": None
+                        }).eq("beneficiario_id", ben_id).execute()
+                        beneficiarios_resetados.add(ben_id)
+                        
                     # Validar estritamente se a meta pai (tipo INICIATIVA) já existe para o beneficiário (Opção A)
-                    res_meta = supabase.table("bsf_metas_plano").select("id").eq("beneficiario_id", ben_id).eq("codigo", raw_codigo_str).eq("tipo", "INICIATIVA").execute()
+                    res_meta = supabase.table("bsf_metas_plano").select("id").eq("beneficiario_id", ben_id).eq("codigo", codigo_bruto).eq("tipo", "INICIATIVA").execute()
                     
                     if not res_meta.data:
                         warnings.append({
                             "linha": line_num,
-                            "codigo": raw_codigo_str,
+                            "codigo": codigo_bruto,
                             "erro": f"Meta/Iniciativa pai não encontrada para o beneficiário ID {ben_id}. Passo 3 foi pulado?"
                         })
                         continue
@@ -1371,7 +1379,7 @@ async def importar_iniciativas(file: UploadFile = File(...)):
                 logger.error(f"Erro ao processar Passo 4 na linha {line_num}: {e}")
                 warnings.append({
                     "linha": line_num,
-                    "codigo": raw_codigo_str,
+                    "codigo": codigo_bruto,
                     "erro": f"Erro inesperado: {str(e)}"
                 })
                 
