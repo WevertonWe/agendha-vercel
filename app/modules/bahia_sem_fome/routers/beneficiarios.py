@@ -655,9 +655,6 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         
         for idx, row in enumerate(linhas, start=2):
             try:
-                nome_print = row.get(col_nome) if col_nome else "NOME_NAO_ENCONTRADO"
-                print(f"➔ [LINHA {idx}] Processando beneficiário: {nome_print}")
-                
                 raw_cpf = row.get(col_cpf) if col_cpf else None
                 raw_caf = row.get(col_caf) if col_caf else None
                 
@@ -721,15 +718,48 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                             break
 
                 if beneficiario_id:
-                    if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
+                    # Executa a atualização (PATCH) do payload existente
+                    try:
                         supabase.table("beneficiarios").update(payload).eq("id", beneficiario_id).execute()
                         count_atualizados += 1
+                    except Exception as upd_err:
+                        logger.error(f"❌ [ERRO UPDATE] Falha ao atualizar beneficiário ID {beneficiario_id} na linha {idx}: {upd_err}")
+                        print(f"❌ [ERRO UPDATE] Falha na linha {idx}: {upd_err}")
+                        linhas_descartadas.append({
+                            "linha": idx,
+                            "nome": nome,
+                            "motivo": f"Falha na atualização do registro existente: {str(upd_err)}"
+                        })
                 else:
-                    payload["status"] = "IMPORTADO"
-                    res_ins = supabase.table("beneficiarios").insert(payload).execute()
-                    if res_ins.data:
-                        beneficiario_id = res_ins.data[0]["id"]
-                    count_novos += 1
+                    # SE NÃO FOI ENCONTRADO (Caso das 45 linhas novas), OBRIGATORIAMENTE EXECUTA O INSERT (POST)
+                    insert_payload = payload.copy()
+                    if cpf_limpo:
+                        insert_payload["cpf"] = cpf_limpo
+                    insert_payload["status"] = "IMPORTADO"
+                    
+                    try:
+                        res_ins = supabase.table("beneficiarios").insert(insert_payload).execute()
+                        if res_ins.data:
+                            beneficiario_id = res_ins.data[0]["id"]
+                        count_novos += 1
+                    except Exception as ins_err:
+                        err_msg = str(ins_err).lower()
+                        if "duplicate key" in err_msg or "violates unique constraint" in err_msg:
+                            logger.warning(f"⚠️ [AVISO INSERT] Beneficiário concorrente ou duplicado na planilha na linha {idx}: {ins_err}")
+                            print(f"⚠️ [AVISO INSERT] Duplicidade na linha {idx}: {ins_err}")
+                            linhas_descartadas.append({
+                                "linha": idx,
+                                "nome": nome,
+                                "motivo": "Beneficiário com CPF/CAF já existente ou cadastrado concorrentemente."
+                            })
+                        else:
+                            logger.error(f"❌ [ERRO INSERT] Falha ao inserir novo beneficiário na linha {idx}: {ins_err}")
+                            print(f"❌ [ERRO INSERT] Falha na linha {idx}: {ins_err}")
+                            linhas_descartadas.append({
+                                "linha": idx,
+                                "nome": nome,
+                                "motivo": f"Falha na inserção do registro: {str(ins_err)}"
+                            })
                 
                 if beneficiario_id and raw_cod_plano:
                     cod_iniciativa = raw_cod_plano.strip()
