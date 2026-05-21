@@ -498,6 +498,15 @@ async function verDetalhe(id) {
     beneficiarioIdGlobal = id;
     const modalEl = document.getElementById('modalDetalhe');
     const body = document.getElementById('modalDetalheBody');
+    
+    // Restaurar título padrão no carregamento
+    if (modalEl) {
+        const titleEl = modalEl.querySelector('.modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-eye me-2"></i>Detalhes do Beneficiário';
+        }
+    }
+    
     body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
 
     if (typeof bootstrap !== 'undefined') {
@@ -508,6 +517,20 @@ async function verDetalhe(id) {
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}`);
         const b = await res.json();
+
+        // Atualizar título do modal dinamicamente com nome e código do plano
+        if (modalEl) {
+            const titleEl = modalEl.querySelector('.modal-title');
+            if (titleEl) {
+                const nomeCompleto = b.nome_completo || 'Beneficiário';
+                const planoStr = b.codigo_plano ? `- Plano #${b.codigo_plano}` : '- Sem Plano';
+                titleEl.innerHTML = `<i class="fas fa-eye me-2"></i>${nomeCompleto} ${planoStr}`;
+            }
+        }
+
+        const badgePlano = b.codigo_plano 
+            ? `<span class="badge bg-dark fs-6">${b.codigo_plano}</span>` 
+            : `<span class="badge bg-secondary fs-6">Sem Plano</span>`;
 
         body.innerHTML = `
             <div class="row g-3">
@@ -542,6 +565,10 @@ async function verDetalhe(id) {
                 <div class="col-md-6">
                     <p class="mb-1"><strong>Verificado BSF:</strong></p>
                     <p class="text-muted">${b.verificado_bsf || 'Não'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Código do Plano (PowerBI):</strong></p>
+                    <p class="text-muted">${badgePlano}</p>
                 </div>
             </div>
             <hr>
