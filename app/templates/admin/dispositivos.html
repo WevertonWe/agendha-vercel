@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Inventário de Dispositivos - Agendha{% endblock %}
+
+{% block styles %}
+<style>
+    /* Estilos Glassmorphism Premium */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+    }
+    
+    .stat-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+    }
+    
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        background: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .bg-light-success {
+        background: rgba(25, 135, 84, 0.1) !important;
+        color: #198754 !important;
+    }
+    
+    .bg-light-warning {
+        background: rgba(255, 193, 7, 0.1) !important;
+        color: #ffc107 !important;
+    }
+    
+    .bg-light-danger {
+        background: rgba(220, 53, 69, 0.1) !important;
+        color: #dc3545 !important;
+    }
+
+    .table-responsive {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header de Ação -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800"><i class="bi bi-laptop me-2"></i>Controle de Dispositivos</h1>
+        <a href="/hub" class="btn btn-outline-secondary btn-sm shadow-sm">
+            <i class="bi bi-arrow-left"></i> Voltar ao Hub
+        </a>
+    </div>
+
+    <!-- Linha de Metadados / KPIs Rápidos (Glassmorphism stat-card) -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-3">
+            <div class="stat-card p-3 shadow-sm d-flex align-items-center">
+                <div class="icon-shape me-3">
+                    <i class="bi bi-pc-display"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted small text-uppercase mb-1 fw-bold">Total Ativos</h6>
+                    <h4 class="mb-0 fw-bold text-dark" id="kpi-total">0</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 shadow-sm d-flex align-items-center">
+                <div class="icon-shape bg-light-success me-3">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted small text-uppercase mb-1 fw-bold">Disponíveis</h6>
+                    <h4 class="mb-0 fw-bold text-success" id="kpi-disponivel">0</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 shadow-sm d-flex align-items-center">
+                <div class="icon-shape bg-light-warning me-3">
+                    <i class="bi bi-person-fill-lock"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted small text-uppercase mb-1 fw-bold">Em Uso</h6>
+                    <h4 class="mb-0 fw-bold text-warning" id="kpi-em-uso">0</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card p-3 shadow-sm d-flex align-items-center">
+                <div class="icon-shape bg-light-danger me-3">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted small text-uppercase mb-1 fw-bold">Sem Termo PDF</h6>
+                    <h4 class="mb-0 fw-bold text-danger" id="kpi-sem-termo">0</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid Principal: Form Lateral e Tabela -->
+    <div class="row g-4">
+        <!-- Coluna do Form (Esquerda) -->
+        <div class="col-lg-4">
+            <div class="card glass-card border-0 shadow-sm mb-4">
+                <div class="card-header bg-transparent py-3 border-0">
+                    <h5 class="m-0 font-weight-bold text-primary" id="form-titulo">
+                        <i class="bi bi-plus-circle-fill me-1"></i> Cadastrar Dispositivo
+                    </h5>
+                </div>
+                <div class="card-body pt-0">
+                    <form id="form-dispositivo" class="needs-validation" novalidate>
+                        <input type="hidden" id="dispositivo_id">
+
+                        <div class="mb-3">
+                            <label for="tipo" class="form-label small text-muted text-uppercase fw-bold">Tipo de Dispositivo</label>
+                            <select class="form-select" id="tipo" required>
+                                <option value="" disabled selected>Selecione o tipo...</option>
+                                <option value="Notebook">Notebook</option>
+                                <option value="Desktop">Desktop / Computador</option>
+                                <option value="Monitor">Monitor</option>
+                                <option value="Celular">Smartphone / Celular</option>
+                                <option value="Tablet">Tablet</option>
+                                <option value="Outro">Outro Equipamento</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="marca_modelo" class="form-label small text-muted text-uppercase fw-bold">Marca & Modelo</label>
+                            <input type="text" class="form-control" id="marca_modelo" placeholder="Ex: Dell Vostro 3520" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="numero_serie_imei" class="form-label small text-muted text-uppercase fw-bold">Número de Série / IMEI</label>
+                            <input type="text" class="form-control" id="numero_serie_imei" placeholder="Ex: BR123XYZ" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="responsavel_atual" class="form-label small text-muted text-uppercase fw-bold">Responsável Atual</label>
+                            <input type="text" class="form-control" id="responsavel_atual" placeholder="Nome do colaborador (opcional)">
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="status" class="form-label small text-muted text-uppercase fw-bold">Status do Ativo</label>
+                            <select class="form-select" id="status" required>
+                                <option value="Disponível">Disponível</option>
+                                <option value="Em Uso">Em Uso</option>
+                                <option value="Manutenção">Manutenção</option>
+                                <option value="Descartado">Descartado</option>
+                            </select>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary fw-bold shadow-sm">
+                                <i class="bi bi-save me-1"></i> Salvar Equipamento
+                            </button>
+                            <button type="button" id="btn-cancelar-edicao" class="btn btn-outline-secondary btn-sm d-none">
+                                Cancelar Edição
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coluna da Tabela de Inventário (Direita) -->
+        <div class="col-lg-8">
+            <div class="card glass-card border-0 shadow-sm">
+                <div class="card-header bg-transparent py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-list-stars me-1"></i> Inventário de Ativos
+                    </h5>
+                    <div class="input-group input-group-sm w-50 max-width-250">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control border-start-0" id="filtro-pesquisa" placeholder="Filtrar ativos...">
+                    </div>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover align-middle w-100 mb-0">
+                            <thead class="bg-light text-secondary text-uppercase small fw-bold">
+                                <tr>
+                                    <th>Dispositivo</th>
+                                    <th>Nº Série / IMEI</th>
+                                    <th>Responsável</th>
+                                    <th class="text-center" style="width: 20%;">Termo Resp.</th>
+                                    <th class="text-center" style="width: 12%;">Status</th>
+                                    <th class="text-center" style="width: 12%;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-dispositivos">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                        Carregando inventário de ativos...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/dispositivos.js"></script>
+{% endblock %}
