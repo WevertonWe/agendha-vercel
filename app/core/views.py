@@ -91,6 +91,11 @@ async def get_login_page(request: Request):
 async def get_admin_users_page(request: Request):
     return templates.TemplateResponse(request=request, name=str("admin/usuarios.html"), context={"request": request})
 
+@router.get("/admin/dispositivos", response_class=HTMLResponse)
+async def get_admin_dispositivos_page(request: Request):
+    return templates.TemplateResponse(request=request, name=str("admin/dispositivos.html"), context={"request": request, "current_page": "admin_dispositivos"})
+
+
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     if os.path.exists(settings.FAVICON_PATH):
