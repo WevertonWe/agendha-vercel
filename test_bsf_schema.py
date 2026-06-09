@@ -68,7 +68,7 @@ def test_workflow():
         print("   [ERRO] Registros órfãos encontrados na tabela bsf_atividades!")
         sys.exit(1)
 
-    print("\n✅ Todos os testes de validação do schema BSF passaram com sucesso!")
+    print("\n[OK] Todos os testes de validacao do schema BSF passaram com sucesso!")
 
 if __name__ == "__main__":
     test_workflow()

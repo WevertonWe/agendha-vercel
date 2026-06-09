@@ -333,7 +333,9 @@ async def listar_metas_beneficiario(beneficiario_id: int):
                 "beneficiario_id": m.get("beneficiario_id") or 0,
                 "codigo": m.get("codigo") or "",
                 "tipo": m.get("tipo") or "",
-                "descricao": m.get("descricao") or ""
+                "descricao": m.get("descricao") or "",
+                "tarefa": m.get("tarefa") or "",
+                "como_fazer": m.get("como_fazer") or ""
             })
         
         # Ordenação natural pelo código
@@ -536,8 +538,18 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         
         if filename.endswith('.xlsx'):
             import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-            sheet = wb.active
+            from zipfile import BadZipFile
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+                sheet = wb.active
+            except BadZipFile as bz:
+                logger.error(f"❌ [INVESTIGAÇÃO] Arquivo XLSX corrompido fisicamente: {bz}")
+                print(f"❌ [INVESTIGAÇÃO] XLSX CORROMPIDO ZIP: {bz}")
+                return JSONResponse(content={"error": f"Arquivo Excel corrompido (Zip inválido): {str(bz)}"}, status_code=400)
+            except Exception as ex:
+                logger.error(f"❌ [INVESTIGAÇÃO] Erro desconhecido no parser XLSX: {ex}")
+                print(f"❌ [INVESTIGAÇÃO] PARSER XLSX FALHOU: {ex}")
+                return JSONResponse(content={"error": f"Erro ao ler Excel: {str(ex)}"}, status_code=400)
             
             # Pegando cabeçalhos na primeira linha
             headers = [cell.value for cell in sheet[1]]
@@ -558,22 +570,48 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
             return JSONResponse(content={"error": "Formato .xls legado não suportado. Use .xlsx ou .csv."}, status_code=400)
             
         else:
-            decoded = content.decode('utf-8-sig')
-            sniffer = csv.Sniffer()
             try:
-                dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
-                delimiter = dialect.delimiter
-            except csv.Error:
-                delimiter = ';' if ';' in decoded[:100] else ','
+                decoded = content.decode('utf-8-sig')
+            except UnicodeDecodeError as ude:
+                logger.error(f"❌ [INVESTIGAÇÃO] Erro de decodificação UTF-8 no CSV: {ude}")
+                print(f"❌ [INVESTIGAÇÃO] UTF-8 DECODE FAILED: {ude}")
+                # Tenta decodificar em ISO-8859-1 como fallback de segurança
+                try:
+                    decoded = content.decode('iso-8859-1')
+                    logger.warning("🔍 [INVESTIGAÇÃO] Fallback para decodificação ISO-8859-1 obteve sucesso.")
+                except Exception:
+                    return JSONResponse(content={"error": f"Erro de codificação de caracteres no CSV: {str(ude)}"}, status_code=400)
+                    
+            try:
+                sniffer = csv.Sniffer()
+                try:
+                    dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+                    delimiter = dialect.delimiter
+                except csv.Error as ce:
+                    logger.warning(f"⚠️ [INVESTIGAÇÃO] Sniffer falhou em detectar delimitador, usando delimitador de segurança: {ce}")
+                    delimiter = ';' if ';' in decoded[:100] else ','
                 
-            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
-            linhas = list(csv_reader)
-            fieldnames = csv_reader.fieldnames or []
+                csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+                linhas = list(csv_reader)
+                fieldnames = csv_reader.fieldnames or []
+            except csv.Error as csv_err:
+                logger.error(f"❌ [INVESTIGAÇÃO] Falha estrutural no processador CSV: {csv_err}")
+                print(f"❌ [INVESTIGAÇÃO] PARSER CSV FALHOU: {csv_err}")
+                return JSONResponse(content={"error": f"Erro na estrutura interna do arquivo CSV: {str(csv_err)}"}, status_code=400)
 
-        def remove_accents(text):
-            if not text:
+        def normalizar_nome(t):
+            if not t:
                 return ""
-            return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
+            t_sem_acentos = remove_accents(t)
+            return " ".join(t_sem_acentos.upper().split())
+
+        def padronizar_cpf(raw_val):
+            if not raw_val:
+                return None
+            apenas_numeros = "".join(c for c in str(raw_val) if c.isdigit())
+            if not apenas_numeros:
+                return None
+            return apenas_numeros.zfill(11)
 
         def find_col(candidates):
             cols_map = {remove_accents(str(c).strip().upper()): c for c in fieldnames if c is not None}
@@ -586,12 +624,16 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                         return real_col_name
             return None
 
-        col_cpf = find_col(['CPF', 'DOCUMENTO', 'DOC'])
-        col_caf = find_col(['CAF', 'DAP', 'NIS'])
-        col_nome = find_col(['NOME', 'BENEFICIARIO'])
+        # Força a busca explícita pelo documento e nome do FAMILIAR/BENEFICIÁRIO primeiro
+        col_nome = find_col(['Dados do Grupo Familiar > Nome', 'NOME_COMPLETO', 'BENEFICIARIO', 'NOME'])
+        col_cpf = find_col(['Dados do Grupo Familiar > CPF', 'CPF_BENEFICIARIO', 'CPF'])
+        col_caf = find_col(['DAP / CAF', 'CAF', 'DAP'])
+        
+        # Isola os dados do técnico para que não colidam
+        col_tec = find_col(['Nome do(a) técnico(a) responsável', 'TECNICO', 'RESPONSAVEL'])
         col_mun = find_col(['MUNICIPIO', 'CIDADE'])
-        col_com = find_col(['COMUNIDADE', 'LOCALIDADE'])
-        col_tec = find_col(['TECNICO', 'RESPONSAVEL'])
+        col_com = find_col(['Comunidade', 'LOCALIDADE'])
+        
         col_cod_plano = find_col(['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO'])
         col_objetivo = find_col(['Objetivo', 'OBJETIVO_GERAL', 'OBJETIVO'])
         col_iniciativa = find_col(['Iniciativa', 'INICIATIVA'])
@@ -599,12 +641,20 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
         supabase = get_supabase()
         count_novos = 0
         count_atualizados = 0
+        linhas_descartadas = [] # Guarda o motivo do descarte de cada linha
         
-        for row in linhas:
+        # LOG DE DIAGNÓSTICO DE MEMÓRIA BRUTA
+        total_linhas_detectadas = len(linhas)
+        logger.info(f"🔍 [INVESTIGAÇÃO] O parser leu um total bruto de {total_linhas_detectadas} linhas do arquivo enviado.")
+        print(f"🔍 [INVESTIGAÇÃO] QUANTIDADE DE LINHAS ENXERGADAS PELO PYTHON: {total_linhas_detectadas}")
+        
+        for idx, row in enumerate(linhas, start=2):
             try:
                 raw_cpf = row.get(col_cpf) if col_cpf else None
                 raw_caf = row.get(col_caf) if col_caf else None
-                cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
+                
+                # Passa o dado bruto pela nova inteligência de padronização
+                cpf_limpo = padronizar_cpf(raw_cpf)
                 
                 nome = (row.get(col_nome) or "Desconhecido").strip()
                 mun = row.get(col_mun)
@@ -615,44 +665,96 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                 raw_objetivo = row.get(col_objetivo) if col_objetivo else None
                 raw_iniciativa = row.get(col_iniciativa) if col_iniciativa else None
                 
-                if not cpf_limpo and not raw_caf:
-                    continue 
-                    
                 payload = {
                     "nome_completo": nome,
-                    "municipio": mun,
-                    "comunidade": com,
-                    "nome_tecnico": tec,
-                    "projeto": "Bahia Sem Fome"
+                    "municipio": mun if mun else None,
+                    "comunidade": com if com else None,
+                    "nome_tecnico": tec if tec else None,
+                    "projeto": "Bahia Sem Fome",
+                    "cpf": cpf_limpo if cpf_limpo else None,
+                    "caf": raw_caf if raw_caf else None
                 }
-                if raw_caf:
-                    payload["caf"] = raw_caf
                 if raw_cod_plano:
                     payload["codigo_plano"] = raw_cod_plano.strip()
                 
-                query = supabase.table("beneficiarios").select("id, projeto")
-                if cpf_limpo:
-                    query = query.eq("cpf", cpf_limpo)
-                else:
-                    query = query.eq("caf", raw_caf)
-                    
-                res = query.execute()
-                
                 beneficiario_id = None
-                if res.data:
-                    existente = res.data[0]
-                    beneficiario_id = existente["id"]
-                    if not existente.get("projeto") or existente.get("projeto") == "Bahia Sem Fome":
+                existente = None
+
+                # Passo A: Se tiver cpf_limpo, busca por CPF.
+                if cpf_limpo:
+                    res_check = supabase.table("beneficiarios").select("id, projeto, cpf").eq("cpf", cpf_limpo).execute()
+                    if res_check.data:
+                        existente = res_check.data[0]
+                        beneficiario_id = existente["id"]
+
+                # Passo B: Se não tiver CPF mas tiver raw_caf, busca por CAF.
+                if not beneficiario_id and raw_caf:
+                    res_check = supabase.table("beneficiarios").select("id, projeto, caf").eq("caf", raw_caf).execute()
+                    if res_check.data:
+                        existente = res_check.data[0]
+                        beneficiario_id = existente["id"]
+
+                # Passo C: Se não tiver nenhum dos dois, busca por correspondência exata de nome_completo e municipio para evitar duplicar.
+                if not beneficiario_id:
+                    nome_norm = normalizar_nome(nome)
+                    mun_norm = normalizar_nome(mun)
+                    
+                    query_mun = supabase.table("beneficiarios").select("id, nome_completo, municipio, projeto").eq("projeto", "Bahia Sem Fome")
+                    if mun:
+                        query_mun = query_mun.ilike("municipio", mun.strip())
+                    res_mun = query_mun.execute()
+                    
+                    for b in (res_mun.data or []):
+                        b_nome_norm = normalizar_nome(b.get("nome_completo"))
+                        b_mun_norm = normalizar_nome(b.get("municipio"))
+                        if b_nome_norm == nome_norm and b_mun_norm == mun_norm:
+                            existente = b
+                            beneficiario_id = b["id"]
+                            break
+
+                if beneficiario_id:
+                    # Executa a atualização (PATCH) do payload existente
+                    try:
                         supabase.table("beneficiarios").update(payload).eq("id", beneficiario_id).execute()
                         count_atualizados += 1
+                    except Exception as upd_err:
+                        logger.error(f"❌ [ERRO UPDATE] Falha ao atualizar beneficiário ID {beneficiario_id} na linha {idx}: {upd_err}")
+                        print(f"❌ [ERRO UPDATE] Falha na linha {idx}: {upd_err}")
+                        linhas_descartadas.append({
+                            "linha": idx,
+                            "nome": nome,
+                            "motivo": f"Falha na atualização do registro existente: {str(upd_err)}"
+                        })
                 else:
+                    # SE NÃO FOI ENCONTRADO (Caso das 45 linhas novas), OBRIGATORIAMENTE EXECUTA O INSERT (POST)
+                    insert_payload = payload.copy()
                     if cpf_limpo:
-                        payload["cpf"] = cpf_limpo
-                    payload["status"] = "IMPORTADO"
-                    res_ins = supabase.table("beneficiarios").insert(payload).execute()
-                    if res_ins.data:
-                        beneficiario_id = res_ins.data[0]["id"]
-                    count_novos += 1
+                        insert_payload["cpf"] = cpf_limpo
+                    insert_payload["status"] = "IMPORTADO"
+                    
+                    try:
+                        res_ins = supabase.table("beneficiarios").insert(insert_payload).execute()
+                        if res_ins.data:
+                            beneficiario_id = res_ins.data[0]["id"]
+                        count_novos += 1
+                    except Exception as ins_err:
+                        err_msg = str(ins_err).lower()
+                        if "duplicate key" in err_msg or "violates unique constraint" in err_msg:
+                            logger.warning(f"⚠️ [AVISO INSERT] Beneficiário concorrente ou duplicado na planilha na linha {idx}: {ins_err}")
+                            print(f"⚠️ [AVISO INSERT] Duplicidade na linha {idx}: {ins_err}")
+                            linhas_descartadas.append({
+                                "linha": idx,
+                                "nome": nome,
+                                "motivo": "Beneficiário com CPF/CAF já existente ou cadastrado concorrentemente."
+                            })
+                        else:
+                            logger.error(f"❌ [ERRO INSERT] Falha ao inserir novo beneficiário na linha {idx}: {ins_err}")
+                            print(f"❌ [ERRO INSERT] Falha na linha {idx}: {ins_err}")
+                            linhas_descartadas.append({
+                                "linha": idx,
+                                "nome": nome,
+                                "motivo": f"Falha na inserção do registro: {str(ins_err)}"
+                            })
                 
                 if beneficiario_id and raw_cod_plano:
                     cod_iniciativa = raw_cod_plano.strip()
@@ -702,9 +804,22 @@ async def importar_planilha_bsf(file: UploadFile = File(...)):
                     except Exception:
                         pass
                     return JSONResponse(content={"error": "O esquema do banco de dados foi atualizado. Por favor, tente novamente em 5 segundos."}, status_code=500)
-                logger.error(f"Erro na linha durante importação BSF: {e}")
+                logger.error(f"❌ [ERRO CRÍTICO LINHA {idx}]: {str(e)}")
+                print(f"❌ [ERRO CRÍTICO LINHA {idx}]: {str(e)}")
+                linhas_descartadas.append({
+                    "linha": idx,
+                    "nome": nome if 'nome' in locals() else "Desconhecido",
+                    "motivo": f"Erro de runtime: {str(e)}"
+                })
                 
-        return {"message": "Importação concluída", "novos": count_novos, "atualizados": count_atualizados}
+        return {
+            "message": "Importação de beneficiários concluída",
+            "novos_inseridos": count_novos,
+            "atualizados": count_atualizados,
+            "total_linhas_detectadas": total_linhas_detectadas,
+            "linhas_ignoradas_count": len(linhas_descartadas),
+            "diagnostico_descartes": linhas_descartadas
+        }
     except Exception as e:
         logger.error(f"Erro importar bsf: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -774,11 +889,19 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
         if not col_codigo:
             return JSONResponse(content={"error": "Coluna de código de plano/metas não encontrada na planilha."}, status_code=400)
 
+        # Colunas adicionais usando find_col de forma resiliente
+        col_cpf = find_col(['CPF', 'DOCUMENTO', 'DOC', 'CPF_BENEFICIARIO'])
+        col_nome = find_col(['NOME', 'BENEFICIARIO', 'NOME COMPLETO', 'NOME_BENEFICIARIO'])
+        col_tarefa = find_col(['TAREFA', 'ATIVIDADE_TAREFA', 'TAREFA_DESCRICAO'])
+        col_como_fazer = find_col(['COMO FAZER', 'COMO_FAZER', 'METODO', 'ACAO'])
+
         supabase = get_supabase()
         count_metas_inseridas = 0
         beneficiarios_limpos = set()
+        warnings = []
         
-        for row in linhas:
+        for line_num, row in enumerate(linhas, start=2):
+            raw_codigo_str = "N/A"
             try:
                 raw_codigo = row.get(col_codigo)
                 if not raw_codigo:
@@ -791,15 +914,6 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
                 
                 codigo_plano_extraido = partes[0].strip()
                 
-                # Procura descrição de forma extremamente flexível baseada em aproximação de colunas candidatas
-                raw_descricao = None
-                colunas_descricao = ['OBJETIVO', 'INICIATIVA', 'TAREFA', 'COMO FAZER', 'DESCRICAO', 'TEXTO', 'META']
-                for cand in colunas_descricao:
-                    col_cand = find_col([cand])
-                    if col_cand and row.get(col_cand):
-                        raw_descricao = str(row.get(col_cand)).strip()
-                        break
-                
                 # Classifica o Tipo (um ponto = OBJETIVO; dois pontos = INICIATIVA)
                 pontos = raw_codigo_str.count('.')
                 if pontos == 1:
@@ -809,36 +923,487 @@ async def importar_planilha_metas_bsf(file: UploadFile = File(...)):
                 else:
                     continue
                 
-                # Busca o ID real do beneficiário pelo codigo_plano
-                res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
-                if not res_ben.data:
+                # Extração resiliente de dados do beneficiário
+                raw_cpf = row.get(col_cpf) if col_cpf else None
+                cpf_limpo = limpar_cpf(raw_cpf) if raw_cpf else None
+                raw_nome = row.get(col_nome) if col_nome else None
+                nome_limpo = raw_nome.strip() if raw_nome else None
+                
+                beneficiario_id = None
+                
+                # 1. Match por CPF primeiro (se fornecido)
+                if cpf_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").eq("cpf", cpf_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # 2. Match por Nome Completo segundo (case-insensitive)
+                if not beneficiario_id and nome_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").ilike("nome_completo", nome_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # 3. Match por codigo_plano atual
+                if not beneficiario_id and codigo_plano_extraido:
+                    res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_plano_extraido).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                
+                # Se não encontrado por nenhuma das formas:
+                if not beneficiario_id:
+                    warnings.append({
+                        "linha": line_num,
+                        "codigo": raw_codigo_str,
+                        "erro": f"Beneficiário não encontrado para CPF: {raw_cpf or 'N/A'}, Nome: {raw_nome or 'N/A'}, Código do Plano: {codigo_plano_extraido}."
+                    })
                     continue
                 
-                beneficiario_id = res_ben.data[0]["id"]
+                # Atualizar o codigo_plano na tabela beneficiarios com a parte puramente numérica
+                if codigo_plano_extraido:
+                    supabase.table("beneficiarios").update({"codigo_plano": codigo_plano_extraido}).eq("id", beneficiario_id).execute()
                 
                 # Sobrescrita exclusiva: limpa as metas na primeira aparição do beneficiário
                 if beneficiario_id not in beneficiarios_limpos:
                     supabase.table("bsf_metas_plano").delete().eq("beneficiario_id", beneficiario_id).execute()
                     beneficiarios_limpos.add(beneficiario_id)
                 
+                # Procura descrição de forma flexível de acordo com o tipo
+                raw_descricao = None
+                colunas_descricao = ['OBJETIVO', 'INICIATIVA', 'DESCRICAO', 'TEXTO', 'META']
+                for cand in colunas_descricao:
+                    col_cand = find_col([cand])
+                    if col_cand and row.get(col_cand):
+                        raw_descricao = str(row.get(col_cand)).strip()
+                        break
+                
+                raw_tarefa = str(row.get(col_tarefa)).strip() if col_tarefa and row.get(col_tarefa) else None
+                raw_como_fazer = str(row.get(col_como_fazer)).strip() if col_como_fazer and row.get(col_como_fazer) else None
+                
                 # Insere a nova meta limpa
                 payload_meta = {
                     "beneficiario_id": beneficiario_id,
                     "codigo": raw_codigo_str,
                     "tipo": tipo,
-                    "descricao": raw_descricao or ""
+                    "descricao": raw_descricao or "",
+                    "tarefa": raw_tarefa or "",
+                    "como_fazer": raw_como_fazer or ""
                 }
                 supabase.table("bsf_metas_plano").insert(payload_meta).execute()
                 count_metas_inseridas += 1
                 
             except Exception as e:
-                logger.error(f"Erro ao processar linha de metas: {e}")
+                logger.error(f"Erro ao processar linha de metas {line_num}: {e}")
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": raw_codigo_str,
+                    "erro": f"Erro inesperado: {str(e)}"
+                })
                 
         return {
             "message": "Importação de metas concluída com sucesso",
+            "warnings": warnings,
             "metas_inseridas": count_metas_inseridas,
             "beneficiarios_atualizados": len(beneficiarios_limpos)
         }
     except Exception as e:
         logger.error(f"Erro ao importar metas BSF: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# --- NOVOS ENDPOINTS DO WIZARD DE IMPORTAÇÃO BSF (PASSOS 2, 3 E 4) ---
+
+async def _ler_planilha_upload(file: UploadFile) -> tuple[list, list]:
+    content = await file.read()
+    filename = file.filename.lower()
+    linhas = []
+    fieldnames = []
+    
+    if filename.endswith('.xlsx'):
+        import openpyxl
+        from zipfile import BadZipFile
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+            sheet = wb.active
+        except BadZipFile as bz:
+            logger.error(f"Arquivo XLSX corrompido fisicamente: {bz}")
+            raise HTTPException(status_code=400, detail=f"Arquivo Excel corrompido (Zip inválido): {str(bz)}")
+        except Exception as ex:
+            logger.error(f"Erro ao ler Excel: {ex}")
+            raise HTTPException(status_code=400, detail=f"Erro ao ler Excel: {str(ex)}")
+        
+        headers = [cell.value for cell in sheet[1]]
+        fieldnames = [str(h).strip() for h in headers if h is not None]
+        
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            if any(row):
+                row_dict = {}
+                for i, header in enumerate(fieldnames):
+                    if i < len(row):
+                        val = row[i]
+                        row_dict[header] = str(val).strip() if val is not None else None
+                linhas.append(row_dict)
+                
+    elif filename.endswith('.xls'):
+        raise HTTPException(status_code=400, detail="Formato .xls legado não suportado. Use .xlsx ou .csv.")
+        
+    else:
+        try:
+            decoded = content.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            try:
+                decoded = content.decode('iso-8859-1')
+            except Exception:
+                raise HTTPException(status_code=400, detail="Erro de codificação de caracteres no CSV.")
+                
+        try:
+            sniffer = csv.Sniffer()
+            try:
+                dialect = sniffer.sniff(decoded[:1024], delimiters=[',', ';', '\t'])
+                delimiter = dialect.delimiter
+            except Exception:
+                delimiter = ';' if ';' in decoded[:100] else ','
+            
+            csv_reader = csv.DictReader(io.StringIO(decoded), delimiter=delimiter)
+            linhas = list(csv_reader)
+            fieldnames = csv_reader.fieldnames or []
+        except Exception as csv_err:
+            raise HTTPException(status_code=400, detail=f"Erro na estrutura interna do arquivo CSV: {str(csv_err)}")
+            
+    return linhas, fieldnames
+
+def remove_accents(text):
+    if not text:
+        return ""
+    return "".join(c for c in unicodedata.normalize('NFD', str(text)) if unicodedata.category(c) != 'Mn')
+
+def find_col_in_list(fieldnames, candidates):
+    cols_map = {remove_accents(str(c).strip().upper()): c for c in fieldnames if c is not None}
+    for cand in candidates:
+        cand_upper = remove_accents(cand.upper())
+        if cand_upper in cols_map:
+            return cols_map[cand_upper]
+        for real_col_upper, real_col_name in cols_map.items():
+            if cand_upper in real_col_upper:
+                return real_col_name
+    return None
+
+@router.post("/vincular-codigos")
+async def vincular_codigos_plano(file: UploadFile = File(...)):
+    """Passo 2: Vincula o código base do plano produtivo ao beneficiário por CPF ou Nome."""
+    try:
+        linhas, fieldnames = await _ler_planilha_upload(file)
+        
+        col_cpf = find_col_in_list(fieldnames, ['CPF', 'DOCUMENTO', 'DOC', 'CPF_BENEFICIARIO'])
+        col_nome = find_col_in_list(fieldnames, ['Dados do Grupo Familiar > Nome', 'NOME_COMPLETO', 'BENEFICIARIO', 'NOME'])
+        col_cod_plano = find_col_in_list(fieldnames, ['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO', 'CHAVE'])
+        
+        if not col_cod_plano:
+            return JSONResponse(content={"error": "Coluna de código do plano não encontrada na planilha."}, status_code=400)
+            
+        supabase = get_supabase()
+        count_sucesso = 0
+        warnings = []
+        
+        def padronizar_cpf(raw_val):
+            if not raw_val:
+                return None
+            apenas_numeros = "".join(c for c in str(raw_val) if c.isdigit())
+            if not apenas_numeros:
+                return None
+            return apenas_numeros.zfill(11)
+            
+        for line_num, row in enumerate(linhas, start=2):
+            raw_codigo = row.get(col_cod_plano)
+            if not raw_codigo:
+                continue
+                
+            raw_codigo_str = str(raw_codigo).strip()
+            # Extrair os dois primeiros segmentos separados por ponto (ex: 31646.6.1 -> 31646.6)
+            partes = raw_codigo_str.split('.')
+            if len(partes) >= 2:
+                codigo_plano_extraido = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_plano_extraido = raw_codigo_str
+            if not codigo_plano_extraido:
+                continue
+                
+            raw_cpf = row.get(col_cpf) if col_cpf else None
+            cpf_limpo = padronizar_cpf(raw_cpf) if raw_cpf else None
+            raw_nome = row.get(col_nome) if col_nome else None
+            nome_limpo = raw_nome.strip() if raw_nome else None
+            
+            beneficiario_id = None
+            
+            try:
+                # 1. Busca por CPF
+                if cpf_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").eq("cpf", cpf_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                        
+                # 2. Busca por Nome
+                if not beneficiario_id and nome_limpo:
+                    res_ben = supabase.table("beneficiarios").select("id").ilike("nome_completo", nome_limpo).eq("projeto", "Bahia Sem Fome").execute()
+                    if res_ben.data:
+                        beneficiario_id = res_ben.data[0]["id"]
+                        
+                if not beneficiario_id:
+                    warnings.append({
+                        "linha": line_num,
+                        "codigo": raw_codigo_str,
+                        "erro": f"Beneficiário não encontrado para CPF: {raw_cpf or 'N/A'}, Nome: {raw_nome or 'N/A'}."
+                    })
+                    continue
+                    
+                # Atualizar código do plano no beneficiário correspondente
+                supabase.table("beneficiarios").update({"codigo_plano": codigo_plano_extraido}).eq("id", beneficiario_id).execute()
+                count_sucesso += 1
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar Passo 2 na linha {line_num}: {e}")
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": raw_codigo_str,
+                    "erro": f"Erro inesperado: {str(e)}"
+                })
+                
+        return {
+            "message": "Vinculação de códigos concluída",
+            "sucesso": count_sucesso,
+            "warnings": warnings
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao importar Passo 2: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@router.post("/importar-objetivos")
+async def importar_objetivos(file: UploadFile = File(...)):
+    """Passo 3: Importa objetivos e metas salvando-os como nós pais na tabela de metas."""
+    try:
+        linhas, fieldnames = await _ler_planilha_upload(file)
+        
+        col_codigo = find_col_in_list(fieldnames, ['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO', 'CHAVE'])
+        col_objetivo = find_col_in_list(fieldnames, ['Objetivo', 'OBJETIVO_GERAL', 'OBJETIVO'])
+        col_meta = find_col_in_list(fieldnames, ['Meta', 'META_DESCRICAO', 'INICIATIVA', 'DESCRICAO'])
+        
+        if not col_codigo:
+            return JSONResponse(content={"error": "Coluna de código do plano não encontrada na planilha."}, status_code=400)
+            
+        supabase = get_supabase()
+        count_sucesso = 0
+        beneficiarios_resetados = set()
+        warnings = []
+        
+        for line_num, row in enumerate(linhas, start=2):
+            raw_codigo = row.get(col_codigo)
+            if not raw_codigo:
+                continue
+                
+            codigo_bruto = str(raw_codigo).strip()
+            partes = codigo_bruto.split('.')
+            if len(partes) >= 2:
+                codigo_base = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_base = codigo_bruto
+            if not codigo_base:
+                continue
+                
+            # Buscar beneficiário pelo código do plano
+            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_base).eq("projeto", "Bahia Sem Fome").execute()
+            if not res_ben.data:
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": codigo_bruto,
+                    "erro": f"Beneficiário com código de plano {codigo_base} não encontrado."
+                })
+                continue
+                
+            beneficiario_ids = [b["id"] for b in res_ben.data]
+            
+            raw_objetivo = row.get(col_objetivo)
+            raw_meta = row.get(col_meta)
+            
+            desc_obj = str(raw_objetivo).strip() if raw_objetivo else None
+            desc_meta = str(raw_meta).strip() if raw_meta else None
+            
+            partes = codigo_bruto.split('.')
+            # Formatação do código do objetivo correspondente (ex: 31646.1.1 -> 31646.1.0)
+            if len(partes) > 1:
+                partes_obj = partes.copy()
+                partes_obj[-1] = '0'
+                cod_objetivo = '.'.join(partes_obj)
+            else:
+                cod_objetivo = codigo_bruto + ".0"
+                
+            cod_iniciativa = codigo_bruto
+            
+            try:
+                for ben_id in beneficiario_ids:
+                    # Limpeza das metas na primeira aparição do beneficiário nesta importação (sobrescrita limpa)
+                    if ben_id not in beneficiarios_resetados:
+                        supabase.table("bsf_metas_plano").delete().eq("beneficiario_id", ben_id).execute()
+                        beneficiarios_resetados.add(ben_id)
+                        
+                    # 1. Inserir Objetivo (nó pai - tipo OBJETIVO)
+                    if desc_obj:
+                        res_obj_check = supabase.table("bsf_metas_plano").select("id").eq("beneficiario_id", ben_id).eq("codigo", cod_objetivo).eq("tipo", "OBJETIVO").execute()
+                        if not res_obj_check.data:
+                            supabase.table("bsf_metas_plano").insert({
+                                "beneficiario_id": ben_id,
+                                "codigo": cod_objetivo,
+                                "tipo": "OBJETIVO",
+                                "descricao": desc_obj
+                            }).execute()
+                            
+                    # 2. Inserir Meta/Iniciativa (nó pai - tipo INICIATIVA)
+                    if desc_meta:
+                        res_meta_check = supabase.table("bsf_metas_plano").select("id").eq("beneficiario_id", ben_id).eq("codigo", cod_iniciativa).eq("tipo", "INICIATIVA").execute()
+                        if not res_meta_check.data:
+                            supabase.table("bsf_metas_plano").insert({
+                                "beneficiario_id": ben_id,
+                                "codigo": cod_iniciativa,
+                                "tipo": "INICIATIVA",
+                                "descricao": desc_meta
+                            }).execute()
+                            
+                count_sucesso += 1
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar Passo 3 na linha {line_num}: {e}")
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": codigo_bruto,
+                    "erro": f"Erro inesperado: {str(e)}"
+                })
+                
+        return {
+            "message": "Importação de objetivos concluída com sucesso",
+            "sucesso": count_sucesso,
+            "warnings": warnings
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao importar Passo 3: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@router.post("/importar-iniciativas")
+async def importar_iniciativas(file: UploadFile = File(...)):
+    """Passo 4: Processa colunas de execução e acopla os dados na tabela por chave composta (codigo + beneficiario_id)."""
+    try:
+        linhas, fieldnames = await _ler_planilha_upload(file)
+        
+        col_codigo = find_col_in_list(fieldnames, ['Codigo (Plano Produtivo)', 'CODIGO PLANO', 'COD_PLANO', 'CODIGO_PLANO', 'CODIGO', 'CHAVE'])
+        col_tarefa = find_col_in_list(fieldnames, ['TAREFA', 'ATIVIDADE_TAREFA', 'TAREFA_DESCRICAO'])
+        col_como_fazer = find_col_in_list(fieldnames, ['COMO FAZER', 'COMO_FAZER', 'METODO', 'ACAO'])
+        col_entrega = find_col_in_list(fieldnames, ['ENTREGA', 'PRODUTO', 'ENTREGA_DESCRICAO'])
+        col_recursos = find_col_in_list(fieldnames, ['RECURSOS NECESSARIOS', 'RECURSOS', 'RECURSOS_NECESSARIOS'])
+        
+        if not col_codigo:
+            return JSONResponse(content={"error": "Coluna de código não encontrada na planilha."}, status_code=400)
+            
+        supabase = get_supabase()
+        count_sucesso = 0
+        beneficiarios_resetados = set()
+        warnings = []
+        
+        for line_num, row in enumerate(linhas, start=2):
+            raw_codigo = row.get(col_codigo)
+            if not raw_codigo:
+                continue
+                
+            codigo_bruto = str(raw_codigo).strip()
+            partes = codigo_bruto.split('.')
+            if len(partes) >= 2:
+                codigo_base = f"{partes[0]}.{partes[1]}"
+            else:
+                codigo_base = codigo_bruto
+            if not codigo_base:
+                continue
+                
+            # Buscar beneficiário pelo código do plano
+            res_ben = supabase.table("beneficiarios").select("id").eq("codigo_plano", codigo_base).eq("projeto", "Bahia Sem Fome").execute()
+            if not res_ben.data:
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": codigo_bruto,
+                    "erro": f"Beneficiário com código de plano {codigo_base} não encontrado."
+                })
+                continue
+                
+            beneficiario_ids = [b["id"] for b in res_ben.data]
+            
+            raw_tarefa = row.get(col_tarefa)
+            raw_como_fazer = row.get(col_como_fazer)
+            raw_entrega = row.get(col_entrega)
+            raw_recursos = row.get(col_recursos)
+            
+            desc_tarefa = str(raw_tarefa).strip() if raw_tarefa else None
+            desc_como_fazer = str(raw_como_fazer).strip() if raw_como_fazer else None
+            desc_entrega = str(raw_entrega).strip() if raw_entrega else None
+            desc_recursos = str(raw_recursos).strip() if raw_recursos else None
+            
+            try:
+                for ben_id in beneficiario_ids:
+                    # Reset técnico preventivo na primeira aparição
+                    if ben_id not in beneficiarios_resetados:
+                        supabase.table("bsf_metas_plano").update({
+                            "tarefa": None,
+                            "como_fazer": None,
+                            "entrega": None,
+                            "recursos_necessarios": None
+                        }).eq("beneficiario_id", ben_id).execute()
+                        beneficiarios_resetados.add(ben_id)
+                        
+                    # Validar estritamente se a meta pai (tipo INICIATIVA) já existe para o beneficiário (Opção A)
+                    res_meta = supabase.table("bsf_metas_plano").select("id").eq("beneficiario_id", ben_id).eq("codigo", codigo_bruto).eq("tipo", "INICIATIVA").execute()
+                    
+                    if not res_meta.data:
+                        warnings.append({
+                            "linha": line_num,
+                            "codigo": codigo_bruto,
+                            "erro": f"Meta/Iniciativa pai não encontrada para o beneficiário ID {ben_id}. Passo 3 foi pulado?"
+                        })
+                        continue
+                        
+                    meta_id = res_meta.data[0]["id"]
+                    
+                    # Atualizar com os dados adicionais de execução (acoplamento)
+                    payload_update = {}
+                    if desc_tarefa is not None:
+                        payload_update["tarefa"] = desc_tarefa
+                    if desc_como_fazer is not None:
+                        payload_update["como_fazer"] = desc_como_fazer
+                    if desc_entrega is not None:
+                        payload_update["entrega"] = desc_entrega
+                    if desc_recursos is not None:
+                        payload_update["recursos_necessarios"] = desc_recursos
+                        
+                    if payload_update:
+                        supabase.table("bsf_metas_plano").update(payload_update).eq("id", meta_id).execute()
+                        count_sucesso += 1
+                        
+            except Exception as e:
+                logger.error(f"Erro ao processar Passo 4 na linha {line_num}: {e}")
+                warnings.append({
+                    "linha": line_num,
+                    "codigo": codigo_bruto,
+                    "erro": f"Erro inesperado: {str(e)}"
+                })
+                
+        return {
+            "message": "Acoplamento de iniciativas concluído",
+            "sucesso": count_sucesso,
+            "warnings": warnings
+        }
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Erro ao importar Passo 4: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+

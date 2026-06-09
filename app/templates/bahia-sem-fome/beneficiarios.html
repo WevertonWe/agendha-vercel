@@ -62,11 +62,8 @@
                 <span id="benefCount" class="badge bg-primary">0</span>
             </div>
             <div>
-                <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalImportacao()">
-                    <i class="fas fa-file-excel me-1"></i> Importar Planilha
-                </button>
-                <button class="btn btn-sm btn-outline-info me-1" onclick="abrirModalImportacaoMetas()">
-                    <i class="fas fa-project-diagram me-1"></i> Importar Metas (PowerBI)
+                <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalWizardImportacao()">
+                    <i class="fas fa-magic me-1"></i> Assistente de Importação (4 Passos)
                 </button>
                 <button class="btn btn-sm btn-primary" onclick="abrirModalCadastro()">
                     <i class="fas fa-plus me-1"></i> Novo Beneficiário
@@ -132,56 +129,124 @@
     </div>
 </div>
 
-<!-- Modal Importação -->
-<div class="modal fade" id="modalImportacao" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i>Importar Planilha</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+<!-- Modal Wizard Importação BSF -->
+<div class="modal fade" id="modalWizardImportacao" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0 rounded-3">
+            <div class="modal-header bg-dark text-white py-3">
+                <h5 class="modal-title fw-bold d-flex align-items-center">
+                    <i class="fas fa-magic text-warning me-2"></i> Assistente de Importação BSF (4 Passos)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <p class="small text-muted">A planilha pode estar em formato CSV ou XLSX. O sistema detectará automaticamente as colunas (Nome, CPF, CAF, Município, Comunidade, Técnico).</p>
-                <div class="mb-3 text-center">
-                    <a href="/api/bsf/beneficiarios/template" class="btn btn-sm btn-outline-primary mb-3">
-                        <i class="fas fa-download me-1"></i> 📥 Baixar Planilha Modelo
-                    </a>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Arquivo Planilha</label>
-                    <input class="form-control" type="file" id="arquivoImportacao" accept=".csv,.xlsx">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" onclick="importarPlanilha()" id="btnImportar">
-                    <i class="fas fa-upload me-1"></i> Importar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+            <div class="modal-body p-4">
+                <!-- Nav Tabs -->
+                <ul class="nav nav-pills nav-justified mb-4 bg-light p-1 rounded-2 border" id="wizardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active py-2 fw-bold small" id="tab-passo1" data-bs-toggle="tab" data-bs-target="#panel-passo1" type="button" role="tab" aria-controls="panel-passo1" aria-selected="true">
+                            <i class="fas fa-users me-1"></i> Passo 1: Beneficiários
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2 fw-bold small disabled" id="tab-passo2" data-bs-toggle="tab" data-bs-target="#panel-passo2" type="button" role="tab" aria-controls="panel-passo2" aria-selected="false" disabled>
+                            <i class="fas fa-link me-1"></i> Passo 2: Códigos
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2 fw-bold small disabled" id="tab-passo3" data-bs-toggle="tab" data-bs-target="#panel-passo3" type="button" role="tab" aria-controls="panel-passo3" aria-selected="false" disabled>
+                            <i class="fas fa-bullseye me-1"></i> Passo 3: Objetivos
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2 fw-bold small disabled" id="tab-passo4" data-bs-toggle="tab" data-bs-target="#panel-passo4" type="button" role="tab" aria-controls="panel-passo4" aria-selected="false" disabled>
+                            <i class="fas fa-tasks me-1"></i> Passo 4: Execução
+                        </button>
+                    </li>
+                </ul>
 
-<!-- Modal Importação Metas -->
-<div class="modal fade" id="modalImportacaoMetas" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title fw-bold"><i class="fas fa-project-diagram me-2"></i>Importar Metas (PowerBI)</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-muted">A planilha de Metas (PowerBI) pode estar em formato CSV ou XLSX. O sistema realizará a varredura e importará as metas associadas aos beneficiários por meio do código do plano, aplicando a **sobrescrita limpa** dos lotes antigos.</p>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Arquivo de Metas</label>
-                    <input class="form-control" type="file" id="arquivoImportacaoMetas" accept=".csv,.xlsx">
+                <!-- Tab Content -->
+                <div class="tab-content border rounded p-4 bg-white shadow-xs" id="wizardTabsContent">
+                    <!-- PASSO 1 -->
+                    <div class="tab-pane fade show active" id="panel-passo1" role="tabpanel" aria-labelledby="tab-passo1">
+                        <div class="mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold text-success mb-1">Passo 1: Carga Inicial de Beneficiários</h6>
+                            <p class="text-muted small mb-0">Insira a planilha de beneficiários para o cadastro ou atualização cadastral do lote inicial no projeto Bahia Sem Fome.</p>
+                        </div>
+                        <div class="mb-3 text-center">
+                            <a href="/api/bsf/beneficiarios/template" class="btn btn-sm btn-outline-success mb-2">
+                                <i class="fas fa-download me-1"></i> Baixar Planilha Modelo (Beneficiários)
+                            </a>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Arquivo Planilha (CSV ou XLSX)</label>
+                            <input class="form-control" type="file" id="arquivoPasso1" accept=".csv,.xlsx">
+                        </div>
+                        <div id="diagnosticPasso1" class="border rounded p-2 bg-light font-monospace small mb-3 d-none" style="max-height: 150px; overflow-y: auto;"></div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-success fw-bold" onclick="executarPasso1()" id="btnPasso1">
+                                <i class="fas fa-upload me-1"></i> Importar Beneficiários
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASSO 2 -->
+                    <div class="tab-pane fade" id="panel-passo2" role="tabpanel" aria-labelledby="tab-passo2">
+                        <div class="mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold text-primary mb-1">Passo 2: Vinculação de Códigos do Plano Produtivo</h6>
+                            <p class="text-muted small mb-0">Vincula o código numérico base extraído do PowerBI (ex: 31646) a cada beneficiário, usando correspondência estrita por CPF ou Nome Completo.</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Arquivo Planilha de Códigos (CSV ou XLSX)</label>
+                            <input class="form-control" type="file" id="arquivoPasso2" accept=".csv,.xlsx">
+                        </div>
+                        <div id="diagnosticPasso2" class="border rounded p-2 bg-light font-monospace small mb-3 d-none" style="max-height: 150px; overflow-y: auto;"></div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-primary fw-bold" onclick="executarPasso2()" id="btnPasso2">
+                                <i class="fas fa-link me-1"></i> Vincular Códigos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASSO 3 -->
+                    <div class="tab-pane fade" id="panel-passo3" role="tabpanel" aria-labelledby="tab-passo3">
+                        <div class="mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold text-info mb-1">Passo 3: Importação de Objetivos e Metas Padrão</h6>
+                            <p class="text-muted small mb-0">Insere os nós estruturais de Objetivos e Metas base no banco de dados para cada beneficiário mapeado via código de plano produtivo.</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Arquivo de Metas (CSV ou XLSX)</label>
+                            <input class="form-control" type="file" id="arquivoPasso3" accept=".csv,.xlsx">
+                        </div>
+                        <div id="diagnosticPasso3" class="border rounded p-2 bg-light font-monospace small mb-3 d-none" style="max-height: 150px; overflow-y: auto;"></div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-info text-white fw-bold" onclick="executarPasso3()" id="btnPasso3">
+                                <i class="fas fa-bullseye me-1"></i> Importar Objetivos & Metas
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- PASSO 4 -->
+                    <div class="tab-pane fade" id="panel-passo4" role="tabpanel" aria-labelledby="tab-passo4">
+                        <div class="mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold text-dark mb-1">Passo 4: Ingestão de Iniciativas e Execução (Acoplamento)</h6>
+                            <p class="text-muted small mb-0">Processa as colunas de execução detalhadas das iniciativas (Tarefa, Como Fazer, Entrega e Recursos) e as acopla na meta pai correspondente.</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Arquivo de Execução (CSV ou XLSX)</label>
+                            <input class="form-control" type="file" id="arquivoPasso4" accept=".csv,.xlsx">
+                        </div>
+                        <div id="diagnosticPasso4" class="border rounded p-2 bg-light font-monospace small mb-3 d-none" style="max-height: 150px; overflow-y: auto;"></div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-dark fw-bold" onclick="executarPasso4()" id="btnPasso4">
+                                <i class="fas fa-tasks me-1"></i> Ingerir Iniciativas & Execução
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-info text-white" onclick="importarPlanilhaMetas()" id="btnImportarMetas">
-                    <i class="fas fa-upload me-1"></i> Importar Metas
-                </button>
+            <div class="modal-footer bg-light py-2">
+                <span class="small text-muted me-auto"><i class="fas fa-shield-alt"></i> Higienização do PowerBI ativa</span>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar Assistente</button>
             </div>
         </div>
     </div>
@@ -287,8 +352,7 @@ let atvIdGlobalSalvaEdicao = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let detalheModalInst = null;
-let modalImportacaoInst = null;
-let modalImportacaoMetasInst = null;
+let modalWizardImportacaoInst = null;
 let modalCadastroInst = null;
 let modalNovaAtividadeInst = null;
 
@@ -434,6 +498,15 @@ async function verDetalhe(id) {
     beneficiarioIdGlobal = id;
     const modalEl = document.getElementById('modalDetalhe');
     const body = document.getElementById('modalDetalheBody');
+    
+    // Restaurar título padrão no carregamento
+    if (modalEl) {
+        const titleEl = modalEl.querySelector('.modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-eye me-2"></i>Detalhes do Beneficiário';
+        }
+    }
+    
     body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
 
     if (typeof bootstrap !== 'undefined') {
@@ -444,6 +517,20 @@ async function verDetalhe(id) {
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}`);
         const b = await res.json();
+
+        // Atualizar título do modal dinamicamente com nome e código do plano
+        if (modalEl) {
+            const titleEl = modalEl.querySelector('.modal-title');
+            if (titleEl) {
+                const nomeCompleto = b.nome_completo || 'Beneficiário';
+                const planoStr = b.codigo_plano ? `- Plano #${b.codigo_plano}` : '- Sem Plano';
+                titleEl.innerHTML = `<i class="fas fa-eye me-2"></i>${nomeCompleto} ${planoStr}`;
+            }
+        }
+
+        const badgePlano = b.codigo_plano 
+            ? `<span class="badge bg-dark fs-6">${b.codigo_plano}</span>` 
+            : `<span class="badge bg-secondary fs-6">Sem Plano</span>`;
 
         body.innerHTML = `
             <div class="row g-3">
@@ -479,6 +566,10 @@ async function verDetalhe(id) {
                     <p class="mb-1"><strong>Verificado BSF:</strong></p>
                     <p class="text-muted">${b.verificado_bsf || 'Não'}</p>
                 </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Código do Plano (PowerBI):</strong></p>
+                    <p class="text-muted">${badgePlano}</p>
+                </div>
             </div>
             <hr>
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -490,10 +581,18 @@ async function verDetalhe(id) {
             <div id="docsContainer" class="mt-2">
                 <div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>
             </div>
+            <div class="card mt-3 shadow-sm border-start border-info border-4">
+                <div class="card-header bg-white fw-bold d-flex align-items-center">
+                    <i class="fas fa-project-diagram text-info me-2"></i> Plano Produtivo Individual (PowerBI)
+                </div>
+                <div class="card-body bg-light" id="bsf-plano-detalhado-container" style="max-height: 350px; overflow-y: auto;">
+                </div>
+            </div>
         `;
 
         // Load file associations
         carregarArquivos(id);
+        carregarPlanoProdutivo(id);
 
     } catch (e) {
         body.innerHTML = '<p class="text-danger">Erro ao carregar detalhes.</p>';
@@ -793,35 +892,72 @@ async function excluirBeneficiario(id) {
     }
 }
 
-function abrirModalImportacao() {
-    document.getElementById('arquivoImportacao').value = '';
+function abrirModalWizardImportacao() {
+    // Resetar campos de arquivos
+    ['arquivoPasso1', 'arquivoPasso2', 'arquivoPasso3', 'arquivoPasso4'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+    });
+    
+    // Ocultar e limpar diagnósticos
+    ['diagnosticPasso1', 'diagnosticPasso2', 'diagnosticPasso3', 'diagnosticPasso4'].forEach(id => {
+        const diag = document.getElementById(id);
+        if (diag) {
+            diag.innerHTML = '';
+            diag.classList.add('d-none');
+        }
+    });
+
+    // Travar novamente abas subsequentes
+    const tab2 = document.getElementById('tab-passo2');
+    const tab3 = document.getElementById('tab-passo3');
+    const tab4 = document.getElementById('tab-passo4');
+    
+    if (tab2) { tab2.classList.add('disabled'); tab2.setAttribute('disabled', 'true'); }
+    if (tab3) { tab3.classList.add('disabled'); tab3.setAttribute('disabled', 'true'); }
+    if (tab4) { tab4.classList.add('disabled'); tab4.setAttribute('disabled', 'true'); }
+    
+    // Focar no Passo 1
+    const tab1 = document.getElementById('tab-passo1');
+    if (tab1) {
+        tab1.classList.remove('disabled');
+        tab1.removeAttribute('disabled');
+        if (typeof bootstrap !== 'undefined') {
+            const tabInst = new bootstrap.Tab(tab1);
+            tabInst.show();
+        }
+    }
+    
+    // Mostrar modal
     if (typeof bootstrap !== 'undefined') {
-        modalImportacaoInst = new bootstrap.Modal(document.getElementById('modalImportacao'));
-        modalImportacaoInst.show();
+        const modalEl = document.getElementById('modalWizardImportacao');
+        if (modalEl) {
+            modalWizardImportacaoInst = new bootstrap.Modal(modalEl);
+            modalWizardImportacaoInst.show();
+        }
     }
 }
 
-function abrirModalCadastro() {
-    document.getElementById('formCadastroBeneficiario').reset();
-    if (typeof bootstrap !== 'undefined') {
-        modalCadastroInst = new bootstrap.Modal(document.getElementById('modalCadastro'));
-        modalCadastroInst.show();
+async function executarPasso1() {
+    const input = document.getElementById('arquivoPasso1');
+    const diagnosticDiv = document.getElementById('diagnosticPasso1');
+    
+    if (diagnosticDiv) {
+        diagnosticDiv.innerHTML = '';
+        diagnosticDiv.classList.add('d-none');
     }
-}
-
-async function importarPlanilha() {
-    const input = document.getElementById('arquivoImportacao');
+    
     if (!input.files || !input.files.length) {
-        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV.");
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX para o Passo 1.");
         return;
     }
     
     const formData = new FormData();
     formData.append("file", input.files[0]);
     
-    const btn = document.getElementById('btnImportar');
+    const btn = document.getElementById('btnPasso1');
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
     btn.disabled = true;
     
     try {
@@ -831,65 +967,249 @@ async function importarPlanilha() {
         });
         
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erro na importação.");
+        if (!res.ok) throw new Error(data.error || "Erro no processamento do Passo 1.");
         
-        if (typeof ui !== 'undefined') ui.feedbackSucesso(`Importação concluída: ${data.novos} novos, ${data.atualizados} atualizados.`);
-        else alert(`Importação concluída: ${data.novos} novos, ${data.atualizados} atualizados.`);
+        const novos = data.novos_inseridos ?? data.novos ?? 0;
+        const atualizados = data.atualizados ?? 0;
         
-        modalImportacaoInst?.hide();
+        if (typeof ui !== 'undefined') {
+            ui.feedbackSucesso(`Passo 1 concluído! Novos: ${novos}, Atualizados: ${atualizados}.`);
+        }
+        
+        // Renderizar avisos se existirem
+        const descartes = data.diagnostico_descartes || [];
+        if (descartes.length > 0 && diagnosticDiv) {
+            let html = `<div class="alert alert-warning py-1 mb-2 small fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Linhas ignoradas/com aviso (${descartes.length}):</div>`;
+            descartes.forEach(w => {
+                html += `
+                <div class="mb-1 border-bottom pb-1">
+                    <strong>Linha ${w.linha}:</strong> <span class="text-danger">${w.motivo || 'Aviso desconhecido'}</span> (Beneficiário: ${w.nome || '-'})
+                </div>`;
+            });
+            diagnosticDiv.innerHTML = html;
+            diagnosticDiv.classList.remove('d-none');
+        }
+        
+        // Habilitar e mudar para o Passo 2
+        const tab2 = document.getElementById('tab-passo2');
+        if (tab2) {
+            tab2.classList.remove('disabled');
+            tab2.removeAttribute('disabled');
+            if (typeof bootstrap !== 'undefined') {
+                const tabInstance = new bootstrap.Tab(tab2);
+                tabInstance.show();
+            }
+        }
+        
         carregarBeneficiarios(1);
-    } catch(e) {
+    } catch (e) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
-        else alert(e.message);
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
 }
 
-function abrirModalImportacaoMetas() {
-    document.getElementById('arquivoImportacaoMetas').value = '';
-    if (typeof bootstrap !== 'undefined') {
-        modalImportacaoMetasInst = new bootstrap.Modal(document.getElementById('modalImportacaoMetas'));
-        modalImportacaoMetasInst.show();
+async function executarPasso2() {
+    const input = document.getElementById('arquivoPasso2');
+    const diagnosticDiv = document.getElementById('diagnosticPasso2');
+    
+    if (diagnosticDiv) {
+        diagnosticDiv.innerHTML = '';
+        diagnosticDiv.classList.add('d-none');
     }
-}
-
-async function importarPlanilhaMetas() {
-    const input = document.getElementById('arquivoImportacaoMetas');
+    
     if (!input.files || !input.files.length) {
-        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX.");
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX para o Passo 2.");
         return;
     }
     
     const formData = new FormData();
     formData.append("file", input.files[0]);
     
-    const btn = document.getElementById('btnImportarMetas');
+    const btn = document.getElementById('btnPasso2');
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
     btn.disabled = true;
     
     try {
-        const res = await fetch('/api/bsf/beneficiarios/importar-metas', {
+        const res = await fetch('/api/bsf/beneficiarios/vincular-codigos', {
             method: 'POST',
             body: formData
         });
         
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Erro na importação de metas.");
+        if (!res.ok) throw new Error(data.error || "Erro no processamento do Passo 2.");
+        
+        const sucesso = data.sucesso ?? 0;
         
         if (typeof ui !== 'undefined') {
-            ui.feedbackSucesso(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas para ${data.beneficiarios_atualizados} beneficiários.`);
-        } else {
-            alert(`Metas importadas com sucesso! ${data.metas_inseridas} metas criadas.`);
+            ui.feedbackSucesso(`Passo 2 concluído! ${sucesso} códigos de planos vinculados com sucesso.`);
         }
         
-        modalImportacaoMetasInst?.hide();
+        // Renderizar avisos se existirem
+        const warnings = data.warnings || [];
+        if (warnings.length > 0 && diagnosticDiv) {
+            let html = `<div class="alert alert-warning py-1 mb-2 small fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Linhas ignoradas/com aviso (${warnings.length}):</div>`;
+            warnings.forEach(w => {
+                html += `
+                <div class="mb-1 border-bottom pb-1">
+                    <strong>Linha ${w.linha}:</strong> Código <span class="badge bg-secondary">${w.codigo || '-'}</span> - <span class="text-danger">${w.erro || 'Erro não especificado'}</span>
+                </div>`;
+            });
+            diagnosticDiv.innerHTML = html;
+            diagnosticDiv.classList.remove('d-none');
+        }
+        
+        // Habilitar e mudar para o Passo 3
+        const tab3 = document.getElementById('tab-passo3');
+        if (tab3) {
+            tab3.classList.remove('disabled');
+            tab3.removeAttribute('disabled');
+            if (typeof bootstrap !== 'undefined') {
+                const tabInstance = new bootstrap.Tab(tab3);
+                tabInstance.show();
+            }
+        }
+        
         carregarBeneficiarios(1);
-    } catch(e) {
+    } catch (e) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
-        else alert(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function executarPasso3() {
+    const input = document.getElementById('arquivoPasso3');
+    const diagnosticDiv = document.getElementById('diagnosticPasso3');
+    
+    if (diagnosticDiv) {
+        diagnosticDiv.innerHTML = '';
+        diagnosticDiv.classList.add('d-none');
+    }
+    
+    if (!input.files || !input.files.length) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX para o Passo 3.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+    
+    const btn = document.getElementById('btnPasso3');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/importar-objetivos', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro no processamento do Passo 3.");
+        
+        const sucesso = data.sucesso ?? 0;
+        
+        if (typeof ui !== 'undefined') {
+            ui.feedbackSucesso(`Passo 3 concluído! ${sucesso} objetivos/metas estruturais inseridos.`);
+        }
+        
+        // Renderizar avisos se existirem
+        const warnings = data.warnings || [];
+        if (warnings.length > 0 && diagnosticDiv) {
+            let html = `<div class="alert alert-warning py-1 mb-2 small fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Linhas ignoradas/com aviso (${warnings.length}):</div>`;
+            warnings.forEach(w => {
+                html += `
+                <div class="mb-1 border-bottom pb-1">
+                    <strong>Linha ${w.linha}:</strong> Código <span class="badge bg-secondary">${w.codigo || '-'}</span> - <span class="text-danger">${w.erro || 'Erro não especificado'}</span>
+                </div>`;
+            });
+            diagnosticDiv.innerHTML = html;
+            diagnosticDiv.classList.remove('d-none');
+        }
+        
+        // Habilitar e mudar para o Passo 4
+        const tab4 = document.getElementById('tab-passo4');
+        if (tab4) {
+            tab4.classList.remove('disabled');
+            tab4.removeAttribute('disabled');
+            if (typeof bootstrap !== 'undefined') {
+                const tabInstance = new bootstrap.Tab(tab4);
+                tabInstance.show();
+            }
+        }
+        
+        carregarBeneficiarios(1);
+    } catch (e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function executarPasso4() {
+    const input = document.getElementById('arquivoPasso4');
+    const diagnosticDiv = document.getElementById('diagnosticPasso4');
+    
+    if (diagnosticDiv) {
+        diagnosticDiv.innerHTML = '';
+        diagnosticDiv.classList.add('d-none');
+    }
+    
+    if (!input.files || !input.files.length) {
+        if (typeof ui !== 'undefined') ui.feedbackErro("Selecione um arquivo CSV ou XLSX para o Passo 4.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+    
+    const btn = document.getElementById('btnPasso4');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/bsf/beneficiarios/importar-iniciativas', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Erro no processamento do Passo 4.");
+        
+        const sucesso = data.sucesso ?? 0;
+        const warnings = data.warnings || [];
+        
+        if (typeof ui !== 'undefined') {
+            if (warnings.length > 0) {
+                ui.feedbackSucesso(`Acoplamento concluído com avisos! ${sucesso} itens atualizados.`);
+            } else {
+                ui.feedbackSucesso(`Passo 4 concluído! ${sucesso} iniciativas e detalhes de execução acoplados.`);
+            }
+        }
+        
+        // Renderizar avisos se existirem
+        if (warnings.length > 0 && diagnosticDiv) {
+            let html = `<div class="alert alert-warning py-1 mb-2 small fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Linhas ignoradas/com aviso (${warnings.length}):</div>`;
+            warnings.forEach(w => {
+                html += `
+                <div class="mb-1 border-bottom pb-1">
+                    <strong>Linha ${w.linha}:</strong> Código <span class="badge bg-secondary">${w.codigo || '-'}</span> - <span class="text-danger">${w.erro || 'Erro não especificado'}</span>
+                </div>`;
+            });
+            diagnosticDiv.innerHTML = html;
+            diagnosticDiv.classList.remove('d-none');
+        }
+        
+        carregarBeneficiarios(1);
+    } catch (e) {
+        if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
@@ -1208,6 +1528,171 @@ async function cadastrarCategoriaInline(ehDaEdicao = false) {
     } catch (e) {
         if (typeof ui !== 'undefined') ui.feedbackErro(e.message);
         else alert(e.message);
+    }
+}
+
+async function carregarPlanoProdutivo(beneficiarioId) {
+    const container = document.getElementById('bsf-plano-detalhado-container');
+    if (!container) {
+        console.error("bsf-plano-detalhado-container não encontrado no DOM!");
+        return;
+    }
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+            <p class="text-muted small mt-2">Carregando plano produtivo...</p>
+        </div>`;
+    
+    try {
+        const timestamp = new Date().getTime();
+        const res = await fetch(`/api/bsf/beneficiarios/${beneficiarioId}/metas?_=${timestamp}`);
+        if (!res.ok) throw new Error("Erro ao carregar as metas do plano");
+        
+        const metas = await res.json();
+        
+        if (!metas || metas.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-clipboard-list fa-2x mb-2 text-secondary"></i>
+                    <p class="mb-0 small">Nenhum plano produtivo individual importado para este beneficiário.</p>
+                </div>`;
+            return;
+        }
+        
+        const objetivos = [];
+        const objetivosMap = {};
+        const iniciativasOrfas = [];
+        
+        metas.forEach(meta => {
+            if (meta.tipo === 'OBJETIVO') {
+                const obj = { ...meta, iniciativas: [] };
+                objetivos.push(obj);
+                objetivosMap[meta.codigo] = obj;
+            }
+        });
+        
+        metas.forEach(meta => {
+            if (meta.tipo === 'INICIATIVA') {
+                const parentCode = meta.codigo.split('.').slice(0, -1).join('.');
+                if (objetivosMap[parentCode]) {
+                    objetivosMap[parentCode].iniciativas.push(meta);
+                } else {
+                    let currentParent = parentCode;
+                    let found = false;
+                    while (currentParent.includes('.')) {
+                        if (objetivosMap[currentParent]) {
+                            objetivosMap[currentParent].iniciativas.push(meta);
+                            found = true;
+                            break;
+                        }
+                        currentParent = currentParent.split('.').slice(0, -1).join('.');
+                    }
+                    if (!found) {
+                        const match = objetivos.find(o => meta.codigo.startsWith(o.codigo + '.'));
+                        if (match) {
+                            match.iniciativas.push(meta);
+                        } else {
+                            iniciativasOrfas.push(meta);
+                        }
+                    }
+                }
+            }
+        });
+        
+        let htmlContent = '';
+        
+        objetivos.forEach(obj => {
+            htmlContent += `
+            <div class="mb-3 border-bottom pb-2">
+                <div class="d-flex align-items-start mb-2">
+                    <strong class="text-dark small d-block" style="line-height: 1.4;">
+                        <span class="badge bg-dark text-white me-2 px-2 py-1 fw-bold">[${obj.codigo}]</span>${obj.descricao}
+                    </strong>
+                </div>
+            `;
+            
+            if (obj.iniciativas && obj.iniciativas.length > 0) {
+                obj.iniciativas.forEach(init => {
+                    let tarefaHtml = '';
+                    if (init.tarefa && init.tarefa.trim() !== '') {
+                        tarefaHtml = `
+                        <div class="bg-light text-muted p-2 rounded border-start border-secondary small mt-2">
+                            <i class="fas fa-tasks me-2"></i><strong>Tarefa:</strong> ${init.tarefa}
+                        </div>`;
+                    }
+                    
+                    let comoFazerHtml = '';
+                    if (init.como_fazer && init.como_fazer.trim() !== '') {
+                        comoFazerHtml = `
+                        <div class="bg-success-subtle text-success p-2 rounded small mt-1">
+                            <i class="far fa-lightbulb text-success me-2"></i><strong>Como Fazer:</strong> ${init.como_fazer}
+                        </div>`;
+                    }
+                    
+                    htmlContent += `
+                    <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
+                        <div class="small text-secondary fw-semibold">
+                            • <span class="badge bg-dark text-white mx-1 fw-semibold px-2 py-1" style="font-size: 0.75rem;">[${init.codigo}]</span> ${init.descricao}
+                        </div>
+                        ${tarefaHtml}
+                        ${comoFazerHtml}
+                    </div>`;
+                });
+            } else {
+                htmlContent += `
+                <div class="ms-3 text-muted small py-1">
+                    Nenhuma iniciativa vinculada a este objetivo.
+                </div>`;
+            }
+            
+            htmlContent += `</div>`;
+        });
+        
+        if (iniciativasOrfas.length > 0) {
+            htmlContent += `
+            <div class="mb-3 border-bottom pb-2">
+                <div class="d-flex align-items-start mb-2">
+                    <span class="badge bg-secondary text-white me-2 fw-semibold px-2 py-1" style="font-size: 0.75rem;">Outros</span>
+                    <strong class="text-dark small d-block" style="line-height: 1.4;">Outras Iniciativas Importadas</strong>
+                </div>
+            `;
+            iniciativasOrfas.forEach(init => {
+                let tarefaHtml = '';
+                if (init.tarefa && init.tarefa.trim() !== '') {
+                    tarefaHtml = `
+                    <div class="bg-light text-muted p-2 rounded border-start border-secondary small mt-2">
+                        <i class="fas fa-tasks me-2"></i><strong>Tarefa:</strong> ${init.tarefa}
+                    </div>`;
+                }
+                
+                let comoFazerHtml = '';
+                if (init.como_fazer && init.como_fazer.trim() !== '') {
+                    comoFazerHtml = `
+                    <div class="bg-success-subtle text-success p-2 rounded small mt-1">
+                        <i class="far fa-lightbulb text-success me-2"></i><strong>Como Fazer:</strong> ${init.como_fazer}
+                    </div>`;
+                }
+                
+                htmlContent += `
+                <div class="ms-3 p-2 mb-2 bg-white rounded border-start border-info border-3 shadow-xs">
+                    <div class="small text-secondary fw-semibold">
+                        • <span class="badge bg-dark text-white mx-1 fw-semibold px-2 py-1" style="font-size: 0.75rem;">[${init.codigo}]</span> ${init.descricao}
+                    </div>
+                    ${tarefaHtml}
+                    ${comoFazerHtml}
+                </div>`;
+            });
+            htmlContent += `</div>`;
+        }
+        
+        container.innerHTML = htmlContent;
+    } catch (e) {
+        console.error("Erro em carregarPlanoProdutivo:", e);
+        container.innerHTML = `
+            <div class="text-danger small text-center py-4">
+                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                <p class="mb-0">Erro ao carregar o plano produtivo individual.</p>
+            </div>`;
     }
 }
 </script>

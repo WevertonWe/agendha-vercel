@@ -415,6 +415,31 @@ def init_db():
     )
     """)
 
+    # --- MÓDULO DE ATIVOS E CREDENCIAIS (ADMINISTRATIVO) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_powerbi_credentials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_projeto TEXT NOT NULL,
+        email_login TEXT NOT NULL,
+        senha TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Ativo',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS agendha_dispositivos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL,
+        marca_modelo TEXT NOT NULL,
+        numero_serie_imei TEXT UNIQUE NOT NULL,
+        responsavel_atual TEXT,
+        status TEXT NOT NULL DEFAULT 'Disponível',
+        url_termo_pdf TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     # --- MIGRAÇÕES E DADOS PADRÃO ---
     try:
         cursor.execute("ALTER TABLE propostas ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedores(id)")

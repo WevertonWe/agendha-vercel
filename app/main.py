@@ -258,9 +258,11 @@ from app.modules.mapa.routes import router as mapa_router, view_router as mapa_v
 app.include_router(mapa_router)
 app.include_router(mapa_view_router)
 
-# Admin Audit
+# Admin Audit & Assets
 from app.routers.admin_audit import router as admin_audit_router  # noqa: E402
+from app.routers.admin_assets import router as admin_assets_router  # noqa: E402
 app.include_router(admin_audit_router)
+app.include_router(admin_assets_router)
 
 # Módulo: Projetos (Hub e Sugestões)
 from app.modules.projetos.routers import router as projetos_router  # noqa: E402
@@ -276,6 +278,7 @@ app.include_router(bsf_atestes.router)
 app.include_router(bsf_beneficiarios.router)
 app.include_router(bsf_views.router)
 
+<<<<<<< HEAD
 print("\n🔍 ====== MAPA DE ROTAS ATIVAS NO FASTAPI ======")
 for route in app.routes:
     if hasattr(route, "path"):
@@ -283,6 +286,8 @@ for route in app.routes:
         print(f"➡️  Rota: {route.path} | Métodos: {methods}")
 print("================================================\n")
 
+=======
+>>>>>>> 3c52c71cbc677970c15a87ab08f81aaaa8fa2a97
 
 # --- Endpoint WebSocket ---
 @app.websocket("/ws")
