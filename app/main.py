@@ -279,7 +279,8 @@ app.include_router(bsf_views.router)
 print("\n🔍 ====== MAPA DE ROTAS ATIVAS NO FASTAPI ======")
 for route in app.routes:
     if hasattr(route, "path"):
-        print(f"➡️  Rota: {route.path} | Métodos: {route.methods}")
+        methods = getattr(route, "methods", "N/A")
+        print(f"➡️  Rota: {route.path} | Métodos: {methods}")
 print("================================================\n")
 
 
