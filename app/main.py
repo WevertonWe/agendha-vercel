@@ -200,7 +200,7 @@ if os.path.exists(upload_path):
     app.mount("/uploads", StaticFiles(directory=upload_path), name="uploads")
 else:
     # Na Vercel, se a pasta não subir no deploy, o app não deve crashar
-    print(f"⚠️ Alerta de Boot: Diretório {upload_path} não encontrado. Ignorando mount de estáticos.")
+    logging.warning(f"Alerta de Boot: Diretório {upload_path} não encontrado. Ignorando mount de estáticos.")
 
 # --- Inclusão de Rotas (Routers) ---
 # Core
@@ -278,16 +278,12 @@ app.include_router(bsf_atestes.router)
 app.include_router(bsf_beneficiarios.router)
 app.include_router(bsf_views.router)
 
-<<<<<<< HEAD
-print("\n🔍 ====== MAPA DE ROTAS ATIVAS NO FASTAPI ======")
+print("\n[MAPA DE ROTAS ATIVAS NO FASTAPI]")
 for route in app.routes:
     if hasattr(route, "path"):
         methods = getattr(route, "methods", "N/A")
-        print(f"➡️  Rota: {route.path} | Métodos: {methods}")
+        print(f"  Rota: {route.path} | Metodos: {methods}")
 print("================================================\n")
-
-=======
->>>>>>> 3c52c71cbc677970c15a87ab08f81aaaa8fa2a97
 
 # --- Endpoint WebSocket ---
 @app.websocket("/ws")
