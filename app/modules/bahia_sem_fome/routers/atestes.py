@@ -133,9 +133,15 @@ async def gerar_atestes(file: UploadFile = File(...)):
         if df is None or df.empty:
             raise HTTPException(status_code=400, detail="Planilha inválida. Aba de dados não encontrada.")
 
-        # Busca Flexível de Colunas
+        # Busca Flexível de Colunas (insensível a acentos e maiúsculas/minúsculas)
+        import unicodedata
+        def normalize_str(s):
+            s = str(s).upper()
+            return "".join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
         def find_col(key):
-            return next((c for c in df.columns if key.upper() in str(c).upper()), None)
+            norm_key = normalize_str(key)
+            return next((c for c in df.columns if norm_key in normalize_str(c)), None)
 
         col_nome = find_col("DADOS DO GRUPO FAMILIAR > NOME") or find_col("NOME")
         col_cpf = find_col("DADOS DO GRUPO FAMILIAR > CPF") or find_col("CPF DO BENEFICIÁRIO") or find_col("CPF")
