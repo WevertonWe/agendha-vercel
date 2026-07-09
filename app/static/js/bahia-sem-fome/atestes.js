@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
         } catch (error) {
-            logger.error('Erro:', error);
+            console.error('Erro:', error);
             updateStatus(0, 'Erro no processamento');
             addLog(`ERRO: ${error.message}`, 'text-danger');
             
