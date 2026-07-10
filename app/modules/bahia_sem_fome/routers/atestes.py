@@ -89,7 +89,29 @@ def converter_para_pdf(word_app, docx_path: Path, pdf_path: Path):
                 except Exception:
                     pass
 
-    logger.warning("Nenhum conversor de PDF (Word COM ou LibreOffice) conseguiu realizar a conversão.")
+    # 3. Tentar converter usando a API pública do Gotenberg (fallback para ambiente Cloud/Vercel)
+    try:
+        import requests
+        logger.info(f"Tentando converter via API do Gotenberg: {docx_path.name}")
+        url = "https://demo.gotenberg.dev/forms/libreoffice/convert"
+        with open(str(docx_path), "rb") as f:
+            files = {
+                "files": (docx_path.name, f)
+            }
+            # Timeout de 25 segundos para conversões de arquivo
+            response = requests.post(url, files=files, timeout=25)
+            
+        if response.status_code == 200:
+            with open(str(pdf_path), "wb") as f_out:
+                f_out.write(response.content)
+            logger.info(f"Conversão via Gotenberg concluída com sucesso: {pdf_path.name}")
+            return pdf_path.exists()
+        else:
+            logger.error(f"Erro na API do Gotenberg (status {response.status_code}): {response.text}")
+    except Exception as e:
+        logger.error(f"Erro ao converter com API do Gotenberg: {e}")
+
+    logger.warning("Nenhum conversor de PDF (Word COM, LibreOffice local ou Gotenberg API) conseguiu realizar a conversão.")
     return False
 
 
