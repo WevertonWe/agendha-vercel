@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 import fitz # PyMuPDF
 import pdfplumber
 import os
+from docx import Document
 
 router = APIRouter(prefix="/api/bahia-sem-fome", tags=["BSF API"])
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 class RenameInfo(BaseModel):
     nome: str = Field(description="Nome completo do beneficiário principal (titular da família)")
     tipo: str = Field(description="Tipo de documento: ATESTE ou COLLETUM")
+    cpf: str = Field(description="CPF do beneficiário, formatado com pontos e hífen (ex: '000.000.000-00'), ou vazio se não encontrado")
     atividade: str = Field(description="Descrição resumida da atividade que está assinalada/marcada com um 'X' (ou circulada, assinalada de qualquer forma) na tabela/lista de TIPO DE ATIVIDADE, em maiúsculas e sem acentos")
     data: str = Field(description="Data da atividade escrita no documento no formato DD-MM-AAAA ou vazio se não encontrada")
 
@@ -96,8 +98,8 @@ def extrair_local_regex(texto: str):
 
     return nome, tipo
 
-async def extrair_e_analisar(file_content: bytes, filename: str):
-    """Extrai visualmente (imagem) ou texto do PDF em cascata (Waterfall) e identifica nome, tipo, atividade e data."""
+async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "ateste"):
+    """Extrai visualmente (imagem) ou texto do PDF em cascata (Waterfall) e identifica nome, tipo, cpf, atividade e data."""
     try:
         # 1. TENTATIVA: IA Gemini Multimodal (Visão de Imagem) - Método Principal de Alta Precisão
         client = get_gemini_client()
@@ -110,22 +112,36 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
                     mime_type="image/png"
                 )
                 
-                prompt = (
-                    "Você é um assistente especialista em processamento de documentos do projeto 'Bahia Sem Fome'.\n"
-                    "Analise a imagem da página do documento fornecida.\n"
-                    "Você deve identificar e extrair as seguintes informações:\n"
-                    "1. O nome completo do beneficiário principal (titular da família), localizado no campo 'BENEFICIÁRIO(A)' ou 'NOME'.\n"
-                    "2. O tipo de documento: 'ATESTE' se for um Ateste de Atividade Individual, ou 'COLLETUM' se for um Formulário de Atividade Individual.\n"
-                    "3. Qual atividade específica está assinalada ou marcada com um 'X' (ou circulada, marcada de qualquer outra forma) na tabela/lista de 'TIPO DE ATIVIDADE'.\n"
-                    "   Retorne uma descrição curta e resumida da atividade em maiúsculas e sem acentos (ex: 'VISITA TECNICA', 'CADASTRO', 'CARACTERIZACAO UPF I', 'LEVANTAMENTO SOCIOECONOMICO', etc.).\n"
-                    "4. A data da atividade, geralmente preenchida à mão na linha da tabela do cabeçalho sob a coluna 'DATA'.\n"
-                    "   Formate a data obrigatoriamente como DD-MM-AAAA (ex: '15-08-2026'). Se não encontrar ou não estiver preenchida, retorne vazio.\n\n"
-                    "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
-                )
+                if mode == "ateste":
+                    prompt = (
+                        "Você é um assistente especialista em processamento de documentos do projeto 'Bahia Sem Fome'.\n"
+                        "Analise a imagem da página do documento de Ateste fornecida.\n"
+                        "Você deve identificar e extrair as seguintes informações:\n"
+                        "1. O nome completo do beneficiário principal (titular da família), localizado no campo 'BENEFICIÁRIO(A)' ou 'NOME'.\n"
+                        "2. O tipo de documento: Deve ser 'ATESTE'.\n"
+                        "3. O CPF do beneficiário principal, localizado no campo 'CPF' ou 'CPF BENEFICIÁRIO'. Retorne formatado com pontos e hífen (ex: '123.456.789-00'). Se não encontrar, retorne vazio.\n"
+                        "4. Qual atividade específica está assinalada ou marcada com um 'X' (ou circulada, marcada de qualquer outra forma) na tabela/lista de 'TIPO DE ATIVIDADE'.\n"
+                        "   Retorne uma descrição curta e resumida da atividade em maiúsculas e sem acentos (ex: 'VISITA TECNICA', 'CADASTRO', 'CARACTERIZACAO UPF I', 'LEVANTAMENTO SOCIOECONOMICO', etc.).\n"
+                        "5. A data da atividade, geralmente preenchida à mão na linha da tabela do cabeçalho sob a coluna 'DATA'.\n"
+                        "   Formate a data obrigatoriamente como DD-MM-AAAA (ex: '15-08-2026'). Se não encontrar ou não estiver preenchida, retorne vazio.\n\n"
+                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
+                    )
+                else: # colletum
+                    prompt = (
+                        "Você é um assistente especialista em processamento de documentos do projeto 'Bahia Sem Fome'.\n"
+                        "Analise a imagem da página do documento de Colletum fornecida.\n"
+                        "Você deve identificar e extrair as seguintes informações:\n"
+                        "1. O nome completo do beneficiário principal, localizado no campo de nome.\n"
+                        "2. O tipo de documento: Deve ser 'COLLETUM'.\n"
+                        "3. O CPF do beneficiário principal. Retorne formatado com pontos e hífen (ex: '123.456.789-00'). Se não encontrar, retorne vazio.\n"
+                        "4. A atividade descrita no formulário. Retorne uma descrição curta em maiúsculas (ex: 'FORMULARIO COLLETUM').\n"
+                        "5. A data do documento. Formate como DD-MM-AAAA ou vazio se não encontrar.\n\n"
+                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
+                    )
 
                 for nome_modelo in MODELOS_PERMITIDOS:
                     try:
-                        logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo}")
+                        logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo} no modo: {mode}")
                         response = await asyncio.to_thread(
                             client.models.generate_content,
                             model=nome_modelo,
@@ -140,11 +156,13 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
                         data = json.loads(response.text)
                         nome = data.get("nome", "DESCONHECIDO").strip().upper()
                         tipo = data.get("tipo", "DOCUMENTO").strip().upper()
+                        cpf = data.get("cpf", "").strip()
                         atividade = data.get("atividade", "").strip().upper()
                         data_doc = data.get("data", "").strip()
                         
                         # Saneamento dos dados
                         nome_saneado = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
+                        cpf_saneado = "".join(c for c in cpf if c.isalnum() or c in (".", "-")).strip()
                         atividade_saneada = "".join(c for c in atividade if c.isalnum() or c in (" ", "-", "_")).strip()
                         data_saneada = "".join(c for c in data_doc if c.isalnum() or c == "-").strip()
                         
@@ -162,7 +180,13 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
                             
                         new_name = " - ".join(parts) + ".pdf"
                         logger.info(f"✅ Sucesso visual com {nome_modelo} para {filename}: {new_name}")
-                        return new_name
+                        return new_name, {
+                            "nome": nome_saneado,
+                            "cpf": cpf_saneado,
+                            "tipo": tipo,
+                            "atividade": atividade_saneada,
+                            "data": data_saneada
+                        }
 
                     except Exception as e:
                         logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
@@ -200,26 +224,32 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
             nome_saneado = "".join(c for c in nome_local if c.isalnum() or c in (" ", "-", "_")).strip()
             new_name = f"{nome_saneado} - {tipo_local}.pdf"
             logger.info(f"⚡ Sucesso no Fallback Local (Regex) para {filename}: {new_name}")
-            return new_name
+            return new_name, {
+                "nome": nome_saneado,
+                "cpf": "",
+                "tipo": tipo_local,
+                "atividade": "",
+                "data": ""
+            }
 
         logger.error(f"❌ Todos os métodos falharam para o arquivo {filename}. Mantendo original.")
-        return filename
+        return filename, None
 
     except Exception as e:
         logger.error(f"Erro fatal ao processar {filename}: {e}")
-        return filename
+        return filename, None
 
 @router.post("/renomeador-individual")
-async def renomear_individual(file: UploadFile = File(...)):
+async def renomear_individual(file: UploadFile = File(...), mode: str = "ateste"):
     """Recebe um único PDF, renomeia-o via IA (ou fallback) e retorna o novo nome."""
     try:
         content = await file.read()
-        new_filename = await extrair_e_analisar(content, file.filename)
+        new_filename, data = await extrair_e_analisar(content, file.filename, mode)
         
         if not new_filename or new_filename.strip() == "":
             new_filename = file.filename
             
-        return {"new_name": new_filename}
+        return {"new_name": new_filename, "data": data}
     except Exception as e:
         logger.error(f"Erro ao processar arquivo individual {file.filename}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -238,7 +268,7 @@ async def renomear_lote(files: List[UploadFile] = File(...)):
                 content = await file.read()
                 
                 # Processamento assíncrono para cada arquivo
-                new_filename = await extrair_e_analisar(content, file.filename)
+                new_filename, _ = await extrair_e_analisar(content, file.filename, "ateste")
                 
                 # Se o nome falhar ou for vazio, usa o original
                 if not new_filename or new_filename.strip() == "":
@@ -260,3 +290,62 @@ async def renomear_lote(files: List[UploadFile] = File(...)):
     except Exception as e:
         logger.error(f"Erro na geração do ZIP: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar pacote ZIP: {str(e)}")
+
+class AtesteItem(BaseModel):
+    nome: str
+    cpf: str
+    atividade: str
+    data: str
+
+class FichaRequest(BaseModel):
+    items: List[AtesteItem]
+
+@router.post("/gerar-ficha-recebimento")
+async def gerar_ficha_recebimento(request: FichaRequest):
+    """Lê o template de Recebimento de documento.docx, preenche a tabela com os atestes processados e retorna o arquivo."""
+    try:
+        template_path = settings.BASE_DIR / "app" / "modules" / "bahia_sem_fome" / "assets" / "Recebimento de documento.docx"
+        if not template_path.exists():
+            raise HTTPException(status_code=404, detail="Template de recebimento não encontrado.")
+            
+        doc = Document(str(template_path))
+        
+        # O arquivo tem duas tabelas (Table 0 e Table 1) que contêm colunas NOME, CPF, ATIVIDADE, DATA
+        if len(doc.tables) >= 1:
+            table0 = doc.tables[0]
+            max_t0_rows = len(table0.rows) - 1 # desconsidera cabeçalho
+            
+            table1 = doc.tables[1] if len(doc.tables) >= 2 else None
+            max_t1_rows = len(table1.rows) - 1 if table1 else 0
+            
+            for idx, item in enumerate(request.items):
+                if idx < max_t0_rows:
+                    row = table0.rows[idx + 1]
+                    row.cells[0].text = item.nome
+                    row.cells[1].text = item.cpf
+                    row.cells[2].text = item.atividade
+                    row.cells[3].text = item.data
+                else:
+                    t1_idx = idx - max_t0_rows
+                    if table1 and t1_idx < max_t1_rows:
+                        row = table1.rows[t1_idx + 1]
+                        row.cells[0].text = item.nome
+                        row.cells[1].text = item.cpf
+                        row.cells[2].text = item.atividade
+                        row.cells[3].text = item.data
+                        
+        # Salva o documento gerado em um buffer em memória
+        doc_io = io.BytesIO()
+        doc.save(doc_io)
+        doc_io.seek(0)
+        
+        return StreamingResponse(
+            doc_io,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": "attachment; filename=Recebimento_de_documento.docx"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Erro ao gerar ficha de recebimento: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")

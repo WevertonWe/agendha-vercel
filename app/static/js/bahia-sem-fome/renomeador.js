@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -13,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsContainer = document.getElementById('process-logs');
 
     let selectedFiles = [];
+    let activeMode = null; // 'ateste' ou 'colletum'
 
     // Drag and Drop events
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -87,8 +87,46 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFileList();
     };
 
+    window.selectMode = (mode) => {
+        activeMode = mode;
+        const selectionContainer = document.getElementById('mode-selection-container');
+        const workContainer = document.getElementById('renomeador-work-container');
+        const activeBadge = document.getElementById('active-mode-badge');
+        const uploadIcon = document.getElementById('upload-icon-mode');
+
+        if (mode === 'ateste') {
+            activeBadge.className = 'badge bg-primary p-2 rounded-pill shadow-sm';
+            activeBadge.textContent = 'Modo: Ateste Escaneado';
+            uploadIcon.className = 'fas fa-file-signature display-1 text-primary mb-3';
+        } else {
+            activeBadge.className = 'badge bg-success p-2 rounded-pill shadow-sm';
+            activeBadge.textContent = 'Modo: Colletum';
+            uploadIcon.className = 'fas fa-mobile-alt display-1 text-success mb-3';
+        }
+
+        selectionContainer.classList.add('d-none');
+        workContainer.classList.remove('d-none');
+        addLog(`Modo selecionado: ${mode === 'ateste' ? 'Ateste Escaneado' : 'Colletum'}`);
+    };
+
+    window.resetSelection = () => {
+        activeMode = null;
+        selectedFiles = [];
+        updateFileList();
+        
+        const selectionContainer = document.getElementById('mode-selection-container');
+        const workContainer = document.getElementById('renomeador-work-container');
+        
+        workContainer.classList.add('d-none');
+        selectionContainer.classList.remove('d-none');
+        
+        statusContainer.classList.add('d-none');
+        progressBar.style.width = '0%';
+        logsContainer.innerHTML = '<div>> Aguardando início do processo...</div>';
+    };
+
     btnProcessar.addEventListener('click', async () => {
-        if (selectedFiles.length === 0) return;
+        if (selectedFiles.length === 0 || !activeMode) return;
 
         // Feedback visual e travamento do sistema
         statusContainer.classList.remove('d-none');
@@ -102,11 +140,12 @@ document.addEventListener('DOMContentLoaded', () => {
         progressBar.style.width = '0%';
         progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
         statusText.textContent = 'Iniciando processamento em lote...';
-        addLog(`Iniciando processamento sequencial de ${selectedFiles.length} arquivos...`);
+        addLog(`Iniciando processamento sequencial de ${selectedFiles.length} arquivos no modo [${activeMode.toUpperCase()}]...`);
 
         // Cria a instância do JSZip para agrupar tudo no navegador
         const zip = new JSZip();
         let arquivosComSucesso = 0;
+        const extractedDataList = [];
 
         try {
             for (let i = 0; i < selectedFiles.length; i++) {
@@ -126,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let novoNome = file.name;
                 try {
-                    const response = await fetch('/api/bahia-sem-fome/renomeador-individual', {
+                    const response = await fetch(`/api/bahia-sem-fome/renomeador-individual?mode=${activeMode}`, {
                         method: 'POST',
                         body: formData
                     });
@@ -136,6 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         novoNome = data.new_name || file.name;
                         addLog(`✅ Sucesso [${file.name}] -> Renomeado para: ${novoNome}`);
                         arquivosComSucesso++;
+
+                        // Coleta metadados se for ateste para preencher a folha no final
+                        if (activeMode === 'ateste' && data.data) {
+                            extractedDataList.push(data.data);
+                        }
                     } else {
                         // Trata erros não-JSON (como 413, 502, 504, 500 etc.)
                         let errorMessage = `Erro ${response.status}: ${response.statusText}`;
@@ -163,6 +207,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressBar.style.width = `${progressConcluido}%`;
             }
 
+            // GERAÇÃO DA FOLHA DE RECEBIMENTO (.DOCX) - Apenas para Atestes
+            if (activeMode === 'ateste' && extractedDataList.length > 0) {
+                statusText.textContent = 'Gerando ficha de recebimento (.docx)...';
+                addLog(`Enviando dados de ${extractedDataList.length} atestes para preencher a folha de recebimento...`);
+
+                try {
+                    const docxResponse = await fetch('/api/bahia-sem-fome/gerar-ficha-recebimento', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ items: extractedDataList })
+                    });
+
+                    if (docxResponse.ok) {
+                        const docxBlob = await docxResponse.blob();
+                        // Adiciona a folha preenchida ao ZIP
+                        zip.file("Recebimento de documento.docx", docxBlob);
+                        addLog('✅ Ficha "Recebimento de documento.docx" gerada e incluída no ZIP com sucesso!');
+                    } else {
+                        addLog('⚠️ Falha ao gerar ficha de recebimento (servidor retornou erro). O ZIP continuará apenas com os PDFs.');
+                    }
+                } catch (errDocx) {
+                    addLog(`⚠️ Erro ao requisitar geração da ficha de recebimento: ${errDocx.message}. O ZIP continuará apenas com os PDFs.`);
+                }
+            }
+
             statusText.textContent = 'Gerando arquivo ZIP final...';
             addLog('Empacotando todos os arquivos renomeados no navegador...');
             
@@ -173,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = window.URL.createObjectURL(zipContent);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `BSF_Renomeados_${new Date().getTime()}.zip`;
+            a.download = `BSF_${activeMode.toUpperCase()}_Renomeados_${new Date().getTime()}.zip`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -182,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
             progressBar.style.width = '100%';
             statusText.textContent = 'Sucesso! Download concluído.';
-            addLog(`Processamento concluído. ${arquivosComSucesso} de ${selectedFiles.length} arquivos renomeados.`);
+            addLog(`Processamento concluído. ${arquivosComSucesso} de ${selectedFiles.length} arquivos processados.`);
             
             if (window.ui) {
                 window.ui.feedbackSucesso(`Lote concluído! ${arquivosComSucesso} arquivos processados com sucesso.`);
@@ -217,10 +288,11 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedFiles = [];
         updateFileList();
         btnProcessar.disabled = false;
-        // Keep status visible for a few seconds then hide or let user close
-        setTimeout(() => {
-            // statusContainer.classList.add('d-none');
-            // progressBar.style.width = '0%';
-        }, 5000);
+        
+        // Remove os logs e barra para a tela inicial do modo
+        progressBar.style.width = '0%';
+        statusText.textContent = 'Aguardando arquivos...';
+        logsContainer.innerHTML = '<div>> Aguardando início do processo...</div>';
+        statusContainer.classList.add('d-none');
     }
 });

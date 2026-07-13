@@ -1,65 +1,110 @@
-
 {% extends "bahia-sem-fome/base_bsf.html" %}
 
 {% block title %}Renomeador de Arquivos - BSF{% endblock %}
 
 {% block bsf_content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
+    <div class="col-lg-10">
         <!-- Page Header -->
         <div class="text-center mb-5">
             <h2 class="h3 fw-bold text-dark">
-                <i class="fas fa-file-signature me-2 text-primary"></i> Renomeador de Arquivos em Lote
+                <i class="fas fa-file-signature me-2 text-primary"></i> Renomeador de Arquivos
             </h2>
-            <p class="text-muted">Utilize Inteligência Artificial para identificar beneficiários e tipos de documento em seus PDFs.</p>
+            <p class="text-muted">Utilize Inteligência Artificial para identificar beneficiários, atividades e organizar seus PDFs em lote.</p>
         </div>
 
-        <!-- Drag and Drop Area -->
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4">
-            <div class="card-body p-5">
-                <div id="drop-zone" class="drop-zone border-dashed rounded-4 p-5 text-center bg-light transition-all">
-                    <div class="drop-zone-content">
-                        <i class="fas fa-cloud-upload-alt display-1 text-primary mb-3"></i>
-                        <h4 class="fw-bold">Arraste seus PDFs aqui</h4>
-                        <p class="text-muted small">ou clique para selecionar arquivos do seu computador</p>
-                        <label for="file-input" class="visually-hidden">Selecionar arquivos PDF</label>
-                        <input type="file" id="file-input" multiple accept=".pdf" class="d-none">
-                        <button type="button" class="btn btn-primary px-4 rounded-pill mt-2" onclick="document.getElementById('file-input').click()">
-                            Selecionar Arquivos
+        <!-- Mode Selection Container -->
+        <div id="mode-selection-container" class="row g-4 justify-content-center mb-5">
+            <!-- Ateste Escaneado Option -->
+            <div class="col-md-5">
+                <div class="card border-0 shadow-sm stat-card p-4 hover-lift h-100 text-center cursor-pointer transition-all" onclick="window.selectMode('ateste')" style="border-radius: 16px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.25);">
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center py-4">
+                        <div class="icon-wrapper bg-primary bg-opacity-10 text-primary rounded-circle p-4 mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                            <i class="fas fa-file-signature fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark mb-3">Ateste Escaneado</h4>
+                        <p class="text-muted small mb-4">Renomeie arquivos de atestes preenchidos de forma inteligente e gere a folha "Recebimento de documento.docx" preenchida automaticamente.</p>
+                        <button class="btn btn-outline-primary px-4 rounded-pill mt-auto fw-bold">Selecionar Modo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colletum Option -->
+            <div class="col-md-5">
+                <div class="card border-0 shadow-sm stat-card p-4 hover-lift h-100 text-center cursor-pointer transition-all" onclick="window.selectMode('colletum')" style="border-radius: 16px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.25);">
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center py-4">
+                        <div class="icon-wrapper bg-success bg-opacity-10 text-success rounded-circle p-4 mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+                            <i class="fas fa-mobile-alt fa-2x"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark mb-3">Colletum</h4>
+                        <p class="text-muted small mb-4">Renomeie e padronize arquivos gerados a partir da plataforma Colletum com base em regras específicas.</p>
+                        <button class="btn btn-outline-success px-4 rounded-pill mt-auto fw-bold">Selecionar Modo</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Renomeador Work Container (Hidden by default) -->
+        <div id="renomeador-work-container" class="d-none">
+            <!-- Mode Status Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm" onclick="window.resetSelection()">
+                    <i class="fas fa-arrow-left me-1"></i> Voltar à seleção
+                </button>
+                <div>
+                    <span class="badge bg-secondary p-2 rounded-pill shadow-sm" id="active-mode-badge">
+                        Modo: Ateste Escaneado
+                    </span>
+                </div>
+            </div>
+
+            <!-- Drag and Drop Area -->
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden mb-4" style="background: rgba(255, 255, 255, 0.95);">
+                <div class="card-body p-5">
+                    <div id="drop-zone" class="drop-zone border-dashed rounded-4 p-5 text-center bg-light transition-all">
+                        <div class="drop-zone-content">
+                            <i class="fas fa-cloud-upload-alt display-1 text-primary mb-3" id="upload-icon-mode"></i>
+                            <h4 class="fw-bold">Arraste seus PDFs aqui</h4>
+                            <p class="text-muted small">ou clique para selecionar arquivos do seu computador</p>
+                            <label for="file-input" class="visually-hidden">Selecionar arquivos PDF</label>
+                            <input type="file" id="file-input" multiple accept=".pdf" class="d-none">
+                            <button type="button" class="btn btn-primary px-4 rounded-pill mt-2" onclick="document.getElementById('file-input').click()">
+                                Selecionar Arquivos
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selected Files List -->
+                    <div id="file-list-container" class="mt-4 d-none">
+                        <h6 class="fw-bold mb-3 border-bottom pb-2">Arquivos Selecionados (<span id="file-count">0</span>)</h6>
+                        <div id="file-list" class="list-group list-group-flush" style="max-height: 250px; overflow-y: auto;">
+                            <!-- JS handles listing -->
+                        </div>
+                    </div>
+
+                    <!-- Action Button -->
+                    <div id="action-container" class="mt-4 text-center d-none">
+                        <button id="btn-processar" class="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold">
+                            <i class="fas fa-magic me-2"></i> Processar e Renomear
                         </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Selected Files List -->
-                <div id="file-list-container" class="mt-4 d-none">
-                    <h6 class="fw-bold mb-3 border-bottom pb-2">Arquivos Selecionados (<span id="file-count">0</span>)</h6>
-                    <div id="file-list" class="list-group list-group-flush" style="max-height: 250px; overflow-y: auto;">
-                        <!-- JS handles listing -->
+            <!-- Status and Logs -->
+            <div id="status-container" class="card shadow border-0 rounded-4 d-none">
+                <div class="card-header bg-white py-3 border-0">
+                    <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-tasks me-2"></i>Status do Processamento</h6>
+                </div>
+                <div class="card-body py-4">
+                    <div class="progress mb-3 rounded-pill" style="height: 10px;">
+                        <div id="process-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
                     </div>
-                </div>
-
-                <!-- Action Button -->
-                <div id="action-container" class="mt-4 text-center d-none">
-                    <button id="btn-processar" class="btn btn-success btn-lg px-5 rounded-pill shadow-sm fw-bold">
-                        <i class="fas fa-magic me-2"></i> Processar e Renomear
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Status and Logs -->
-        <div id="status-container" class="card shadow border-0 rounded-4 d-none">
-            <div class="card-header bg-white py-3 border-0">
-                <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-tasks me-2"></i>Status do Processamento</h6>
-            </div>
-            <div class="card-body py-4">
-                <div class="progress mb-3 rounded-pill" style="height: 10px;">
-                    <div id="process-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
-                </div>
-                <p id="process-status-text" class="text-center fw-bold text-primary mb-3">Iniciando...</p>
-                
-                <div id="process-logs" class="bg-dark text-light p-3 rounded-3 small font-monospace" style="height: 150px; overflow-y: auto;">
-                    <div>> Aguardando início do processo...</div>
+                    <p id="process-status-text" class="text-center fw-bold text-primary mb-3">Iniciando...</p>
+                    
+                    <div id="process-logs" class="bg-dark text-light p-3 rounded-3 small font-monospace" style="height: 150px; overflow-y: auto;">
+                        <div>> Aguardando início do processo...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -67,6 +112,16 @@
 </div>
 
 <style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    .hover-lift {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 1rem 3rem rgba(0,0,0,.1) !important;
+    }
     .drop-zone {
         border: 3px dashed #dee2e6;
         cursor: pointer;
