@@ -18,16 +18,28 @@ router = APIRouter(prefix="/api/bahia-sem-fome", tags=["BSF API"])
 logger = logging.getLogger(__name__)
 
 class RenameInfo(BaseModel):
-    nome: str = Field(description="Nome do beneficiário")
+    nome: str = Field(description="Nome completo do beneficiário principal (titular da família)")
     tipo: str = Field(description="Tipo de documento: ATESTE ou COLLETUM")
+    atividade: str = Field(description="Descrição resumida da atividade que está assinalada/marcada com um 'X' (ou circulada, assinalada de qualquer forma) na tabela/lista de TIPO DE ATIVIDADE, em maiúsculas e sem acentos")
+    data: str = Field(description="Data da atividade escrita no documento no formato DD-MM-AAAA ou vazio se não encontrada")
 
-MODELOS_PERMITIDOS = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-3-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+MODELOS_PERMITIDOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]
 
 def get_gemini_client():
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if api_key:
         return genai.Client(api_key=api_key)
     return None
+
+def pdf_page_to_png_bytes(pdf_content: bytes, page_num: int = 0) -> bytes:
+    """Renderiza uma página do PDF para imagem PNG em memória usando PyMuPDF (fitz)."""
+    with fitz.open(stream=pdf_content, filetype="pdf") as doc:
+        if page_num >= len(doc):
+            page_num = 0
+        page = doc[page_num]
+        # Renderiza a página com DPI 150 para equilíbrio entre legibilidade da IA e consumo de dados
+        pix = page.get_pixmap(dpi=150)
+        return pix.tobytes("png")
 
 def extrair_local_regex(texto: str):
     nome, tipo = None, None
@@ -85,101 +97,112 @@ def extrair_local_regex(texto: str):
     return nome, tipo
 
 async def extrair_e_analisar(file_content: bytes, filename: str):
-    """Extrai texto do PDF em cascata (Waterfall) e identifica nome e tipo."""
+    """Extrai visualmente (imagem) ou texto do PDF em cascata (Waterfall) e identifica nome, tipo, atividade e data."""
     try:
-        nome_local, tipo_local = None, None
+        # 1. TENTATIVA: IA Gemini Multimodal (Visão de Imagem) - Método Principal de Alta Precisão
+        client = get_gemini_client()
+        if client:
+            try:
+                # Converte a primeira página do PDF em imagem PNG em memória
+                img_bytes = pdf_page_to_png_bytes(file_content, 0)
+                image_part = types.Part.from_bytes(
+                    data=img_bytes,
+                    mime_type="image/png"
+                )
+                
+                prompt = (
+                    "Você é um assistente especialista em processamento de documentos do projeto 'Bahia Sem Fome'.\n"
+                    "Analise a imagem da página do documento fornecida.\n"
+                    "Você deve identificar e extrair as seguintes informações:\n"
+                    "1. O nome completo do beneficiário principal (titular da família), localizado no campo 'BENEFICIÁRIO(A)' ou 'NOME'.\n"
+                    "2. O tipo de documento: 'ATESTE' se for um Ateste de Atividade Individual, ou 'COLLETUM' se for um Formulário de Atividade Individual.\n"
+                    "3. Qual atividade específica está assinalada ou marcada com um 'X' (ou circulada, marcada de qualquer outra forma) na tabela/lista de 'TIPO DE ATIVIDADE'.\n"
+                    "   Retorne uma descrição curta e resumida da atividade em maiúsculas e sem acentos (ex: 'VISITA TECNICA', 'CADASTRO', 'CARACTERIZACAO UPF I', 'LEVANTAMENTO SOCIOECONOMICO', etc.).\n"
+                    "4. A data da atividade, geralmente preenchida à mão na linha da tabela do cabeçalho sob a coluna 'DATA'.\n"
+                    "   Formate a data obrigatoriamente como DD-MM-AAAA (ex: '15-08-2026'). Se não encontrar ou não estiver preenchida, retorne vazio.\n\n"
+                    "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
+                )
 
-        # 1. TENTATIVA: PyMuPDF (Extremamente rápido)
+                for nome_modelo in MODELOS_PERMITIDOS:
+                    try:
+                        logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo}")
+                        response = await asyncio.to_thread(
+                            client.models.generate_content,
+                            model=nome_modelo,
+                            contents=[image_part, prompt],
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_schema=RenameInfo
+                            )
+                        )
+                        
+                        # Parse do JSON
+                        data = json.loads(response.text)
+                        nome = data.get("nome", "DESCONHECIDO").strip().upper()
+                        tipo = data.get("tipo", "DOCUMENTO").strip().upper()
+                        atividade = data.get("atividade", "").strip().upper()
+                        data_doc = data.get("data", "").strip()
+                        
+                        # Saneamento dos dados
+                        nome_saneado = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
+                        atividade_saneada = "".join(c for c in atividade if c.isalnum() or c in (" ", "-", "_")).strip()
+                        data_saneada = "".join(c for c in data_doc if c.isalnum() or c == "-").strip()
+                        
+                        # Monta o novo nome com traços
+                        parts = [nome_saneado]
+                        if atividade_saneada:
+                            parts.append(atividade_saneada)
+                        else:
+                            parts.append(tipo)
+                        
+                        if data_saneada:
+                            # Garante hífen no lugar de barras ou pontos na data
+                            data_saneada = data_saneada.replace("/", "-").replace(".", "-")
+                            parts.append(data_saneada)
+                            
+                        new_name = " - ".join(parts) + ".pdf"
+                        logger.info(f"✅ Sucesso visual com {nome_modelo} para {filename}: {new_name}")
+                        return new_name
+
+                    except Exception as e:
+                        logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
+                        continue
+            except Exception as e_img:
+                logger.error(f"Erro no processamento visual com Gemini para {filename}: {e_img}")
+        else:
+            logger.warning("API do Gemini não configurada ou indisponível. Usando fallback local.")
+
+        # 2. TENTATIVA (FALLBACK): Leitura de Texto Local (PyMuPDF / pdfplumber) + Regex
+        # Usado apenas se a IA do Gemini falhar ou não estiver configurada.
+        nome_local, tipo_local = None, None
         try:
             with fitz.open(stream=file_content, filetype="pdf") as pdf:
                 text_fitz = ""
                 for i in range(min(3, len(pdf))):
                     text_fitz += pdf[i].get_text() + "\n"
-                
                 if text_fitz.strip():
                     nome_local, tipo_local = extrair_local_regex(text_fitz)
         except Exception as e:
-            logger.warning(f"Erro PyMuPDF em {filename}: {e}")
+            logger.warning(f"Erro no fallback PyMuPDF para {filename}: {e}")
 
-        # 2. TENTATIVA: pdfplumber (Mais preciso com layouts - se a 1 falhar)
         if not nome_local or not tipo_local:
             try:
                 with pdfplumber.open(io.BytesIO(file_content)) as pdf:
                     text_plumber = ""
                     for i in range(min(3, len(pdf.pages))):
                         text_plumber += pdf.pages[i].extract_text() + "\n"
-                    
                     if text_plumber.strip():
                         nome_local, tipo_local = extrair_local_regex(text_plumber)
             except Exception as e:
-                logger.warning(f"Erro pdfplumber em {filename}: {e}")
+                logger.warning(f"Erro no fallback pdfplumber para {filename}: {e}")
 
-        # SUCESSO LOCAL (Pula a IA)
         if nome_local and tipo_local:
-            # Saneamento básico do nome
             nome_saneado = "".join(c for c in nome_local if c.isalnum() or c in (" ", "-", "_")).strip()
             new_name = f"{nome_saneado} - {tipo_local}.pdf"
-            logger.info(f"⚡ Sucesso Local (Waterfall Regex) para {filename}: {new_name}")
+            logger.info(f"⚡ Sucesso no Fallback Local (Regex) para {filename}: {new_name}")
             return new_name
 
-        # 3. TENTATIVA: IA Gemini (Fallback se as locais falharem)
-        client = get_gemini_client()
-        if not client:
-             logger.warning("API do Gemini não configurada. IA indisponível.")
-             return filename
-
-        text_for_ai = ""
-        try:
-            with fitz.open(stream=file_content, filetype="pdf") as pdf:
-                for i in range(min(3, len(pdf))):
-                    text_for_ai += pdf[i].get_text() + "\n"
-        except Exception:
-            pass
-
-        if not text_for_ai.strip():
-            logger.warning(f"Texto não extraído de {filename}. IA não terá contexto.")
-            return filename
-
-        prompt = (
-            "Analise o texto abaixo extraído de um documento do projeto Bahia Sem Fome. "
-            "Extraia o nome do beneficiário (geralmente após 'NOME DO BENEFICIÁRIO') "
-            "e o tipo do documento: 'ATESTE' se for um ateste de atividade, ou 'COLLETUM' "
-            "se for um Formulário de Atividade Individual Bahia Sem Fome (também chamado de Colletum). "
-            "Retorne APENAS um JSON estrito no formato: {\"nome\": \"NOME\", \"tipo\": \"TIPO\"}. "
-            f"\n\nTexto:\n{text_for_ai[:4000]}" 
-        )
-
-        for nome_modelo in MODELOS_PERMITIDOS:
-            try:
-                logger.info(f"Tentando renomear '{filename}' com o modelo: {nome_modelo}")
-                
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=nome_modelo,
-                    contents=[prompt],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=RenameInfo
-                    )
-                )
-                
-                # Parse do JSON
-                data = json.loads(response.text)
-                nome = data.get("nome", "DESCONHECIDO").strip().upper()
-                tipo = data.get("tipo", "DOCUMENTO").strip().upper()
-                
-                # Saneamento básico do nome
-                nome = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
-                
-                new_name = f"{nome} - {tipo}.pdf"
-                logger.info(f"✅ Sucesso com {nome_modelo}: {new_name}")
-                return new_name
-
-            except Exception as e:
-                logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
-                continue 
-
-        logger.error(f"❌ Todos os modelos falharam para o arquivo {filename}. Mantendo original.")
+        logger.error(f"❌ Todos os métodos falharam para o arquivo {filename}. Mantendo original.")
         return filename
 
     except Exception as e:
