@@ -209,6 +209,21 @@ async def extrair_e_analisar(file_content: bytes, filename: str):
         logger.error(f"Erro fatal ao processar {filename}: {e}")
         return filename
 
+@router.post("/renomeador-individual")
+async def renomear_individual(file: UploadFile = File(...)):
+    """Recebe um único PDF, renomeia-o via IA (ou fallback) e retorna o novo nome."""
+    try:
+        content = await file.read()
+        new_filename = await extrair_e_analisar(content, file.filename)
+        
+        if not new_filename or new_filename.strip() == "":
+            new_filename = file.filename
+            
+        return {"new_name": new_filename}
+    except Exception as e:
+        logger.error(f"Erro ao processar arquivo individual {file.filename}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/renomeador-lote")
 async def renomear_lote(files: List[UploadFile] = File(...)):
     """Recebe múltiplos PDFs, renomeia-os via IA e retorna um ZIP."""

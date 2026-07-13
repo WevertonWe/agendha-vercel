@@ -90,67 +90,110 @@ document.addEventListener('DOMContentLoaded', () => {
     btnProcessar.addEventListener('click', async () => {
         if (selectedFiles.length === 0) return;
 
-        // Visual feedback
+        // Feedback visual e travamento do sistema
         statusContainer.classList.remove('d-none');
         btnProcessar.disabled = true;
         dropZone.style.pointerEvents = 'none';
         dropZone.style.opacity = '0.5';
         
+        // Esconde botões de exclusão na lista para evitar alteração durante o processamento
+        document.querySelectorAll('#file-list button').forEach(btn => btn.style.display = 'none');
+        
         progressBar.style.width = '0%';
-        statusText.textContent = 'Enviando arquivos...';
-        addLog(`Iniciando envio de ${selectedFiles.length} arquivos.`);
+        progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+        statusText.textContent = 'Iniciando processamento em lote...';
+        addLog(`Iniciando processamento sequencial de ${selectedFiles.length} arquivos...`);
 
-        const formData = new FormData();
-        selectedFiles.forEach(file => {
-            formData.append('files', file);
-        });
+        // Cria a instância do JSZip para agrupar tudo no navegador
+        const zip = new JSZip();
+        let arquivosComSucesso = 0;
 
         try {
-            addLog('Conectando ao servidor e processando com IA...');
-            
-            // Simular progresso enquanto espera o servidor (que pode demorar devido à IA)
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                if (progress < 90) {
-                    progress += 1;
-                    progressBar.style.width = `${progress}%`;
-                    if (progress === 30) statusText.textContent = 'IA analisando conteúdos...';
-                    if (progress === 60) statusText.textContent = 'Identificando beneficiários...';
-                    if (progress === 85) statusText.textContent = 'Gerando pacote ZIP...';
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const indexUmBase = i + 1;
+                
+                statusText.textContent = `Processando arquivo ${indexUmBase} de ${selectedFiles.length}...`;
+                addLog(`Enviando [${file.name}] (${(file.size / 1024).toFixed(1)} KB) para a IA...`);
+
+                // Atualiza barra de progresso antes de iniciar
+                const baseProgress = (i / selectedFiles.length) * 100;
+                progressBar.style.width = `${baseProgress}%`;
+
+                // Monta FormData apenas com o arquivo individual
+                const formData = new FormData();
+                formData.append('file', file);
+
+                let novoNome = file.name;
+                try {
+                    const response = await fetch('/api/bahia-sem-fome/renomeador-individual', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        novoNome = data.new_name || file.name;
+                        addLog(`✅ Sucesso [${file.name}] -> Renomeado para: ${novoNome}`);
+                        arquivosComSucesso++;
+                    } else {
+                        // Trata erros não-JSON (como 413, 502, 504, 500 etc.)
+                        let errorMessage = `Erro ${response.status}: ${response.statusText}`;
+                        try {
+                            const contentType = response.headers.get("content-type");
+                            if (contentType && contentType.includes("application/json")) {
+                                const errorData = await response.json();
+                                errorMessage = errorData.detail || errorMessage;
+                            } else {
+                                const textData = await response.text();
+                                errorMessage = textData || errorMessage;
+                            }
+                        } catch (e) {}
+                        addLog(`⚠️ Falha ao processar [${file.name}]: ${errorMessage}. Mantendo nome original.`);
+                    }
+                } catch (err) {
+                    addLog(`⚠️ Erro de rede no arquivo [${file.name}]: ${err.message}. Mantendo nome original.`);
                 }
-            }, 500);
 
-            const response = await fetch('/api/bahia-sem-fome/renomeador-lote', {
-                method: 'POST',
-                body: formData
-            });
-
-            clearInterval(progressInterval);
-
-            if (response.ok) {
-                progressBar.style.width = '100%';
-                statusText.textContent = 'Sucesso! Download iniciado.';
-                addLog('Processamento concluído com sucesso.');
+                // Adiciona o arquivo no ZIP com o novo nome
+                zip.file(novoNome, file);
                 
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `BSF_Renomeados_${new Date().getTime()}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-
-                if (window.ui) window.ui.feedbackSucesso('Arquivos processados e pacote baixado!');
-                
-                resetUI();
-            } else {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Erro ao processar arquivos.');
+                // Incrementa progresso após a conclusão do arquivo
+                const progressConcluido = (indexUmBase / selectedFiles.length) * 100;
+                progressBar.style.width = `${progressConcluido}%`;
             }
+
+            statusText.textContent = 'Gerando arquivo ZIP final...';
+            addLog('Empacotando todos os arquivos renomeados no navegador...');
+            
+            // Gera o ZIP final
+            const zipContent = await zip.generateAsync({ type: 'blob' });
+            
+            // Dispara o download automático do ZIP
+            const url = window.URL.createObjectURL(zipContent);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `BSF_Renomeados_${new Date().getTime()}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            progressBar.style.width = '100%';
+            statusText.textContent = 'Sucesso! Download concluído.';
+            addLog(`Processamento concluído. ${arquivosComSucesso} de ${selectedFiles.length} arquivos renomeados.`);
+            
+            if (window.ui) {
+                window.ui.feedbackSucesso(`Lote concluído! ${arquivosComSucesso} arquivos processados com sucesso.`);
+            }
+            
+            setTimeout(() => {
+                resetUI();
+            }, 3000);
+
         } catch (error) {
-            console.error('Erro:', error);
+            console.error('Erro crítico no lote:', error);
             statusText.textContent = 'Falha no processamento';
             statusText.classList.replace('text-primary', 'text-danger');
             addLog(`ERRO: ${error.message}`);
