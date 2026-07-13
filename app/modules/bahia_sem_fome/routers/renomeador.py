@@ -14,6 +14,7 @@ import fitz # PyMuPDF
 import pdfplumber
 import os
 from docx import Document
+from app.config import settings
 
 router = APIRouter(prefix="/api/bahia-sem-fome", tags=["BSF API"])
 logger = logging.getLogger(__name__)
@@ -140,57 +141,64 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
                     )
 
                 for nome_modelo in MODELOS_PERMITIDOS:
-                    try:
-                        logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo} no modo: {mode}")
-                        response = await asyncio.to_thread(
-                            client.models.generate_content,
-                            model=nome_modelo,
-                            contents=[image_part, prompt],
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                response_schema=RenameInfo
+                    tentativas = 2
+                    for tentativa in range(1, tentativas + 1):
+                        try:
+                            logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo} no modo: {mode} (Tentativa {tentativa}/{tentativas})")
+                            response = await asyncio.to_thread(
+                                client.models.generate_content,
+                                model=nome_modelo,
+                                contents=[image_part, prompt],
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=RenameInfo
+                                )
                             )
-                        )
-                        
-                        # Parse do JSON
-                        data = json.loads(response.text)
-                        nome = data.get("nome", "DESCONHECIDO").strip().upper()
-                        tipo = data.get("tipo", "DOCUMENTO").strip().upper()
-                        cpf = data.get("cpf", "").strip()
-                        atividade = data.get("atividade", "").strip().upper()
-                        data_doc = data.get("data", "").strip()
-                        
-                        # Saneamento dos dados
-                        nome_saneado = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
-                        cpf_saneado = "".join(c for c in cpf if c.isalnum() or c in (".", "-")).strip()
-                        atividade_saneada = "".join(c for c in atividade if c.isalnum() or c in (" ", "-", "_")).strip()
-                        data_saneada = "".join(c for c in data_doc if c.isalnum() or c == "-").strip()
-                        
-                        # Monta o novo nome com traços
-                        parts = [nome_saneado]
-                        if atividade_saneada:
-                            parts.append(atividade_saneada)
-                        else:
-                            parts.append(tipo)
-                        
-                        if data_saneada:
-                            # Garante hífen no lugar de barras ou pontos na data
-                            data_saneada = data_saneada.replace("/", "-").replace(".", "-")
-                            parts.append(data_saneada)
                             
-                        new_name = " - ".join(parts) + ".pdf"
-                        logger.info(f"✅ Sucesso visual com {nome_modelo} para {filename}: {new_name}")
-                        return new_name, {
-                            "nome": nome_saneado,
-                            "cpf": cpf_saneado,
-                            "tipo": tipo,
-                            "atividade": atividade_saneada,
-                            "data": data_saneada
-                        }
+                            # Parse do JSON
+                            data = json.loads(response.text)
+                            nome = data.get("nome", "DESCONHECIDO").strip().upper()
+                            tipo = data.get("tipo", "DOCUMENTO").strip().upper()
+                            cpf = data.get("cpf", "").strip()
+                            atividade = data.get("atividade", "").strip().upper()
+                            data_doc = data.get("data", "").strip()
+                            
+                            # Saneamento dos dados
+                            nome_saneado = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
+                            cpf_saneado = "".join(c for c in cpf if c.isalnum() or c in (".", "-")).strip()
+                            atividade_saneada = "".join(c for c in atividade if c.isalnum() or c in (" ", "-", "_")).strip()
+                            data_saneada = "".join(c for c in data_doc if c.isalnum() or c == "-").strip()
+                            
+                            # Monta o novo nome com traços
+                            parts = [nome_saneado]
+                            if atividade_saneada:
+                                parts.append(atividade_saneada)
+                            else:
+                                parts.append(tipo)
+                            
+                            if data_saneada:
+                                # Garante hífen no lugar de barras ou pontos na data
+                                data_saneada = data_saneada.replace("/", "-").replace(".", "-")
+                                parts.append(data_saneada)
+                                
+                            new_name = " - ".join(parts) + ".pdf"
+                            logger.info(f"✅ Sucesso visual com {nome_modelo} para {filename}: {new_name}")
+                            return new_name, {
+                                "nome": nome_saneado,
+                                "cpf": cpf_saneado,
+                                "tipo": tipo,
+                                "atividade": atividade_saneada,
+                                "data": data_saneada
+                            }
 
-                    except Exception as e:
-                        logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
-                        continue
+                        except Exception as e:
+                            err_str = str(e)
+                            if tentativa < tentativas and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str):
+                                logger.warning(f"⚠️ Rate limit ou indisponibilidade (erro: {err_str}) no modelo {nome_modelo}. Aguardando 4s antes de re-tentativa {tentativa + 1}...")
+                                await asyncio.sleep(4)
+                            else:
+                                logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
+                                break
             except Exception as e_img:
                 logger.error(f"Erro no processamento visual com Gemini para {filename}: {e_img}")
         else:

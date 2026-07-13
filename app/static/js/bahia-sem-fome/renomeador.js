@@ -152,6 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const file = selectedFiles[i];
                 const indexUmBase = i + 1;
                 
+                // Intervalo de segurança para evitar Rate Limit (429) no plano gratuito do Gemini
+                if (i > 0) {
+                    statusText.textContent = `Aguardando intervalo de segurança...`;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                
                 statusText.textContent = `Processando arquivo ${indexUmBase} de ${selectedFiles.length}...`;
                 addLog(`Enviando [${file.name}] (${(file.size / 1024).toFixed(1)} KB) para a IA...`);
 
