@@ -117,22 +117,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 { "data": "grh" }, { "data": "verificado_bsf" }, { "data": null }
             ],
             columnDefs: [
+                { "targets": "_all", "defaultContent": "-" },
                 // Center Align: 0 (ID), 2 (CPF Tec), 5-7 (Loc/Data), 9-17 (Data/Status/Actions)
-                { "targets": [0, 2, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16], "className": "text-center" },
+                { "targets": [0, 2, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16], "className": "text-center", "defaultContent": "-" },
                 // Left Align: 1 (Nome Tec), 3 (Munic), 4 (Comun), 8 (Nome Fam)
-                { "targets": [1, 3, 4], "className": "text-start px-3" },
+                { "targets": [1, 3, 4], "className": "text-start px-3", "defaultContent": "-" },
                 {
                     "targets": 8,
                     "className": "text-start px-3",
+                    "defaultContent": "-",
                     "render": function (data, type, row) {
                         return data || row.nome_completo || row.nome || 'Sem Nome';
                     }
                 },
 
                 { "targets": 0, "width": "20px", "searchable": false, "orderable": false, "render": (data, type, row, meta) => meta.row + meta.settings._iDisplayStart + 1 },
-                { "targets": [2, 9], "render": (data) => data && String(data).length >= 11 ? String(data).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : data },
-                { "targets": 12, "render": function (data, type) { if (type === 'display' && data) { return `<span class="badge rounded-pill ${getStatusBadgeClass(data)}">${data}</span>`; } return data; } },
-                { "targets": 14, "render": function (data, type) { 
+                { "targets": [2, 9], "defaultContent": "-", "render": (data) => data && String(data).length >= 11 ? String(data).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : (data || '-') },
+                { "targets": 12, "defaultContent": "-", "render": function (data, type) { if (type === 'display' && data) { return `<span class="badge rounded-pill ${getStatusBadgeClass(data)}">${data}</span>`; } return data || '-'; } },
+                { "targets": 14, "defaultContent": "-", "render": function (data, type) { 
                     if (type === 'display') {
                         if (data && data !== 'OK' && typeof data === 'string') {
                             const link = (data.startsWith('http://') || data.startsWith('https://')) ? data : '/' + data;
