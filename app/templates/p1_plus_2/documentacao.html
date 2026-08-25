@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Documentação e Arquivos - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .doc-card {
+        background: #ffffff;
+        border-radius: 14px;
+        border: 1px solid rgba(0,0,0,0.06);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+    .doc-card:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-folder-fill text-secondary me-2"></i>Documentação do Projeto P1+2
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Repositório de arquivos, relatórios, atas e comprovantes do P1+2.</p>
+        </div>
+
+        <button class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="abrirModalUpload()">
+            <i class="bi bi-cloud-arrow-up-fill me-1"></i> Enviar Documento
+        </button>
+    </div>
+
+    <!-- Filtro por Categoria -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-8">
+                <span class="text-muted small fw-bold">ARQUIVOS DO REPOSITÓRIO</span>
+            </div>
+            <div class="col-md-4">
+                <select id="filtro-categoria" class="form-select form-select-sm bg-light border-0" onchange="carregarDocumentos()">
+                    <option value="TODOS">Todas as Categorias</option>
+                    <option value="Geral">Geral</option>
+                    <option value="Atas">Atas</option>
+                    <option value="Relatórios">Relatórios</option>
+                    <option value="Contratos">Contratos</option>
+                    <option value="Fotos">Fotos</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Documentos -->
+    <div id="container-documentos" class="row g-3">
+        <div class="col-12 text-center py-5 text-muted">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            Carregando documentos...
+        </div>
+    </div>
+</main>
+
+<!-- Modal: Upload de Documento -->
+<div class="modal fade" id="modalUpload" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cloud-upload text-primary me-2"></i>Enviar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formUpload" onsubmit="enviarDocumento(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Documento *</label>
+                        <input type="text" id="doc-nome" class="form-control" required placeholder="Ex: Relatório Mensal de Campo - Março">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Categoria</label>
+                        <select id="doc-categoria" class="form-select">
+                            <option value="Geral" selected>Geral</option>
+                            <option value="Atas">Atas</option>
+                            <option value="Relatórios">Relatórios</option>
+                            <option value="Contratos">Contratos</option>
+                            <option value="Fotos">Fotos</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Arquivo *</label>
+                        <input type="file" id="doc-file" class="form-control" required>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4" id="btn-submit-doc">Enviar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarDocumentos();
+    });
+
+    async function carregarDocumentos() {
+        const cat = document.getElementById('filtro-categoria').value;
+        const container = document.getElementById('container-documentos');
+
+        let url = `/api/p1-2/documentos`;
+        if (cat && cat !== 'TODOS') url += `?categoria=${encodeURIComponent(cat)}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Erro ao buscar documentos");
+            const data = await res.json();
+            const lista = data.dados || [];
+
+            if (lista.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center py-5 text-muted">
+                        <i class="bi bi-folder2-open fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhum documento encontrado no repositório.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            lista.forEach(d => {
+                const dataFormatada = d.data_upload ? d.data_upload.split('T')[0].split('-').reverse().join('/') : '';
+                html += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="doc-card p-4 h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3">${d.categoria || 'Geral'}</span>
+                                    <small class="text-muted">${dataFormatada}</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-3 my-3">
+                                    <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-3 fs-3">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-1">${escapeHtml(d.nome_documento)}</h6>
+                                        <small class="text-muted text-break">${escapeHtml(d.nome_arquivo || '')}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-2">
+                                <a href="/api/p1-2/documentos/download/${d.id}" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                    <i class="bi bi-download me-1"></i> Acessar / Baixar
+                                </a>
+                                <button class="btn btn-outline-danger btn-sm p-1 rounded-circle border-0" onclick="excluirDocumento(${d.id})" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<div class="col-12 text-center text-danger py-4">Erro ao carregar documentos.</div>`;
+        }
+    }
+
+    function abrirModalUpload() {
+        document.getElementById('formUpload').reset();
+        const modal = new bootstrap.Modal(document.getElementById('modalUpload'));
+        modal.show();
+    }
+
+    async function enviarDocumento(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('doc-file');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) ui.feedbackErro("Selecione um arquivo para upload.");
+            else alert("Selecione um arquivo.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('nome_documento', document.getElementById('doc-nome').value);
+        formData.append('categoria', document.getElementById('doc-categoria').value);
+        formData.append('file', fileInput.files[0]);
+
+        const btn = document.getElementById('btn-submit-doc');
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
+
+        try {
+            const res = await fetch('/api/p1-2/documentos', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro no upload do documento.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalUpload')).hide();
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso("Documento enviado com sucesso!");
+            }
+            carregarDocumentos();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Enviar';
+        }
+    }
+
+    function excluirDocumento(id) {
+        const executarExclusao = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/documentos/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao excluir.");
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Documento excluído com sucesso.");
+                }
+                carregarDocumentos();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar("Excluir Documento?", "Deseja realmente excluir este documento do repositório?", executarExclusao, "Sim, excluir");
+        } else if (confirm("Deseja realmente excluir este documento?")) {
+            executarExclusao();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+</script>
+{% endblock %}

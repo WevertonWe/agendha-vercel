@@ -1,0 +1,89 @@
+﻿{% extends "base.html" %}
+{% block title %}Perfil do Beneficiário - P1+2{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Topo -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/p1-2/beneficiarios" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="fw-bold mb-0 text-dark">{{ beneficiario.nome_completo or beneficiario.nome_familiar or "Beneficiário" }}</h4>
+                <small class="text-muted">Cadastro ID #{{ beneficiario.id }} &bull; Projeto P1+2</small>
+            </div>
+        </div>
+        <div>
+            <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 fs-6">
+                {{ beneficiario.status or 'Ativo' }}
+            </span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Dados Pessoais -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                <h5 class="fw-bold text-dark mb-3"><i class="bi bi-person-badge text-primary me-2"></i>Informações Pessoais</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Nome Completo:</span>
+                        <span class="fw-bold">{{ beneficiario.nome_completo or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Nome Familiar:</span>
+                        <span class="fw-bold">{{ beneficiario.nome_familiar or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">CPF:</span>
+                        <span class="fw-bold">{{ beneficiario.cpf or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">NIS:</span>
+                        <span class="fw-bold">{{ beneficiario.nis or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Data de Nascimento:</span>
+                        <span>{{ beneficiario.data_nascimento or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Sexo:</span>
+                        <span>{{ beneficiario.sexo or '-' }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Localização e Observações -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100">
+                <h5 class="fw-bold text-dark mb-3"><i class="bi bi-geo-alt text-danger me-2"></i>Localização e Contato</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Município:</span>
+                        <span class="fw-bold">{{ beneficiario.municipio or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Comunidade:</span>
+                        <span class="fw-bold">{{ beneficiario.comunidade or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Referência:</span>
+                        <span>{{ beneficiario.ref_localizacao or '-' }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between px-0">
+                        <span class="text-muted">Data de Cadastro:</span>
+                        <span>{{ beneficiario.data_cadastro or '-' }}</span>
+                    </li>
+                </ul>
+
+                <h6 class="fw-bold text-dark mt-4 mb-2">Observações</h6>
+                <p class="text-secondary small bg-light p-3 rounded-3 mb-0">
+                    {{ beneficiario.observacoes or 'Nenhuma observação registrada para este beneficiário.' }}
+                </p>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

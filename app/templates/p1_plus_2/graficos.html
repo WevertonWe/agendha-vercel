@@ -1,0 +1,153 @@
+﻿{% extends "base.html" %}
+{% block title %}Gráficos e Estatísticas - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .chart-card {
+        background: #ffffff;
+        border-radius: 16px;
+        border: none;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+        padding: 1.5rem;
+        height: 100%;
+    }
+</style>
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+            <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-pie-chart-fill text-warning me-2"></i>Gráficos e Estatísticas do P1+2
+                </h4>
+                <small class="text-muted">Visualização analítica de beneficiários, parcelas e monitoramentos.</small>
+            </div>
+        </div>
+        <div>
+            <a href="/p1-2/consolidado" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                <i class="bi bi-table me-1"></i> Ver Tabelas
+            </a>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row g-4 mb-4">
+        <!-- Beneficiários por Município -->
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-bar-chart-fill text-primary me-2"></i>Beneficiários por Município</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="chartMunicipios"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status das Parcelas -->
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-cash-stack text-success me-2"></i>Status das Parcelas (1ª vs 2ª)</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="chartParcelas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monitoramentos (GAPA, SISMA, INTERCÂMBIO) -->
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-calendar2-check text-info me-2"></i>Distribuição de Monitoramentos</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="chartMonitoramentos"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status dos Beneficiários -->
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h6 class="fw-bold text-dark mb-3"><i class="bi bi-pie-chart text-warning me-2"></i>Status Cadastral</h6>
+                <div style="height: 280px; position: relative;">
+                    <canvas id="chartStatus"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const res = await fetch('/api/p1-2/consolidado/graficos-dados');
+            if (!res.ok) throw new Error("Erro ao obter dados para gráficos");
+            const data = await res.json();
+
+            // 1. Municípios
+            new Chart(document.getElementById('chartMunicipios'), {
+                type: 'bar',
+                data: {
+                    labels: data.municipios.labels,
+                    datasets: [{
+                        label: 'Beneficiários',
+                        data: data.municipios.data,
+                        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // 2. Parcelas
+            new Chart(document.getElementById('chartParcelas'), {
+                type: 'bar',
+                data: {
+                    labels: data.parcelas.labels,
+                    datasets: [
+                        { label: '1ª Parcela', data: data.parcelas.p1_data, backgroundColor: '#198754', borderRadius: 4 },
+                        { label: '2ª Parcela', data: data.parcelas.p2_data, backgroundColor: '#0dcaf0', borderRadius: 4 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // 3. Monitoramentos
+            new Chart(document.getElementById('chartMonitoramentos'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.monitoramentos.labels,
+                    datasets: [{
+                        data: data.monitoramentos.data,
+                        backgroundColor: ['#0d6efd', '#20c997', '#ffc107']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // 4. Status Geral
+            new Chart(document.getElementById('chartStatus'), {
+                type: 'pie',
+                data: {
+                    labels: data.status_beneficiarios.labels,
+                    datasets: [{
+                        data: data.status_beneficiarios.data,
+                        backgroundColor: ['#198754', '#ffc107', '#0d6efd', '#dc3545']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+        } catch (e) {
+            console.error("Erro gráficos:", e);
+        }
+    });
+</script>
+{% endblock %}

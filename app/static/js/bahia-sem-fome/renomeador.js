@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsContainer = document.getElementById('process-logs');
 
     let selectedFiles = [];
-    let activeMode = null; // 'ateste' ou 'colletum'
+    let pollingInterval = null;
 
     // Drag and Drop events
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -43,10 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function handleFiles(files) {
-        const newFiles = Array.from(files).filter(file => file.type === 'application/pdf');
+        const newFiles = Array.from(files).filter(file => {
+            return file.type === 'application/pdf' || file.type.startsWith('image/');
+        });
         
         if (newFiles.length < files.length) {
-            if (window.ui) window.ui.feedbackAviso('Apenas arquivos PDF são aceitos.');
+            if (window.ui) window.ui.feedbackAviso('Apenas arquivos PDF ou Imagens (PNG/JPG) são aceitos.');
         }
 
         selectedFiles = [...selectedFiles, ...newFiles];
@@ -64,13 +66,24 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedFiles.forEach((file, index) => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
+                
+                let iconClass = 'far fa-file-alt';
+                let iconColor = 'text-secondary';
+                if (file.type === 'application/pdf') {
+                    iconClass = 'far fa-file-pdf';
+                    iconColor = 'text-danger';
+                } else if (file.type.startsWith('image/')) {
+                    iconClass = 'far fa-image';
+                    iconColor = 'text-primary';
+                }
+                
                 item.innerHTML = `
                     <div class="text-truncate" style="max-width: 80%;">
-                        <i class="far fa-file-pdf text-danger me-2"></i>
-                        <span class="small">${file.name}</span>
+                        <i class="${iconClass} ${iconColor} me-2"></i>
+                        <span class="small fw-bold">${file.name}</span>
                         <span class="text-muted smaller ms-2">(${(file.size / 1024).toFixed(1)} KB)</span>
                     </div>
-                    <button class="btn btn-link btn-sm text-danger p-0" onclick="window.removeFile(${index})">
+                    <button class="btn btn-link btn-sm text-danger p-0 hover-lift" onclick="window.removeFile(${index})">
                         <i class="fas fa-times"></i>
                     </button>
                 `;
@@ -87,218 +100,230 @@ document.addEventListener('DOMContentLoaded', () => {
         updateFileList();
     };
 
-    window.selectMode = (mode) => {
-        activeMode = mode;
-        const selectionContainer = document.getElementById('mode-selection-container');
-        const workContainer = document.getElementById('renomeador-work-container');
-        const activeBadge = document.getElementById('active-mode-badge');
-        const uploadIcon = document.getElementById('upload-icon-mode');
-
-        if (mode === 'ateste') {
-            activeBadge.className = 'badge bg-primary p-2 rounded-pill shadow-sm';
-            activeBadge.textContent = 'Modo: Ateste Escaneado';
-            uploadIcon.className = 'fas fa-file-signature display-1 text-primary mb-3';
-        } else {
-            activeBadge.className = 'badge bg-success p-2 rounded-pill shadow-sm';
-            activeBadge.textContent = 'Modo: Colletum';
-            uploadIcon.className = 'fas fa-mobile-alt display-1 text-success mb-3';
-        }
-
-        selectionContainer.classList.add('d-none');
-        workContainer.classList.remove('d-none');
-        addLog(`Modo selecionado: ${mode === 'ateste' ? 'Ateste Escaneado' : 'Colletum'}`);
-    };
-
-    window.resetSelection = () => {
-        activeMode = null;
-        selectedFiles = [];
-        updateFileList();
+    function addLog(message, type = 'info') {
+        const time = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
         
-        const selectionContainer = document.getElementById('mode-selection-container');
-        const workContainer = document.getElementById('renomeador-work-container');
+        let colorClass = 'text-light';
+        if (type === 'success') colorClass = 'text-success fw-bold';
+        if (type === 'warning') colorClass = 'text-warning';
+        if (type === 'danger') colorClass = 'text-danger fw-bold';
         
-        workContainer.classList.add('d-none');
-        selectionContainer.classList.remove('d-none');
-        
-        statusContainer.classList.add('d-none');
-        progressBar.style.width = '0%';
-        logsContainer.innerHTML = '<div>> Aguardando início do processo...</div>';
-    };
+        logEntry.innerHTML = `<span class="text-muted">[${time}]</span> <span class="${colorClass}">${message}</span>`;
+        logsContainer.appendChild(logEntry);
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
 
     btnProcessar.addEventListener('click', async () => {
-        if (selectedFiles.length === 0 || !activeMode) return;
+        if (selectedFiles.length === 0) return;
 
-        // Feedback visual e travamento do sistema
+        // Feedback visual
         statusContainer.classList.remove('d-none');
         btnProcessar.disabled = true;
         dropZone.style.pointerEvents = 'none';
         dropZone.style.opacity = '0.5';
         
-        // Esconde botões de exclusão na lista para evitar alteração durante o processamento
+        // Esconde botões de exclusão
         document.querySelectorAll('#file-list button').forEach(btn => btn.style.display = 'none');
         
         progressBar.style.width = '0%';
-        progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
-        statusText.textContent = 'Iniciando processamento em lote...';
-        addLog(`Iniciando processamento sequencial de ${selectedFiles.length} arquivos no modo [${activeMode.toUpperCase()}]...`);
+        progressBar.textContent = '0%';
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary fw-bold d-flex align-items-center justify-content-center';
+        
+        statusText.textContent = 'Enviando arquivos para a Fila Inteligente...';
+        addLog(`Iniciando envio de ${selectedFiles.length} arquivos para o Piloto Automático...`);
 
-        // Cria a instância do JSZip para agrupar tudo no navegador
-        const zip = new JSZip();
-        let arquivosComSucesso = 0;
-        const extractedDataList = [];
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+            formData.append('files', file);
+        });
+        
+        // Opcional: Se precisar de tipo_documento, pode enviar 'AUTO'
+        formData.append('tipo_documento', 'AUTO');
 
         try {
-            for (let i = 0; i < selectedFiles.length; i++) {
-                const file = selectedFiles[i];
-                const indexUmBase = i + 1;
+            // Faremos o envio e não esperamos o bloqueio, caso o backend segure a conexão,
+            // usaremos um fetch normal. Se o endpoint já devolve logo um task_id e processa em background:
+            const response = await fetch('/api/bahia-sem-fome/scanner/organizar-lote-upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                // A requisição inicial foi aceita
+                addLog('✅ Arquivos enviados com sucesso! A IA já está trabalhando...', 'success');
+                statusText.textContent = 'Processamento em andamento...';
                 
-                // Intervalo de segurança para evitar Rate Limit (429) no plano gratuito do Gemini
-                if (i > 0) {
-                    statusText.textContent = `Aguardando intervalo de segurança...`;
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-                
-                statusText.textContent = `Processando arquivo ${indexUmBase} de ${selectedFiles.length}...`;
-                addLog(`Enviando [${file.name}] (${(file.size / 1024).toFixed(1)} KB) para a IA...`);
-
-                // Atualiza barra de progresso antes de iniciar
-                const baseProgress = (i / selectedFiles.length) * 100;
-                progressBar.style.width = `${baseProgress}%`;
-
-                // Monta FormData apenas com o arquivo individual
-                const formData = new FormData();
-                formData.append('file', file);
-
-                let novoNome = file.name;
-                try {
-                    const response = await fetch(`/api/bahia-sem-fome/renomeador-individual?mode=${activeMode}`, {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        novoNome = data.new_name || file.name;
-                        addLog(`✅ Sucesso [${file.name}] -> Renomeado para: ${novoNome}`);
-                        arquivosComSucesso++;
-
-                        // Coleta metadados se for ateste para preencher a folha no final
-                        if (activeMode === 'ateste' && data.data) {
-                            extractedDataList.push(data.data);
-                        }
-                    } else {
-                        // Trata erros não-JSON (como 413, 502, 504, 500 etc.)
-                        let errorMessage = `Erro ${response.status}: ${response.statusText}`;
-                        try {
-                            const contentType = response.headers.get("content-type");
-                            if (contentType && contentType.includes("application/json")) {
-                                const errorData = await response.json();
-                                errorMessage = errorData.detail || errorMessage;
-                            } else {
-                                const textData = await response.text();
-                                errorMessage = textData || errorMessage;
-                            }
-                        } catch (e) {}
-                        addLog(`⚠️ Falha ao processar [${file.name}]: ${errorMessage}. Mantendo nome original.`);
-                    }
-                } catch (err) {
-                    addLog(`⚠️ Erro de rede no arquivo [${file.name}]: ${err.message}. Mantendo nome original.`);
-                }
-
-                // Adiciona o arquivo no ZIP com o novo nome
-                zip.file(novoNome, file);
-                
-                // Incrementa progresso após a conclusão do arquivo
-                const progressConcluido = (indexUmBase / selectedFiles.length) * 100;
-                progressBar.style.width = `${progressConcluido}%`;
+                // Inicia o polling a cada 3 segundos
+                iniciarPolling();
+            } else {
+                const data = await response.json().catch(() => ({}));
+                const msg = data.detail || data.mensagem || 'Falha ao enviar arquivos.';
+                throw new Error(msg);
             }
-
-            // GERAÇÃO DA FOLHA DE RECEBIMENTO (.DOCX) - Apenas para Atestes
-            if (activeMode === 'ateste' && extractedDataList.length > 0) {
-                statusText.textContent = 'Gerando ficha de recebimento (.docx)...';
-                addLog(`Enviando dados de ${extractedDataList.length} atestes para preencher a folha de recebimento...`);
-
-                try {
-                    const docxResponse = await fetch('/api/bahia-sem-fome/gerar-ficha-recebimento', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ items: extractedDataList })
-                    });
-
-                    if (docxResponse.ok) {
-                        const docxBlob = await docxResponse.blob();
-                        // Adiciona a folha preenchida ao ZIP
-                        zip.file("Recebimento de documento.docx", docxBlob);
-                        addLog('✅ Ficha "Recebimento de documento.docx" gerada e incluída no ZIP com sucesso!');
-                    } else {
-                        addLog('⚠️ Falha ao gerar ficha de recebimento (servidor retornou erro). O ZIP continuará apenas com os PDFs.');
-                    }
-                } catch (errDocx) {
-                    addLog(`⚠️ Erro ao requisitar geração da ficha de recebimento: ${errDocx.message}. O ZIP continuará apenas com os PDFs.`);
-                }
-            }
-
-            statusText.textContent = 'Gerando arquivo ZIP final...';
-            addLog('Empacotando todos os arquivos renomeados no navegador...');
-            
-            // Gera o ZIP final
-            const zipContent = await zip.generateAsync({ type: 'blob' });
-            
-            // Dispara o download automático do ZIP
-            const url = window.URL.createObjectURL(zipContent);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `BSF_${activeMode.toUpperCase()}_Renomeados_${new Date().getTime()}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-
-            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-            progressBar.style.width = '100%';
-            statusText.textContent = 'Sucesso! Download concluído.';
-            addLog(`Processamento concluído. ${arquivosComSucesso} de ${selectedFiles.length} arquivos processados.`);
-            
-            if (window.ui) {
-                window.ui.feedbackSucesso(`Lote concluído! ${arquivosComSucesso} arquivos processados com sucesso.`);
-            }
-            
-            setTimeout(() => {
-                resetUI();
-            }, 3000);
-
         } catch (error) {
-            console.error('Erro crítico no lote:', error);
-            statusText.textContent = 'Falha no processamento';
-            statusText.classList.replace('text-primary', 'text-danger');
-            addLog(`ERRO: ${error.message}`);
-            if (window.ui) window.ui.feedbackErro(error.message);
-            btnProcessar.disabled = false;
-        } finally {
-            dropZone.style.pointerEvents = 'auto';
-            dropZone.style.opacity = '1';
+            handleError(error.message);
         }
     });
+    
+    function handleError(msg) {
+        statusText.textContent = 'Falha no processamento';
+        statusText.className = 'text-center fw-bold text-danger mb-3';
+        addLog(`ERRO: ${msg}`, 'danger');
+        if (window.ui) window.ui.feedbackErro(msg);
+        
+        btnProcessar.disabled = false;
+        dropZone.style.pointerEvents = 'auto';
+        dropZone.style.opacity = '1';
+        document.querySelectorAll('#file-list button').forEach(btn => btn.style.display = 'block');
+        
+        progressBar.className = 'progress-bar bg-danger fw-bold';
+        
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+    }
 
-    function addLog(message) {
-        const time = new Date().toLocaleTimeString();
-        const logEntry = document.createElement('div');
-        logEntry.innerHTML = `<span class="text-success">[${time}]</span> ${message}`;
-        logsContainer.appendChild(logEntry);
-        logsContainer.scrollTop = logsContainer.scrollHeight;
+    function iniciarPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+        
+        // Vamos checar imediatamente e depois a cada 3s
+        verificarStatusFila();
+        pollingInterval = setInterval(verificarStatusFila, 3000);
+    }
+
+    async function verificarStatusFila() {
+        try {
+            const res = await fetch('/api/bahia-sem-fome/scanner/status-fila');
+            if (!res.ok) {
+                addLog('⚠️ Não foi possível obter o status da fila no momento.', 'warning');
+                return;
+            }
+            
+            const data = await res.json();
+            /* Esperamos algo como:
+               { 
+                 status: 'concluido' | 'processando' | 'vazio', 
+                 progresso: 100,
+                 processados: 5,
+                 total: 5,
+                 mensagens: ['Log 1', 'Log 2'] 
+               }
+            */
+            
+            const p = data.progresso || 0;
+            progressBar.style.width = `${p}%`;
+            progressBar.textContent = `${p}%`;
+            
+            if (data.mensagens && Array.isArray(data.mensagens)) {
+                data.mensagens.forEach(m => addLog(`🤖 ${m}`));
+            }
+            
+            if (data.status === 'processando') {
+                statusText.textContent = `Processando: ${data.processados || 0} de ${data.total || '?'} concluídos...`;
+                progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-success fw-bold d-flex align-items-center justify-content-center';
+            } 
+            else if (data.status === 'concluido' || p >= 100 || data.status === 'vazio') {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                
+                progressBar.className = 'progress-bar bg-success fw-bold d-flex align-items-center justify-content-center';
+                progressBar.style.width = '100%';
+                progressBar.textContent = '100%';
+                
+                if (data.status === 'vazio' && p === 0) {
+                    statusText.textContent = 'Processamento Interrompido ou Fila Vazia';
+                    statusText.className = 'text-center fw-bold text-warning mb-3';
+                } else {
+                    statusText.textContent = 'Piloto Automático Finalizado!';
+                    statusText.className = 'text-center fw-bold text-success mb-3';
+                    addLog('✨ Todos os arquivos foram organizados e renomeados com sucesso!', 'success');
+                    if (window.ui) window.ui.feedbackSucesso('Processamento do lote finalizado com sucesso!');
+                }
+                
+                // Limpar interface após um tempo
+                setTimeout(() => {
+                    resetUI();
+                }, 5000);
+            }
+        } catch (err) {
+            console.error('Erro no polling:', err);
+        }
     }
 
     function resetUI() {
         selectedFiles = [];
         updateFileList();
-        btnProcessar.disabled = false;
         
-        // Remove os logs e barra para a tela inicial do modo
+        btnProcessar.disabled = false;
+        dropZone.style.pointerEvents = 'auto';
+        dropZone.style.opacity = '1';
+        
         progressBar.style.width = '0%';
-        statusText.textContent = 'Aguardando arquivos...';
-        logsContainer.innerHTML = '<div>> Aguardando início do processo...</div>';
+        progressBar.textContent = '0%';
+        
+        statusText.textContent = 'Aguardando novos arquivos...';
+        statusText.className = 'text-center fw-bold text-primary mb-3';
+        
         statusContainer.classList.add('d-none');
+        logsContainer.innerHTML = '<div class="text-success">> Piloto Automático pronto para a próxima remessa.</div>';
     }
+
+    // Funcionalidade de Scanner Físico integrada ao Piloto Automático
+    window.iniciarScannerFisico = async () => {
+        statusContainer.classList.remove('d-none');
+        btnProcessar.disabled = true;
+        dropZone.style.pointerEvents = 'none';
+        dropZone.style.opacity = '0.5';
+        
+        document.querySelectorAll('#file-list button').forEach(btn => btn.style.display = 'none');
+        
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-warning text-dark fw-bold d-flex align-items-center justify-content-center';
+        
+        statusText.textContent = 'Acionando Scanner Físico...';
+        addLog(`⏳ Ligando os motores do scanner... Coloque as folhas e aguarde a digitalização.`, 'warning');
+
+        try {
+            const response = await fetch('/api/bahia-sem-fome/scanner/escanear-auto-ia', {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                const data = await response.json().catch(() => ({}));
+                
+                if (data.status === 'sucesso_sincrono') {
+                    // Processamento único imediato (Sem usar a fila)
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = '100%';
+                    progressBar.className = 'progress-bar bg-success fw-bold d-flex align-items-center justify-content-center';
+                    
+                    statusText.textContent = 'Processamento Finalizado!';
+                    statusText.className = 'text-center fw-bold text-success mb-3';
+                    
+                    addLog('🤖 ' + data.mensagem);
+                    addLog('✨ A folha foi processada e organizada imediatamente!', 'success');
+                    
+                    if (window.ui) window.ui.feedbackSucesso('Folha digitalizada e processada com sucesso!');
+                    
+                    setTimeout(() => {
+                        resetUI();
+                    }, 5000);
+                } else {
+                    // Modo Lote (Mais de 1 folha), vai pra fila
+                    addLog('✅ Folhas escaneadas e enviadas à Fila Inteligente!', 'success');
+                    statusText.textContent = 'Processamento em andamento...';
+                    iniciarPolling();
+                }
+            } else {
+                const data = await response.json().catch(() => ({}));
+                const msg = data.detail || data.mensagem || 'Falha ao se comunicar com o scanner.';
+                throw new Error(msg);
+            }
+        } catch (error) {
+            handleError(error.message);
+        }
+    };
 });

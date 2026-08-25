@@ -1,0 +1,174 @@
+﻿{% extends "base.html" %}
+{% block title %}Portal P1+2 - Agendha{% endblock %}
+{% block styles %}
+<style>
+    .card-nav {
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid rgba(0,0,0,0.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .card-nav:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+        color: inherit;
+    }
+    .card-icon-circle {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        margin: 0 auto 1rem auto;
+    }
+    .bg-soft-primary { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+    .bg-soft-success { background-color: rgba(25, 135, 84, 0.1); color: #198754; }
+    .bg-soft-warning { background-color: rgba(255, 193, 7, 0.15); color: #d39e00; }
+    .bg-soft-danger { background-color: rgba(220, 53, 69, 0.1); color: #dc3545; }
+    .bg-soft-info { background-color: rgba(13, 202, 240, 0.12); color: #087990; }
+    .bg-soft-teal { background-color: rgba(32, 201, 151, 0.12); color: #146c43; }
+    .bg-soft-dark { background-color: rgba(33, 37, 41, 0.08); color: #212529; }
+    .bg-soft-purple { background-color: rgba(111, 66, 193, 0.1); color: #6f42c1; }
+
+    .section-divider {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #adb5bd;
+        margin: 2rem 0 1.5rem 0;
+        display: flex;
+        align-items: center;
+    }
+    .section-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #e9ecef;
+        margin-left: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho do Projeto P1+2 -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark">
+                <i class="bi bi-layers-fill text-primary me-2"></i>Portal do Projeto P1+2
+            </h3>
+            <p class="text-muted mb-0">Gestão integrada, beneficiários, plano produtivo e monitoramentos.</p>
+        </div>
+        <div>
+            <a href="/hub" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                <i class="bi bi-arrow-left me-1"></i> Voltar ao Hub
+            </a>
+        </div>
+    </div>
+
+    <!-- Seção: Núcleo Operacional -->
+    <div class="section-divider">Operações Principais</div>
+    <div class="row g-4 justify-content-center mb-4">
+        <!-- Consolidado -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/consolidado" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-primary">
+                    <i class="bi bi-table"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Consolidado</h5>
+                <p class="text-muted small mb-0">Resumo geral e KPIs de execução.</p>
+            </a>
+        </div>
+
+        <!-- Gráficos -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/graficos" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-warning">
+                    <i class="bi bi-pie-chart-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Gráficos</h5>
+                <p class="text-muted small mb-0">Análise visual e estatística.</p>
+            </a>
+        </div>
+
+        <!-- Beneficiários -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/beneficiarios" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-success">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Beneficiários</h5>
+                <p class="text-muted small mb-0">Cadastro, busca e gestão de famílias.</p>
+            </a>
+        </div>
+
+        <!-- Acompanhamento Plano Produtivo -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/plano-produtivo" class="card-nav p-4 text-center border-primary border-opacity-25" style="background: linear-gradient(180deg, #ffffff 0%, rgba(13,110,253,0.02) 100%);">
+                <div class="card-icon-circle bg-soft-teal">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1 text-primary">Plano Produtivo</h5>
+                <p class="text-muted small mb-0">Acompanhamento das parcelas e planilha interativa.</p>
+            </a>
+        </div>
+    </div>
+
+    <!-- Seção: Monitoramento e Gestão -->
+    <div class="section-divider">Monitoramento e Gestão Administrativa</div>
+    <div class="row g-4 justify-content-center">
+        <!-- Monitoramento Unificado (GAPA, SISMA, INTERCÂMBIO) -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/monitoramento" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-info">
+                    <i class="bi bi-calendar2-check-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Monitoramento</h5>
+                <p class="text-muted small mb-0">GAPA, SISMA e INTERCÂMBIO em sub-abas.</p>
+            </a>
+        </div>
+
+        <!-- Planejamento Físico -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/planejamento" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-primary">
+                    <i class="bi bi-calendar-range-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Planejamento</h5>
+                <p class="text-muted small mb-0">Gestão de metas e cronograma semanal.</p>
+            </a>
+        </div>
+
+        <!-- Cotações -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/cotacoes" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-danger">
+                    <i class="bi bi-receipt-cutoff"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Cotações</h5>
+                <p class="text-muted small mb-0">Processos e orçamentos do P1+2.</p>
+            </a>
+        </div>
+
+        <!-- Documentação -->
+        <div class="col-lg-3 col-md-6">
+            <a href="/p1-2/documentacao" class="card-nav p-4 text-center">
+                <div class="card-icon-circle bg-soft-dark">
+                    <i class="bi bi-folder-fill"></i>
+                </div>
+                <h5 class="fw-bold mb-1">Documentação</h5>
+                <p class="text-muted small mb-0">Arquivos, relatórios e atas.</p>
+            </a>
+        </div>
+    </div>
+</main>
+{% endblock %}

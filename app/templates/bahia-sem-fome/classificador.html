@@ -1,0 +1,185 @@
+{% extends "bahia-sem-fome/base_bsf.html" %}
+
+{% block title %}Classificador Manual - BSF{% endblock %}
+
+{% block bsf_content %}
+<div class="container-fluid py-4" style="height: 90vh;">
+    <div class="row h-100">
+        <!-- Lado Esquerdo: Visualizador de PDF -->
+        <div class="col-md-8 h-100">
+            <div class="stat-card h-100 d-flex flex-column" style="background: rgba(25, 30, 36, 0.7); backdrop-filter: blur(10px); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); padding: 20px;">
+                <h4 class="text-white mb-3" id="pastaAtualTitle"><i class="fas fa-folder-open text-warning me-2"></i>Buscando próxima pasta...</h4>
+                <div class="flex-grow-1 bg-dark rounded overflow-hidden position-relative">
+                    <iframe id="pdfViewer" src="" class="w-100 h-100" style="border: none;"></iframe>
+                    <div id="loadingOverlay" class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(0,0,0,0.8); z-index: 10;">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lado Direito: Botões de Classificação -->
+        <div class="col-md-4 h-100">
+            <div class="stat-card h-100" style="background: rgba(25, 30, 36, 0.7); backdrop-filter: blur(10px); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); padding: 20px;">
+                <h4 class="text-white mb-4 text-center">Classificação Rápida</h4>
+                
+                <p class="text-muted small text-center mb-4">Utilize as <strong>teclas numéricas</strong> do seu teclado para classificar instantaneamente ou clique nos botões.</p>
+
+                <div class="d-grid gap-3">
+                    <button class="btn btn-outline-primary btn-lg text-start btn-classificar" data-atividade="SOCIOECONOMICO" data-key="1">
+                        <span class="badge bg-primary me-2">1</span> SOCIOECONÔMICO
+                    </button>
+                    <button class="btn btn-outline-info btn-lg text-start btn-classificar" data-atividade="GRUPO FAMILIAR" data-key="2">
+                        <span class="badge bg-info me-2">2</span> GRUPO FAMILIAR
+                    </button>
+                    <button class="btn btn-outline-success btn-lg text-start btn-classificar" data-atividade="CARACTERIZACAO" data-key="3">
+                        <span class="badge bg-success me-2">3</span> CARACTERIZAÇÃO
+                    </button>
+                    <button class="btn btn-outline-warning btn-lg text-start btn-classificar" data-atividade="PLANO PRODUTIVO" data-key="4">
+                        <span class="badge bg-warning me-2">4</span> PLANO PRODUTIVO
+                    </button>
+                    <button class="btn btn-outline-light btn-lg text-start btn-classificar" data-atividade="VISITA" data-key="5">
+                        <span class="badge bg-secondary me-2">5</span> VISITA
+                    </button>
+                    
+                    <hr class="border-secondary my-2">
+                    
+                    <button class="btn btn-outline-danger btn-lg text-start btn-classificar" data-atividade="PULAR" data-key="0">
+                        <span class="badge bg-danger me-2">0</span> IGNORAR / PULAR
+                    </button>
+                </div>
+                
+                <div class="mt-auto pt-4 text-center">
+                    <div class="alert alert-success d-none" id="msgSucesso">
+                        <i class="fas fa-check-circle me-2"></i>Renomeado com sucesso!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let pastaAtualData = null;
+    let isProcessing = false;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        carregarProximaPasta();
+        
+        // Configurar botões de clique
+        document.querySelectorAll('.btn-classificar').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const atividade = this.getAttribute('data-atividade');
+                classificarPasta(atividade);
+            });
+        });
+        
+        // Configurar atalhos de teclado
+        document.addEventListener('keydown', function(event) {
+            if (isProcessing) return;
+            
+            const key = event.key;
+            const btn = document.querySelector(`.btn-classificar[data-key="${key}"]`);
+            if (btn) {
+                // Simula o efeito visual de clique
+                btn.classList.add('active');
+                setTimeout(() => btn.classList.remove('active'), 200);
+                
+                classificarPasta(btn.getAttribute('data-atividade'));
+            }
+        });
+    });
+
+    async function carregarProximaPasta() {
+        isProcessing = true;
+        document.getElementById('loadingOverlay').classList.remove('d-none');
+        document.getElementById('pastaAtualTitle').innerHTML = '<i class="fas fa-spinner fa-spin text-warning me-2"></i>Buscando...';
+        
+        try {
+            const response = await fetch('/api/classificador/proxima');
+            const data = await response.json();
+            
+            if (data.status === 'sucesso') {
+                pastaAtualData = data;
+                document.getElementById('pastaAtualTitle').innerHTML = `<i class="fas fa-folder text-warning me-2"></i>${data.pasta_nome} <small class="text-muted ms-2" style="font-size:0.6em">${data.nome_arquivo}</small>`;
+                
+                // Carregar o PDF no Iframe
+                const iframe = document.getElementById('pdfViewer');
+                // Adicionando um timestamp para evitar cache do navegador
+                iframe.src = `/api/classificador/arquivo?caminho=${encodeURIComponent(data.caminho_arquivo)}&t=${new Date().getTime()}#zoom=page-fit`;
+                
+                iframe.onload = function() {
+                    document.getElementById('loadingOverlay').classList.add('d-none');
+                    isProcessing = false;
+                };
+            } else if (data.status === 'concluido') {
+                document.getElementById('pastaAtualTitle').innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>Tudo Concluído!';
+                document.getElementById('pdfViewer').src = 'about:blank';
+                document.getElementById('loadingOverlay').classList.add('d-none');
+                
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Você finalizou todas as pastas disponíveis!");
+                } else {
+                    alert("Você finalizou todas as pastas disponíveis!");
+                }
+            } else {
+                alert("Erro ao buscar próxima pasta: " + data.mensagem);
+                document.getElementById('loadingOverlay').classList.add('d-none');
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Erro de comunicação com o servidor.");
+            document.getElementById('loadingOverlay').classList.add('d-none');
+        }
+    }
+
+    async function classificarPasta(atividade) {
+        if (!pastaAtualData || isProcessing) return;
+        
+        if (atividade === 'PULAR') {
+            // Apenas busca a próxima sem renomear
+            // Nota: na lógica atual do backend, se não renomear, ela continuará com 10 caracteres e será pega de novo.
+            // Precisaríamos de uma lógica de 'ignorados' no backend, ou renomeá-la com um sufixo tipo " - IGNORADO".
+            atividade = "IGNORADO";
+        }
+        
+        isProcessing = true;
+        
+        try {
+            const response = await fetch('/api/classificador/renomear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    caminho_pasta: pastaAtualData.caminho_pasta,
+                    atividade: atividade
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                // Mostrar mensagem rápida de sucesso
+                const msg = document.getElementById('msgSucesso');
+                msg.classList.remove('d-none');
+                setTimeout(() => msg.classList.add('d-none'), 1000);
+                
+                // Puxar a próxima
+                carregarProximaPasta();
+            } else {
+                alert("Erro ao renomear: " + (result.detail || result.mensagem));
+                isProcessing = false;
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Erro de comunicação ao renomear a pasta.");
+            isProcessing = false;
+        }
+    }
+</script>
+{% endblock %}

@@ -97,7 +97,23 @@ def init_db():
         return
 
     # Fallback LOCAL: Importações tardias para evitar ghost imports em PROD
+    import sys
+    if sys.platform == "win32":
+        for qgis_bin in [
+            r"C:\Program Files\QGIS 3.44.12\bin",
+            r"C:\Program Files\QGIS 3.44.12\apps\Python312\DLLs",
+            r"C:\Program Files\QGIS 3.44.12\apps\Python312",
+            r"C:\Program Files\QGIS 3.44.12\apps\qt5\bin",
+            r"C:\Program Files\QGIS 3.34.0\bin",
+            r"C:\Program Files\QGIS 3.34.0\apps\Python312\DLLs"
+        ]:
+            if os.path.exists(qgis_bin):
+                try:
+                    os.add_dll_directory(qgis_bin)
+                except Exception:
+                    pass
     import sqlite3
+
     DB_PATH_FIX = os.path.join(os.getcwd(), "agendha.db")
     logging.info(f"Inicializando banco de dados local em: {DB_PATH_FIX}")
     
@@ -440,6 +456,129 @@ def init_db():
     )
     """)
 
+    # --- MÓDULO P1+2 (CLONE ADAPTADO) ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_beneficiarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_completo TEXT,
+        nome_familiar TEXT,
+        cpf TEXT UNIQUE,
+        cpf_familiar TEXT,
+        nis TEXT,
+        data_nascimento TEXT,
+        sexo TEXT,
+        escolaridade TEXT,
+        municipio TEXT,
+        comunidade TEXT,
+        estado_uf TEXT DEFAULT 'BA',
+        ref_localizacao TEXT, 
+        latitude TEXT,
+        longitude TEXT,
+        status TEXT DEFAULT 'Ativo',
+        doc_status TEXT DEFAULT 'Pendente',
+        data_cadastro TEXT DEFAULT CURRENT_TIMESTAMP,
+        observacoes TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_monitoramentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL, -- 'GAPA', 'SISMA', 'INTERCAMBIO'
+        titulo TEXT NOT NULL,
+        data_evento TEXT NOT NULL,
+        municipio TEXT,
+        comunidade TEXT,
+        responsavel TEXT,
+        status TEXT DEFAULT 'Realizado',
+        quantidade_participantes INTEGER DEFAULT 0,
+        participantes_ids TEXT DEFAULT '[]',
+        observacao TEXT,
+        link_documento TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_plano_produtivo_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chave_coluna TEXT UNIQUE NOT NULL,
+        titulo_coluna TEXT NOT NULL,
+        tipo_coluna TEXT DEFAULT 'texto',
+        ordem INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_plano_produtivo_dados (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        beneficiario_id INTEGER,
+        nome_beneficiario TEXT,
+        municipio TEXT,
+        comunidade TEXT,
+        status_parcela_1 TEXT DEFAULT 'Pendente',
+        status_parcela_2 TEXT DEFAULT 'Pendente',
+        observacoes TEXT,
+        campos_dinamicos TEXT DEFAULT '{}',
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (beneficiario_id) REFERENCES p12_beneficiarios(id) ON DELETE SET NULL
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_cronograma_execucao (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        municipio TEXT NOT NULL,
+        semana_referencia INTEGER DEFAULT 1,
+        ano INTEGER DEFAULT 2026,
+        meta_planejada INTEGER DEFAULT 0,
+        qtd_executada INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'Em Andamento',
+        observacoes TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_documentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_documento TEXT NOT NULL,
+        categoria TEXT DEFAULT 'Geral',
+        nome_arquivo TEXT NOT NULL,
+        caminho_arquivo TEXT NOT NULL,
+        data_upload TEXT DEFAULT CURRENT_TIMESTAMP,
+        tamanho_bytes INTEGER DEFAULT 0
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_cotacoes_master (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo_cotacao TEXT UNIQUE NOT NULL,
+        titulo TEXT NOT NULL,
+        descricao TEXT,
+        status TEXT DEFAULT 'Aberta',
+        data_abertura TEXT DEFAULT CURRENT_TIMESTAMP,
+        data_fechamento TEXT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS p12_cotacao_itens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cotacao_master_id INTEGER NOT NULL,
+        descricao_item TEXT NOT NULL,
+        unidade TEXT DEFAULT 'UN',
+        quantidade REAL NOT NULL,
+        valor_unitario_estimado REAL DEFAULT 0.0,
+        valor_total_estimado REAL DEFAULT 0.0,
+        fornecedor_vencedor TEXT,
+        status TEXT DEFAULT 'Pendente',
+        FOREIGN KEY (cotacao_master_id) REFERENCES p12_cotacoes_master(id) ON DELETE CASCADE
+    )
+    """)
+
     # --- MIGRAÇÕES E DADOS PADRÃO ---
     try:
         cursor.execute("ALTER TABLE propostas ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedores(id)")
@@ -469,6 +608,13 @@ def init_db():
         cursor.execute("ALTER TABLE beneficiarios ADD COLUMN faturamento_id INTEGER REFERENCES faturamentos(id)")
     except sqlite3.OperationalError:
         pass
+
+    # Migração: adicionar participantes_nomes em p12_monitoramentos
+    try:
+        cursor.execute("ALTER TABLE p12_monitoramentos ADD COLUMN participantes_nomes TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     
     # Cria usuário admin se não existir
     cursor.execute("SELECT * FROM users WHERE username = ?", (settings.ADMIN_USERNAME,))
@@ -498,15 +644,15 @@ def get_supabase():
     return create_client(supabase_url, supabase_key)
 
 def fetch_all(table_name: str, select_query: str = '*'):
-    """Busca todos os registros de uma tabela Supabase com paginação recursiva para evitar limite de 1000"""
-    supabase = get_supabase()
+    """Busca todos os registros de uma tabela Supabase ou SQLite local (fallback resiliente)"""
     all_data = []
-    page_size = 1000
-    start = 0
+    try:
+        supabase = get_supabase()
+        page_size = 1000
+        start = 0
 
-    while True:
-        end = start + page_size - 1
-        try:
+        while True:
+            end = start + page_size - 1
             res = supabase.table(table_name).select(select_query).range(start, end).execute()
             if not res.data:
                 break
@@ -514,11 +660,203 @@ def fetch_all(table_name: str, select_query: str = '*'):
             if len(res.data) < page_size:
                 break
             start += page_size
-        except Exception as e:
-            logging.error(f"Erro ao fazer fetch_all na tabela {table_name}: {e}")
-            break
+        return all_data
+    except Exception as e:
+        # Fallback para SQLite local
+        import os
+        db_path = os.path.join(os.getcwd(), "agendha.db")
+        if os.path.exists(db_path):
+            try:
+                import sys
+                if sys.platform == "win32":
+                    for qgis_bin in [
+                        r"C:\Program Files\QGIS 3.44.12\bin",
+                        r"C:\Program Files\QGIS 3.44.12\apps\Python312\DLLs",
+                        r"C:\Program Files\QGIS 3.44.12\apps\Python312"
+                    ]:
+                        if os.path.exists(qgis_bin):
+                            try:
+                                os.add_dll_directory(qgis_bin)
+                            except Exception:
+                                pass
+                import sqlite3
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT {select_query} FROM {table_name}")
+                rows = cursor.fetchall()
+                conn.close()
+                return [dict(r) for r in rows]
+            except Exception as e_sql:
+                logging.warning(f"Aviso fetch_all ({table_name}): Supabase e SQLite falharam ({e_sql})")
+        return []
 
-    return all_data
+
+def _get_sqlite_conn():
+    """Retorna uma conexão configurada com o SQLite local agendha.db"""
+    import os
+    import sys
+    if sys.platform == "win32":
+        for qgis_bin in [
+            r"C:\Program Files\QGIS 3.44.12\bin",
+            r"C:\Program Files\QGIS 3.44.12\apps\Python312\DLLs",
+            r"C:\Program Files\QGIS 3.44.12\apps\Python312",
+            r"C:\Program Files\QGIS 3.34.0\bin",
+            r"C:\Program Files\QGIS 3.34.0\apps\Python312\DLLs"
+        ]:
+            if os.path.exists(qgis_bin):
+                try:
+                    os.add_dll_directory(qgis_bin)
+                except Exception:
+                    pass
+    import sqlite3
+    db_path = os.path.join(os.getcwd(), "agendha.db")
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def db_insert(table_name: str, data: dict) -> dict:
+    """Insere registro no Supabase ou no SQLite local de forma transparente."""
+    import json
+    clean_data = {k: v for k, v in data.items() if v is not None}
+
+    # 1. Tentar Supabase
+    try:
+        supabase = get_supabase()
+        res = supabase.table(table_name).insert(clean_data).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        logging.info(f"[db_insert] Supabase indisponível para tabela {table_name} ({e}). Salvando no SQLite local...")
+
+    # 2. Fallback SQLite
+    try:
+        conn = _get_sqlite_conn()
+        cursor = conn.cursor()
+
+        # Obter colunas existentes na tabela SQLite
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing_cols = {col[1] for col in cursor.fetchall()}
+
+        sqlite_data = {}
+        for k, v in clean_data.items():
+            val = v
+            if isinstance(v, (dict, list)):
+                val = json.dumps(v)
+            elif isinstance(v, bool):
+                val = 1 if v else 0
+            
+            if existing_cols:
+                if k in existing_cols:
+                    sqlite_data[k] = val
+                elif k == "item_nome" and "descricao_item" in existing_cols:
+                    sqlite_data["descricao_item"] = val
+                elif k == "descricao_item" and "item_nome" in existing_cols:
+                    sqlite_data["item_nome"] = val
+            else:
+                sqlite_data[k] = val
+
+        cols = list(sqlite_data.keys())
+        placeholders = ["?"] * len(cols)
+        sql = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join(placeholders)})"
+        cursor.execute(sql, list(sqlite_data.values()))
+        new_id = cursor.lastrowid
+        conn.commit()
+
+        cursor.execute(f"SELECT * FROM {table_name} WHERE id = ?", (new_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+        return {"id": new_id, **clean_data}
+    except Exception as e_sql:
+        logging.error(f"[db_insert] Falha no SQLite para {table_name}: {e_sql}")
+        raise RuntimeError(f"Erro ao salvar dados em {table_name}: {e_sql}")
+
+
+def db_update(table_name: str, id_value: any, data: dict, id_col: str = "id") -> dict:
+    """Atualiza registro no Supabase ou no SQLite local de forma transparente."""
+    import json
+    clean_data = {k: v for k, v in data.items() if v is not None}
+
+    # 1. Tentar Supabase
+    try:
+        supabase = get_supabase()
+        res = supabase.table(table_name).update(clean_data).eq(id_col, id_value).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        logging.info(f"[db_update] Supabase indisponível para tabela {table_name} ({e}). Atualizando no SQLite local...")
+
+    # 2. Fallback SQLite
+    try:
+        conn = _get_sqlite_conn()
+        cursor = conn.cursor()
+
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing_cols = {col[1] for col in cursor.fetchall()}
+
+        sqlite_data = {}
+        for k, v in clean_data.items():
+            val = v
+            if isinstance(v, (dict, list)):
+                val = json.dumps(v)
+            elif isinstance(v, bool):
+                val = 1 if v else 0
+            
+            if existing_cols:
+                if k in existing_cols:
+                    sqlite_data[k] = val
+                elif k == "item_nome" and "descricao_item" in existing_cols:
+                    sqlite_data["descricao_item"] = val
+                elif k == "descricao_item" and "item_nome" in existing_cols:
+                    sqlite_data["item_nome"] = val
+            else:
+                sqlite_data[k] = val
+
+        if not sqlite_data:
+            conn.close()
+            return {id_col: id_value}
+
+        set_clause = ", ".join([f"{k} = ?" for k in sqlite_data.keys()])
+        sql = f"UPDATE {table_name} SET {set_clause} WHERE {id_col} = ?"
+        cursor.execute(sql, list(sqlite_data.values()) + [id_value])
+        conn.commit()
+
+        cursor.execute(f"SELECT * FROM {table_name} WHERE {id_col} = ?", (id_value,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+        return {id_col: id_value, **clean_data}
+    except Exception as e_sql:
+        logging.error(f"[db_update] Falha no SQLite para {table_name}: {e_sql}")
+        raise RuntimeError(f"Erro ao atualizar dados em {table_name}: {e_sql}")
+
+
+def db_delete(table_name: str, id_value: any, id_col: str = "id") -> bool:
+    """Exclui registro no Supabase ou no SQLite local de forma transparente."""
+    # 1. Tentar Supabase
+    try:
+        supabase = get_supabase()
+        supabase.table(table_name).delete().eq(id_col, id_value).execute()
+    except Exception as e:
+        logging.info(f"[db_delete] Supabase indisponível para tabela {table_name} ({e}). Excluindo no SQLite local...")
+
+    # 2. Fallback SQLite
+    try:
+        conn = _get_sqlite_conn()
+        cursor = conn.cursor()
+        cursor.execute(f"DELETE FROM {table_name} WHERE {id_col} = ?", (id_value,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e_sql:
+        logging.error(f"[db_delete] Falha no SQLite para {table_name}: {e_sql}")
+        raise RuntimeError(f"Erro ao excluir dados em {table_name}: {e_sql}")
+
+
 
 
 def sync_projects() -> None:

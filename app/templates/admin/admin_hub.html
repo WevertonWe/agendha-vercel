@@ -94,6 +94,10 @@
     .theme-oficios .stat-icon { background-color: rgba(255, 193, 7, 0.1); color: #ffc107; }
     .theme-oficios .stat-value { color: #d39e00; }
 
+    .theme-p12 .stat-icon { background-color: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+    .theme-p12 .stat-value { color: #0d6efd; }
+
+
     .section-title {
         font-size: 0.85rem;
         font-weight: 700;
@@ -183,8 +187,27 @@
             </a>
         </div>
 
+        <!-- P1+2 (Indigo/Azul) -->
+        <div class="col-md-6 col-lg-4 col-xl">
+            <a href="/p1-2/portal" class="stat-card p-4 theme-p12 shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+                <div>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="stat-icon"><i class="bi bi-layers-fill"></i></div>
+                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3">Projeto P1+2</span>
+                    </div>
+                    <div class="stat-value mt-3" id="val-p12"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Projeto P1+2</div>
+                    <div class="progress progress-micro mt-3">
+                        <div class="progress-bar bg-primary" id="prog-p12" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block" id="desc-p12">Carregando...</small>
+                </div>
+            </a>
+        </div>
+
         <!-- Financeiro (Verde) -->
-        <div class="col-md-6 col-lg-3">
+        <div class="col-md-6 col-lg-4 col-xl">
             {% if user_username in ['admin', 'marilac', 'mauricio', 'fabiano', 'valda'] %}
             <a href="/financeiro/painel" class="stat-card p-4 theme-fin shadow-sm" style="border-radius: 16px;">
                 <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
@@ -331,6 +354,13 @@
                 
                 // AQA
                 document.getElementById('val-aqa').textContent = data.aqa.beneficiarios;
+
+                // P1+2
+                if (data.p12) {
+                    document.getElementById('val-p12').textContent = data.p12.beneficiarios;
+                    document.getElementById('desc-p12').textContent = `${data.p12.executado} / ${data.p12.meta} metas (${data.p12.percent.toString().replace('.', ',')}%)`;
+                    document.getElementById('prog-p12').style.width = `${Math.min(data.p12.percent, 100)}%`;
+                }
                 
                 // Financeiro
                 const formatBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });

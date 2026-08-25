@@ -850,6 +850,8 @@ async def gerar_relatorio_excel(data: RelatorioRequest):
             "cpf_familiar": "CPF",
             "municipio": "Município",
             "comunidade": "Comunidade",
+            "latitude": "Latitude",
+            "longitude": "Longitude",
             "status": "Status",
             "nis": "NIS",
             "tecnico_agua_que_alimenta": "Técnico",
@@ -880,6 +882,18 @@ async def gerar_relatorio_excel(data: RelatorioRequest):
 
         df = pd.DataFrame(dados)
         df.rename(columns={k: v for k, v in colunas_permitidas.items() if k in cols_to_query}, inplace=True)
+
+        # Reordenar colunas conforme a seleção do usuário
+        desired_order = []
+        if 'numero_ordem' in data.colunas:
+            desired_order.append('Nº')
+        for c in data.colunas:
+            if c in colunas_permitidas:
+                desired_order.append(colunas_permitidas[c])
+        
+        final_cols = [c for c in desired_order if c in df.columns]
+        if final_cols:
+            df = df[final_cols]
 
         output = io.BytesIO()
         from openpyxl.styles import PatternFill, Font
@@ -919,7 +933,7 @@ async def gerar_analise_ia(data: RelatorioRequest):
 
     try:
         supabase = get_supabase()
-        cols_for_ai = ["nome_familiar", "municipio", "comunidade", "status", "nis", "tecnico_agua_que_alimenta"]
+        cols_for_ai = ["nome_familiar", "municipio", "comunidade", "latitude", "longitude", "status", "nis", "tecnico_agua_que_alimenta"]
         res = supabase.table('beneficiarios').select(','.join(cols_for_ai)).in_('id', data.ids).execute()
         
         if not res.data:

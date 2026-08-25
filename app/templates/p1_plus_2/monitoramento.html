@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Monitoramento (GAPA, SISMA, INTERCÂMBIO) - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .nav-pills-custom .nav-link {
+        color: #495057;
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 0.6rem 1.5rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+        transition: all 0.2s ease;
+    }
+    .nav-pills-custom .nav-link:hover {
+        background: #f8f9fa;
+        color: #0d6efd;
+    }
+    .nav-pills-custom .nav-link.active {
+        background: #0d6efd;
+        color: #ffffff;
+        border-color: #0d6efd;
+        box-shadow: 0 4px 12px rgba(13,110,253,0.25);
+    }
+    .event-card {
+        background: #ffffff;
+        border-radius: 14px;
+        border: 1px solid rgba(0,0,0,0.06);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        transition: all 0.25s ease;
+    }
+    .event-card:hover {
+        box-shadow: 0 8px 18px rgba(0,0,0,0.06);
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-calendar2-check-fill text-primary me-2"></i>Módulo de Monitoramento
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Acompanhamento e registro de atividades de GAPA, SISMA e INTERCÂMBIO.</p>
+        </div>
+
+        <button class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="abrirModalNovoEvento()">
+            <i class="bi bi-plus-lg me-1"></i> Novo Monitoramento
+        </button>
+    </div>
+
+    <!-- Navegação por Sub-Abas -->
+    <ul class="nav nav-pills nav-pills-custom mb-4" id="monitoramentoTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-gapa" data-bs-toggle="pill" data-bs-target="#content-gapa" type="button" role="tab" onclick="mudarAba('GAPA')">
+                <i class="bi bi-water me-2"></i>Monitoramento GAPA
+                <span class="badge bg-light text-dark rounded-pill ms-2" id="badge-gapa">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-sisma" data-bs-toggle="pill" data-bs-target="#content-sisma" type="button" role="tab" onclick="mudarAba('SISMA')">
+                <i class="bi bi-shield-check me-2"></i>Monitoramento SISMA
+                <span class="badge bg-light text-dark rounded-pill ms-2" id="badge-sisma">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-intercambio" data-bs-toggle="pill" data-bs-target="#content-intercambio" type="button" role="tab" onclick="mudarAba('INTERCAMBIO')">
+                <i class="bi bi-arrow-left-right me-2"></i>Monitoramento INTERCÂMBIO
+                <span class="badge bg-light text-dark rounded-pill ms-2" id="badge-intercambio">0</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- Busca -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2">
+            <div class="col-md-9">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="filtro-busca" class="form-control bg-light border-0" placeholder="Buscar por título, município, comunidade ou responsável..." onkeyup="carregarMonitoramentos()">
+                </div>
+            </div>
+            <div class="col-md-3 text-end">
+                <span class="text-muted small" id="contador-eventos">0 registros encontrados</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conteúdo das Abas -->
+    <div class="tab-content" id="monitoramentoTabsContent">
+        <!-- Container dos Cards de Eventos -->
+        <div id="container-eventos" class="row g-3">
+            <div class="col-12 text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                Carregando eventos...
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Modal: Criar/Editar Monitoramento -->
+<div class="modal fade" id="modalMonitoramento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalMonitoramentoTitulo">
+                    <i class="bi bi-calendar-plus text-primary me-2"></i>Registrar Monitoramento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formMonitoramento" onsubmit="salvarMonitoramento(event)">
+                    <input type="hidden" id="mon-id">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Tipo de Monitoramento *</label>
+                            <select id="mon-tipo" class="form-select" required>
+                                <option value="GAPA">GAPA</option>
+                                <option value="SISMA">SISMA</option>
+                                <option value="INTERCAMBIO">INTERCÂMBIO</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Título / Tema da Atividade *</label>
+                            <input type="text" id="mon-titulo" class="form-control" required placeholder="Ex: Oficina Temática de Manejo de Recursos">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Data da Atividade *</label>
+                            <input type="date" id="mon-data" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Município</label>
+                            <input type="text" id="mon-municipio" class="form-control" placeholder="Ex: Abaré">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Comunidade</label>
+                            <input type="text" id="mon-comunidade" class="form-control" placeholder="Ex: Icozeira">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Técnico / Responsável</label>
+                            <input type="text" id="mon-responsavel" class="form-control" placeholder="Nome do técnico">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Qtd. Participantes</label>
+                            <input type="number" id="mon-qtd" class="form-control" min="0" value="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select id="mon-status" class="form-select">
+                                <option value="Realizado" selected>Realizado</option>
+                                <option value="Planejado">Planejado</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold"><i class="bi bi-people me-1 text-primary"></i>Participantes (Nomes / Beneficiários Presentes)</label>
+                        <textarea id="mon-participantes" class="form-control" rows="2" placeholder="Ex: João da Silva, Maria dos Santos, Raimundo Nonato..."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações / Encaminhamentos</label>
+                        <textarea id="mon-obs" class="form-control" rows="3" placeholder="Detalhes do encontro, pautas tratadas, etc..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Salvar Monitoramento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let abaAtiva = 'GAPA';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Preenche data padrão com hoje
+        const hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('mon-data').value = hoje;
+        carregarMonitoramentos();
+    });
+
+    function mudarAba(tipo) {
+        abaAtiva = tipo;
+        document.getElementById('mon-tipo').value = tipo;
+        carregarMonitoramentos();
+    }
+
+    async function carregarMonitoramentos() {
+        const busca = document.getElementById('filtro-busca').value;
+        const container = document.getElementById('container-eventos');
+        
+        try {
+            // Busca dados gerais para atualizar os badges
+            const resTodos = await fetch('/api/p1-2/monitoramentos');
+            if (resTodos.ok) {
+                const dataTodos = await resTodos.json();
+                const itens = dataTodos.dados || [];
+                document.getElementById('badge-gapa').textContent = itens.filter(i => String(i.tipo || '').toUpperCase() === 'GAPA').length;
+                document.getElementById('badge-sisma').textContent = itens.filter(i => String(i.tipo || '').toUpperCase() === 'SISMA').length;
+                document.getElementById('badge-intercambio').textContent = itens.filter(i => ['INTERCAMBIO', 'INTERCÂMBIO'].includes(String(i.tipo || '').toUpperCase())).length;
+            }
+
+            // Busca dados da aba ativa com filtro
+            let url = `/api/p1-2/monitoramentos?tipo=${abaAtiva}`;
+            if (busca) url += `&search=${encodeURIComponent(busca)}`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Erro ao buscar dados.");
+            const data = await res.json();
+            const eventos = data.dados || [];
+
+            document.getElementById('contador-eventos').textContent = `${eventos.length} registros em ${abaAtiva}`;
+
+            if (eventos.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center py-5 text-muted">
+                        <i class="bi bi-calendar-x fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhum monitoramento registrado para ${abaAtiva}.
+                    </div>
+                `;
+                return;
+            }
+
+            let cardsHtml = '';
+            eventos.forEach(ev => {
+                const dataFormatada = ev.data_evento ? ev.data_evento.split('-').reverse().join('/') : 'Não informada';
+                const statusBadge = ev.status === 'Realizado' ? 'bg-success bg-opacity-10 text-success' : 'bg-warning bg-opacity-15 text-warning';
+                cardsHtml += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="event-card p-4 h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <span class="badge ${statusBadge} rounded-pill px-3">${ev.status || 'Realizado'}</span>
+                                    <small class="text-muted"><i class="bi bi-calendar3 me-1"></i>${dataFormatada}</small>
+                                </div>
+                                <h6 class="fw-bold text-dark mb-2">${escapeHtml(ev.titulo)}</h6>
+                                <p class="text-muted small mb-2">
+                                    <i class="bi bi-geo-alt me-1 text-danger"></i>${escapeHtml(ev.municipio || 'Não informado')} ${ev.comunidade ? ' - ' + escapeHtml(ev.comunidade) : ''}
+                                </p>
+                                <p class="text-muted small mb-2">
+                                    <i class="bi bi-person me-1 text-primary"></i>Resp: ${escapeHtml(ev.responsavel || 'Não informado')}
+                                </p>
+                                ${ev.participantes_nomes ? `
+                                    <div class="p-2 bg-light rounded-3 small mb-2 text-secondary">
+                                        <i class="bi bi-people-fill me-1 text-info"></i><strong>Participantes:</strong> ${escapeHtml(ev.participantes_nomes)}
+                                    </div>
+                                ` : ''}
+                                ${ev.observacao ? `<p class="text-secondary small fst-italic mb-3">${escapeHtml(ev.observacao)}</p>` : ''}
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-3">
+                                <span class="badge bg-light text-dark rounded-pill">
+                                    <i class="bi bi-people me-1"></i>${ev.quantidade_participantes || 0} participantes
+                                </span>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-outline-primary btn-sm p-1 rounded-circle border-0" onclick="editarMonitoramento(${ev.id})" title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm p-1 rounded-circle border-0" onclick="excluirMonitoramento(${ev.id})" title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = cardsHtml;
+
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<div class="col-12 text-center text-danger py-4">Erro ao carregar monitoramentos.</div>`;
+        }
+    }
+
+    function abrirModalNovoEvento() {
+        document.getElementById('formMonitoramento').reset();
+        document.getElementById('mon-id').value = '';
+        document.getElementById('mon-tipo').value = abaAtiva;
+        const titEl = document.getElementById('modalMonitoramentoTitulo');
+        if (titEl) titEl.innerHTML = `<i class="bi bi-calendar-check text-primary me-2"></i>Novo Registro de Monitoramento (${abaAtiva})`;
+        const hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('mon-data').value = hoje;
+        const modal = new bootstrap.Modal(document.getElementById('modalMonitoramento'));
+        modal.show();
+    }
+
+    async function editarMonitoramento(id) {
+        try {
+            const res = await fetch(`/api/p1-2/monitoramentos/${id}`);
+            if (!res.ok) throw new Error("Erro ao buscar dados do monitoramento.");
+            const ev = await res.json();
+
+            document.getElementById('mon-id').value = ev.id;
+            document.getElementById('mon-tipo').value = ev.tipo || abaAtiva;
+            document.getElementById('mon-titulo').value = ev.titulo || '';
+            document.getElementById('mon-data').value = ev.data_evento || '';
+            document.getElementById('mon-municipio').value = ev.municipio || '';
+            document.getElementById('mon-comunidade').value = ev.comunidade || '';
+            document.getElementById('mon-responsavel').value = ev.responsavel || '';
+            document.getElementById('mon-qtd').value = ev.quantidade_participantes || 0;
+            document.getElementById('mon-status').value = ev.status || 'Realizado';
+            document.getElementById('mon-participantes').value = ev.participantes_nomes || '';
+            document.getElementById('mon-obs').value = ev.observacao || '';
+
+            const titEl = document.getElementById('modalMonitoramentoTitulo');
+            if (titEl) titEl.innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>Editar Monitoramento (${ev.tipo || abaAtiva})`;
+            const modal = new bootstrap.Modal(document.getElementById('modalMonitoramento'));
+            modal.show();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+
+    async function salvarMonitoramento(e) {
+        e.preventDefault();
+        const id = document.getElementById('mon-id').value;
+        const payload = {
+            tipo: document.getElementById('mon-tipo').value,
+            titulo: document.getElementById('mon-titulo').value,
+            data_evento: document.getElementById('mon-data').value,
+            municipio: document.getElementById('mon-municipio').value,
+            comunidade: document.getElementById('mon-comunidade').value,
+            responsavel: document.getElementById('mon-responsavel').value,
+            quantidade_participantes: parseInt(document.getElementById('mon-qtd').value || 0),
+            status: document.getElementById('mon-status').value,
+            participantes_nomes: document.getElementById('mon-participantes').value,
+            observacao: document.getElementById('mon-obs').value
+        };
+
+        try {
+            const url = id ? `/api/p1-2/monitoramentos/${id}` : `/api/p1-2/monitoramentos`;
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro ao salvar monitoramento.";
+                try {
+                    const errData = await res.json();
+                    if (Array.isArray(errData.detail)) {
+                        errorMsg = errData.detail.map(d => `${d.loc ? d.loc.slice(1).join('.') : ''}: ${d.msg}`).join(', ');
+                    } else if (typeof errData.detail === 'object' && errData.detail !== null) {
+                        errorMsg = JSON.stringify(errData.detail);
+                    } else {
+                        errorMsg = errData.detail || errorMsg;
+                    }
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            const modalEl = document.getElementById('modalMonitoramento');
+            const modalInst = bootstrap.Modal.getInstance(modalEl);
+            if (modalInst) modalInst.hide();
+            
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso(id ? "Monitoramento atualizado com sucesso!" : "Monitoramento registrado com sucesso!");
+            }
+            carregarMonitoramentos();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function excluirMonitoramento(id) {
+
+        const executarExclusao = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/monitoramentos/${id}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    let errorMsg = "Erro ao excluir.";
+                    try {
+                        const errData = await res.json();
+                        errorMsg = errData.detail || errorMsg;
+                    } catch(e) {}
+                    throw new Error(errorMsg);
+                }
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Monitoramento removido com sucesso.");
+                }
+                carregarMonitoramentos();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar(
+                "Excluir Monitoramento?",
+                "Deseja realmente remover este registro de monitoramento?",
+                executarExclusao,
+                "Sim, excluir"
+            );
+        } else if (confirm("Deseja realmente excluir este monitoramento?")) {
+            executarExclusao();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+</script>
+{% endblock %}

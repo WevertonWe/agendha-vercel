@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+{% block title %}Beneficiários - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .table-beneficiarios th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table-beneficiarios td {
+        vertical-align: middle;
+        font-size: 0.9rem;
+    }
+    .table-beneficiarios tbody tr:hover {
+        background-color: rgba(13, 110, 253, 0.02);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Barra Superior -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-people-fill text-primary me-2"></i>Gestão de Beneficiários P1+2
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Pesquisa, cadastro, edição e exportação de famílias do projeto.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="abrirModalNovoBeneficiario()">
+                <i class="bi bi-person-plus-fill me-1"></i> Novo Beneficiário
+            </button>
+            <a href="/api/p1-2/beneficiarios/exportar/excel" class="btn btn-success btn-sm rounded-pill px-3 shadow-sm">
+                <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="busca" class="form-control bg-light border-0" placeholder="Buscar por Nome, CPF, NIS ou Comunidade..." onkeyup="aplicarFiltro()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-municipio" class="form-select form-select-sm bg-light border-0" onchange="aplicarFiltro()">
+                    <option value="TODOS">Todos os Municípios</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-status" class="form-select form-select-sm bg-light border-0" onchange="aplicarFiltro()">
+                    <option value="TODOS">Todos os Status</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Em Cadastro">Em Cadastro</option>
+                    <option value="Concluído">Concluído</option>
+                    <option value="Inativo">Inativo</option>
+                </select>
+            </div>
+            <div class="col-md-1 text-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limparFiltros()" title="Limpar">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Beneficiários -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white mb-4">
+        <div class="table-responsive">
+            <table class="table table-beneficiarios align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;" class="text-center">#</th>
+                        <th>Nome Completo / Familiar</th>
+                        <th>CPF</th>
+                        <th>Município / Comunidade</th>
+                        <th>NIS</th>
+                        <th>Status</th>
+                        <th style="width: 120px;" class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-beneficiarios">
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                            Carregando beneficiários...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Paginação -->
+        <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+            <span class="text-muted small" id="info-paginacao">Mostrando 0 registros</span>
+            <ul class="pagination pagination-sm mb-0" id="paginacao"></ul>
+        </div>
+    </div>
+</main>
+
+<!-- Modal: Criar / Editar Beneficiário -->
+<div class="modal fade" id="modalBeneficiario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalTitulo">Novo Beneficiário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formBeneficiario" onsubmit="salvarBeneficiario(event)">
+                    <input type="hidden" id="ben-id">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Nome Completo *</label>
+                            <input type="text" id="ben-nome" class="form-control" required placeholder="Nome do titular">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">CPF</label>
+                            <input type="text" id="ben-cpf" class="form-control" placeholder="000.000.000-00">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Nome Familiar / Cônjuge</label>
+                            <input type="text" id="ben-familiar" class="form-control" placeholder="Nome do cônjuge/familiar">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">NIS</label>
+                            <input type="text" id="ben-nis" class="form-control" placeholder="Número do NIS">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Data Nascimento</label>
+                            <input type="date" id="ben-nascimento" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Município</label>
+                            <input type="text" id="ben-municipio" class="form-control" placeholder="Ex: Abaré">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Comunidade</label>
+                            <input type="text" id="ben-comunidade" class="form-control" placeholder="Ex: Icozeira">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select id="ben-status" class="form-select">
+                                <option value="Ativo" selected>Ativo</option>
+                                <option value="Em Cadastro">Em Cadastro</option>
+                                <option value="Concluído">Concluído</option>
+                                <option value="Inativo">Inativo</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações</label>
+                        <textarea id="ben-obs" class="form-control" rows="2" placeholder="Informações adicionais..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Salvar Beneficiário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let paginaAtual = 1;
+    let timerBusca = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarBeneficiarios(1);
+    });
+
+    function aplicarFiltro() {
+        clearTimeout(timerBusca);
+        timerBusca = setTimeout(() => {
+            carregarBeneficiarios(1);
+        }, 300);
+    }
+
+    function limparFiltros() {
+        document.getElementById('busca').value = '';
+        document.getElementById('filtro-municipio').value = 'TODOS';
+        document.getElementById('filtro-status').value = 'TODOS';
+        carregarBeneficiarios(1);
+    }
+
+    async function carregarBeneficiarios(pagina) {
+        paginaAtual = pagina;
+        const busca = document.getElementById('busca').value;
+        const mun = document.getElementById('filtro-municipio').value;
+        const st = document.getElementById('filtro-status').value;
+
+        let url = `/api/p1-2/beneficiarios?page=${pagina}&limit=20`;
+        if (busca) url += `&search=${encodeURIComponent(busca)}`;
+        if (mun && mun !== 'TODOS') url += `&municipio=${encodeURIComponent(mun)}`;
+        if (st && st !== 'TODOS') url += `&status=${encodeURIComponent(st)}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Erro ao buscar dados.");
+            const data = await res.json();
+
+            // Atualiza select de municípios se estiver apenas com a opção inicial
+            const selMun = document.getElementById('filtro-municipio');
+            if (selMun.options.length <= 1 && data.municipios) {
+                data.municipios.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    selMun.appendChild(opt);
+                });
+            }
+
+            renderizarTabela(data);
+            renderizarPaginacao(data);
+        } catch (err) {
+            console.error(err);
+            document.getElementById('lista-beneficiarios').innerHTML = `
+                <tr><td colspan="7" class="text-center text-danger py-4">Erro ao carregar beneficiários.</td></tr>
+            `;
+        }
+    }
+
+    function renderizarTabela(data) {
+        const tbody = document.getElementById('lista-beneficiarios');
+        const lista = data.dados || [];
+
+        if (lista.length === 0) {
+            tbody.innerHTML = `
+                <tr><td colspan="7" class="text-center text-muted py-5">Nenhum beneficiário encontrado.</td></tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        lista.forEach((b, idx) => {
+            const num = (data.page - 1) * data.limit + idx + 1;
+            const statusClass = String(b.status).toLowerCase() === 'ativo' ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary';
+            html += `
+                <tr>
+                    <td class="text-center text-muted small">${num}</td>
+                    <td>
+                        <a href="/p1-2/beneficiarios/perfil/${b.id}" class="fw-bold text-dark text-decoration-none hover-primary">
+                            ${escapeHtml(b.nome_completo || 'Sem Nome')}
+                        </a>
+                        ${b.nome_familiar ? `<br><small class="text-muted">Familiar: ${escapeHtml(b.nome_familiar)}</small>` : ''}
+                    </td>
+                    <td>${escapeHtml(b.cpf || '-')}</td>
+                    <td>
+                        <span class="fw-medium">${escapeHtml(b.municipio || 'Não informado')}</span>
+                        ${b.comunidade ? `<br><small class="text-muted">${escapeHtml(b.comunidade)}</small>` : ''}
+                    </td>
+                    <td>${escapeHtml(b.nis || '-')}</td>
+                    <td><span class="badge ${statusClass} rounded-pill px-3">${b.status || 'Ativo'}</span></td>
+                    <td class="text-center">
+                        <div class="btn-group btn-group-sm">
+                            <a href="/p1-2/beneficiarios/perfil/${b.id}" class="btn btn-outline-primary border-0" title="Ver Perfil">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <button class="btn btn-outline-secondary border-0" onclick="editarBeneficiario(${b.id})" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger border-0" onclick="excluirBeneficiario(${b.id})" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+        document.getElementById('info-paginacao').textContent = `Mostrando ${lista.length} de ${data.total} registros`;
+    }
+
+    function renderizarPaginacao(data) {
+        const pag = document.getElementById('paginacao');
+        pag.innerHTML = '';
+        if (data.total_pages <= 1) return;
+
+        // Anterior
+        if (data.page > 1) {
+            pag.innerHTML += `<li class="page-item"><button class="page-link" onclick="carregarBeneficiarios(${data.page - 1})">&laquo;</button></li>`;
+        }
+
+        for (let p = Math.max(1, data.page - 2); p <= Math.min(data.total_pages, data.page + 2); p++) {
+            pag.innerHTML += `<li class="page-item ${p === data.page ? 'active' : ''}"><button class="page-link" onclick="carregarBeneficiarios(${p})">${p}</button></li>`;
+        }
+
+        // Próximo
+        if (data.page < data.total_pages) {
+            pag.innerHTML += `<li class="page-item"><button class="page-link" onclick="carregarBeneficiarios(${data.page + 1})">&raquo;</button></li>`;
+        }
+    }
+
+    function abrirModalNovoBeneficiario() {
+        document.getElementById('formBeneficiario').reset();
+        document.getElementById('ben-id').value = '';
+        document.getElementById('modalTitulo').textContent = 'Novo Beneficiário';
+        const modal = new bootstrap.Modal(document.getElementById('modalBeneficiario'));
+        modal.show();
+    }
+
+    async function editarBeneficiario(id) {
+        try {
+            const res = await fetch(`/api/p1-2/beneficiarios/${id}`);
+            if (!res.ok) throw new Error("Erro ao buscar dados do beneficiário.");
+            const b = await res.json();
+
+            document.getElementById('ben-id').value = b.id;
+            document.getElementById('ben-nome').value = b.nome_completo || '';
+            document.getElementById('ben-cpf').value = b.cpf || '';
+            document.getElementById('ben-familiar').value = b.nome_familiar || '';
+            document.getElementById('ben-nis').value = b.nis || '';
+            document.getElementById('ben-nascimento').value = b.data_nascimento || '';
+            document.getElementById('ben-municipio').value = b.municipio || '';
+            document.getElementById('ben-comunidade').value = b.comunidade || '';
+            document.getElementById('ben-status').value = b.status || 'Ativo';
+            document.getElementById('ben-obs').value = b.observacoes || '';
+
+            document.getElementById('modalTitulo').textContent = 'Editar Beneficiário';
+            const modal = new bootstrap.Modal(document.getElementById('modalBeneficiario'));
+            modal.show();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    async function salvarBeneficiario(e) {
+        e.preventDefault();
+        const id = document.getElementById('ben-id').value;
+        const payload = {
+            nome_completo: document.getElementById('ben-nome').value,
+            cpf: document.getElementById('ben-cpf').value,
+            nome_familiar: document.getElementById('ben-familiar').value,
+            nis: document.getElementById('ben-nis').value,
+            data_nascimento: document.getElementById('ben-nascimento').value,
+            municipio: document.getElementById('ben-municipio').value,
+            comunidade: document.getElementById('ben-comunidade').value,
+            status: document.getElementById('ben-status').value,
+            observacoes: document.getElementById('ben-obs').value
+        };
+
+        try {
+            const url = id ? `/api/p1-2/beneficiarios/${id}` : `/api/p1-2/beneficiarios`;
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                let errorMsg = "Erro ao salvar.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+
+            const modalEl = document.getElementById('modalBeneficiario');
+            const modalInst = bootstrap.Modal.getInstance(modalEl);
+            if (modalInst) modalInst.hide();
+            
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso(id ? "Beneficiário atualizado com sucesso!" : "Beneficiário cadastrado com sucesso!");
+            }
+            carregarBeneficiarios(paginaAtual);
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function excluirBeneficiario(id) {
+        const executarExclusao = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/beneficiarios/${id}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    let errorMsg = "Erro ao excluir.";
+                    try {
+                        const errData = await res.json();
+                        errorMsg = errData.detail || errorMsg;
+                    } catch(e) {}
+                    throw new Error(errorMsg);
+                }
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Beneficiário excluído com sucesso.");
+                }
+                carregarBeneficiarios(paginaAtual);
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar(
+                "Excluir Beneficiário?",
+                "Tem certeza que deseja excluir este beneficiário? Todos os dados vinculados serão atualizados.",
+                executarExclusao,
+                "Sim, excluir"
+            );
+        } else if (confirm("Deseja realmente excluir este beneficiário?")) {
+            executarExclusao();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+</script>
+{% endblock %}

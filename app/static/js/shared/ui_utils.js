@@ -153,6 +153,18 @@ const ui = {
             title: 'Informação',
             text: mensagem
         });
+    },
+
+    /**
+     * Exibe um Popup de aviso/alerta.
+     * @param {string} mensagem - Mensagem a ser exibida.
+     */
+    feedbackAviso: (mensagem) => {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atenção',
+            text: mensagem
+        });
     }
 };
 

@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block title %}Ferramenta: Rotacionar PDF - Agendha{% endblock %}
+
+{% block styles %}
+<style>
+    .pdf-container {
+        height: 75vh;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background-color: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .pdf-container iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+
+    .file-list-container {
+        max-height: 75vh;
+        overflow-y: auto;
+    }
+
+    .file-item {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .file-item:hover, .file-item.active {
+        background-color: #e9ecef;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3 mb-0 text-gray-800"><i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Rotacionar PDFs Locais</h2>
+    </div>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body">
+            <form id="form-load-folder" class="row g-3 align-items-end">
+                <div class="col-md-9">
+                    <label for="folderPath" class="form-label fw-bold text-secondary">Caminho da Pasta (Local)</label>
+                    <input type="text" class="form-control form-control-lg" id="folderPath" name="folderPath" placeholder="Ex: C:\Users\SeuUsuario\Documentos\PDFs" required>
+                    <div class="form-text">Insira o caminho absoluto da pasta no seu computador onde os PDFs estão salvos.</div>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="btn-load">
+                        <i class="bi bi-search me-2"></i>Carregar PDFs
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row" id="workspace" style="display: none;">
+        <!-- File List Sidebar -->
+        <div class="col-md-3 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-3 pb-0">
+                    <h5 class="card-title text-primary fw-bold mb-0">
+                        Arquivos (<span id="file-count">0</span>)
+                    </h5>
+                    <hr class="mb-0 mt-2">
+                </div>
+                <div class="card-body p-0 file-list-container">
+                    <div class="list-group list-group-flush" id="pdf-list">
+                        <!-- List of PDFs will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Viewer and Controls -->
+        <div class="col-md-9 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex flex-column">
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                        <div class="d-flex align-items-center mb-2 mb-md-0">
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="btn-prev" disabled title="PDF Anterior (Seta Cima)">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-3" id="btn-next" disabled title="Próximo PDF (Seta Baixo)">
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+                            <h5 class="card-title fw-bold text-secondary mb-0" id="current-filename">Nenhum arquivo selecionado</h5>
+                        </div>
+                        
+                        <div class="text-end">
+                            <div class="btn-group shadow-sm mb-1" role="group" aria-label="Ações de Rotação">
+                                <button type="button" class="btn btn-outline-primary" id="btn-rotate-left" disabled title="Girar -90° (Seta Esquerda)">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> -90° (Esq)
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="btn-rotate-180" disabled title="Girar 180°">
+                                    <i class="bi bi-arrow-repeat me-1"></i> 180°
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="btn-rotate-right" disabled title="Girar +90° (Seta Direita)">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> +90° (Dir)
+                                </button>
+                            </div>
+                            <div class="small text-muted" style="font-size: 0.75rem;">
+                                <strong>Atalhos:</strong> <kbd>↑</kbd> <kbd>↓</kbd> (Navegar) | <kbd>←</kbd> <kbd>→</kbd> <kbd>Enter</kbd> (Girar)
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pdf-container">
+                        <div id="pdf-placeholder" class="text-muted text-center">
+                            <i class="bi bi-file-pdf display-1 d-block mb-3 opacity-25"></i>
+                            <p class="mb-0">Selecione um arquivo na lista para visualizar</p>
+                        </div>
+                        <iframe id="pdf-frame" style="display: none;"></iframe>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentFilePath = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const formLoadFolder = document.getElementById('form-load-folder');
+        const folderPathInput = document.getElementById('folderPath');
+        const btnLoad = document.getElementById('btn-load');
+        const pdfList = document.getElementById('pdf-list');
+        const fileCountSpan = document.getElementById('file-count');
+        const workspace = document.getElementById('workspace');
+        
+        const currentFilenameEl = document.getElementById('current-filename');
+        const pdfPlaceholder = document.getElementById('pdf-placeholder');
+        const pdfFrame = document.getElementById('pdf-frame');
+        
+        const btnRotateLeft = document.getElementById('btn-rotate-left');
+        const btnRotateRight = document.getElementById('btn-rotate-right');
+        const btnRotate180 = document.getElementById('btn-rotate-180');
+
+        formLoadFolder.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const folderPath = folderPathInput.value.trim();
+            if (!folderPath) return;
+
+            btnLoad.disabled = true;
+            btnLoad.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Buscando...';
+
+            try {
+                const response = await fetch(`/api/ferramentas/pdf-list?folder_path=${encodeURIComponent(folderPath)}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erro ao carregar a pasta.');
+                }
+
+                renderFileList(data.files);
+                workspace.style.display = 'flex';
+                clearViewer();
+                
+                if (data.files.length === 0) {
+                    ui.feedbackErro("Nenhum arquivo PDF encontrado nesta pasta.");
+                }
+
+            } catch (error) {
+                ui.feedbackErro(error.message);
+                workspace.style.display = 'none';
+            } finally {
+                btnLoad.disabled = false;
+                btnLoad.innerHTML = '<i class="bi bi-search me-2"></i>Carregar PDFs';
+            }
+        });
+
+        function renderFileList(files) {
+            pdfList.innerHTML = '';
+            fileCountSpan.textContent = files.length;
+            
+            if (files.length === 0) {
+                pdfList.innerHTML = '<div class="list-group-item text-muted text-center py-4">Nenhum PDF encontrado</div>';
+                return;
+            }
+
+            files.forEach(file => {
+                const item = document.createElement('a');
+                item.className = 'list-group-item list-group-item-action file-item d-flex align-items-center';
+                item.innerHTML = `
+                    <i class="bi bi-file-earmark-pdf text-danger fs-4 me-3"></i>
+                    <div class="text-truncate">
+                        <div class="fw-medium text-truncate" title="${file.filename}">${file.filename}</div>
+                        <small class="text-muted d-block text-truncate" title="${file.rel_path}">${file.rel_path}</small>
+                        <small class="text-muted">${formatBytes(file.size)}</small>
+                    </div>
+                `;
+                
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Remove active from all
+                    document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+                    // Add active to current
+                    item.classList.add('active');
+                    
+                    loadPdf(file.filepath, file.filename);
+                });
+                
+                pdfList.appendChild(item);
+            });
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        function loadPdf(filepath, filename) {
+            currentFilePath = filepath;
+            currentFilenameEl.textContent = filename;
+            
+            pdfPlaceholder.style.display = 'none';
+            pdfFrame.style.display = 'block';
+            
+            // Cache buster to ensure it reloads if rotated
+            const cacheBuster = new Date().getTime();
+            pdfFrame.src = `/api/ferramentas/pdf-view?filepath=${encodeURIComponent(filepath)}&cb=${cacheBuster}`;
+            
+            // Enable buttons
+            btnRotateLeft.disabled = false;
+            btnRotateRight.disabled = false;
+            btnRotate180.disabled = false;
+        }
+
+        function clearViewer() {
+            currentFilePath = null;
+            currentFilenameEl.textContent = 'Nenhum arquivo selecionado';
+            pdfPlaceholder.style.display = 'block';
+            pdfFrame.style.display = 'none';
+            pdfFrame.src = '';
+            
+            btnRotateLeft.disabled = true;
+            btnRotateRight.disabled = true;
+            btnRotate180.disabled = true;
+        }
+
+        async function rotatePdf(angle) {
+            if (!currentFilePath) return;
+
+            // Show loading state using swal if available
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Rotacionando e Salvando...',
+                    text: 'Aguarde um momento.',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            }
+
+            try {
+                const response = await fetch('/api/ferramentas/pdf-rotate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filepath: currentFilePath,
+                        angle: angle
+                    })
+                });
+
+                const data = await response.json();
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erro ao rotacionar PDF.');
+                }
+
+                ui.feedbackSucesso(data.message || 'PDF atualizado!');
+                
+                // Reload the iframe to show new rotation
+                const currentFileItem = document.querySelector('.file-item.active .fw-medium');
+                const filename = currentFileItem ? currentFileItem.getAttribute('title') : currentFilenameEl.textContent;
+                loadPdf(currentFilePath, filename);
+
+            } catch (error) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+                ui.feedbackErro(error.message);
+            }
+        }
+
+        btnRotateLeft.addEventListener('click', () => rotatePdf(-90));
+        btnRotateRight.addEventListener('click', () => rotatePdf(90));
+        btnRotate180.addEventListener('click', () => rotatePdf(180));
+
+        // Navigation logic
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+
+        function navigatePdf(direction) {
+            const allItems = Array.from(document.querySelectorAll('.file-item'));
+            if (allItems.length === 0) return;
+
+            const activeIndex = allItems.findIndex(item => item.classList.contains('active'));
+            if (activeIndex === -1) {
+                // Se nenhum selecionado, seleciona o primeiro
+                allItems[0].click();
+                return;
+            }
+
+            let nextIndex = activeIndex + direction;
+            if (nextIndex < 0) nextIndex = 0;
+            if (nextIndex >= allItems.length) nextIndex = allItems.length - 1;
+
+            if (nextIndex !== activeIndex) {
+                const targetItem = allItems[nextIndex];
+                targetItem.click();
+                targetItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        btnPrev.addEventListener('click', () => navigatePdf(-1));
+        btnNext.addEventListener('click', () => navigatePdf(1));
+
+        // Update clearViewer and loadPdf to handle prev/next button state
+        const originalClearViewer = clearViewer;
+        clearViewer = function() {
+            originalClearViewer();
+            if (btnPrev) btnPrev.disabled = true;
+            if (btnNext) btnNext.disabled = true;
+        }
+
+        const originalLoadPdf = loadPdf;
+        loadPdf = function(filepath, filename) {
+            originalLoadPdf(filepath, filename);
+            if (btnPrev) btnPrev.disabled = false;
+            if (btnNext) btnNext.disabled = false;
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ignore if typing in input
+            if (e.target.tagName === 'INPUT') return;
+
+            // If SweetAlert is open, don't trigger background actions
+            if (document.body.classList.contains('swal2-shown')) return;
+
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    if (!btnRotateLeft.disabled) rotatePdf(-90);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    if (!btnRotateRight.disabled) rotatePdf(90);
+                    break;
+                case 'Enter':
+                case ' ':
+                    e.preventDefault();
+                    if (!btnRotate180.disabled) rotatePdf(180);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    navigatePdf(-1);
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    navigatePdf(1);
+                    break;
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,7 +1,28 @@
 import os
+import sys
+
+# No Windows (Python 3.8+), registra diretórios de DLLs nativas caso o Python venha do QGIS ou ambiente sem DLLs globais
+if sys.platform == "win32":
+    for qgis_bin in [
+        r"C:\Program Files\QGIS 3.44.12\bin",
+        r"C:\Program Files\QGIS 3.44.12\apps\Python312\DLLs",
+        r"C:\Program Files\QGIS 3.44.12\apps\Python312",
+        r"C:\Program Files\QGIS 3.44.12\apps\qt5\bin",
+        r"C:\Program Files\QGIS 3.34.0\bin",
+        r"C:\Program Files\QGIS 3.34.0\apps\Python312\DLLs",
+        r"C:\Program Files\QGIS 3.32.0\bin"
+    ]:
+        if os.path.exists(qgis_bin):
+            try:
+                os.add_dll_directory(qgis_bin)
+            except Exception:
+                pass
+
+
 import logging
 from contextlib import asynccontextmanager
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -54,7 +75,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 
 def safely_split(value, delimiter='-'):
     if isinstance(value, dict):
@@ -132,8 +153,12 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logging.info("Scheduler de backup iniciado.")
     
+    from app.services.queue_service import queue_manager
+    queue_manager.start()
+    
     yield
     logging.info("Servidor a desligar...")
+    queue_manager.stop()
 
 
 # --- Configuração da Aplicação FastAPI ---
@@ -143,6 +168,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 @app.get("/api/force-create")
 async def force_create():
@@ -192,7 +220,13 @@ async def not_found_handler(request: Request, exc: Exception):
 
 
 # --- Montagem de Arquivos Estáticos ---
-app.mount("/static", StaticFiles(directory=settings.STATIC_FOLDER), name="static")
+class CachedStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+app.mount("/static", CachedStaticFiles(directory=settings.STATIC_FOLDER), name="static")
 
 # Verificação de existência da pasta para evitar o RuntimeError da Starlette
 upload_path = settings.UPLOAD_FOLDER
@@ -230,7 +264,6 @@ app.include_router(financeiro_router)
 
 # Dashboard
 app.include_router(dashboard_views.router)
-app.include_router(dashboard_views.router)
 # app.include_router(dashboard.router) # Antigo
 from app.modules.dashboard.routers import api as dashboard_api  # noqa: E402
 app.include_router(dashboard_api.router)
@@ -264,6 +297,10 @@ from app.routers.admin_assets import router as admin_assets_router  # noqa: E402
 app.include_router(admin_audit_router)
 app.include_router(admin_assets_router)
 
+# Ferramentas
+from app.routers.ferramentas import router as ferramentas_router  # noqa: E402
+app.include_router(ferramentas_router)
+
 # Módulo: Projetos (Hub e Sugestões)
 from app.modules.projetos.routers import router as projetos_router  # noqa: E402
 app.include_router(projetos_router)
@@ -271,12 +308,38 @@ app.include_router(projetos_router)
 from app.modules.bahia_sem_fome.routers import renomeador as bsf_renomeador  # noqa: E402
 from app.modules.bahia_sem_fome.routers import atestes as bsf_atestes  # noqa: E402
 from app.modules.bahia_sem_fome.routers import beneficiarios as bsf_beneficiarios  # noqa: E402
+from app.modules.bahia_sem_fome.routers import scanner as bsf_scanner  # noqa: E402
 from app.modules.bahia_sem_fome import views as bsf_views  # noqa: E402
+from app.modules.bahia_sem_fome.routers import classificador as bsf_classificador
 
 app.include_router(bsf_renomeador.router)
 app.include_router(bsf_atestes.router)
 app.include_router(bsf_beneficiarios.router)
+app.include_router(bsf_scanner.router)
 app.include_router(bsf_views.router)
+app.include_router(bsf_classificador.router)
+
+# Módulo: Projeto P1+2
+from app.modules.p1_plus_2 import views as p12_views  # noqa: E402
+from app.modules.p1_plus_2.routers import (  # noqa: E402
+    beneficiarios as p12_beneficiarios,
+    consolidado as p12_consolidado,
+    monitoramentos as p12_monitoramentos,
+    plano_produtivo as p12_plano_produtivo,
+    cotacoes as p12_cotacoes,
+    documentos as p12_documentos,
+    planejamento as p12_planejamento
+)
+app.include_router(p12_views.router)
+app.include_router(p12_beneficiarios.router)
+app.include_router(p12_consolidado.router)
+app.include_router(p12_monitoramentos.router)
+app.include_router(p12_plano_produtivo.router)
+app.include_router(p12_cotacoes.router)
+app.include_router(p12_documentos.router)
+app.include_router(p12_planejamento.router)
+
+
 
 print("\n[MAPA DE ROTAS ATIVAS NO FASTAPI]")
 for route in app.routes:

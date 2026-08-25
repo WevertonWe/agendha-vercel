@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block title %}Cotações e Compras - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .cotacao-card {
+        background: #ffffff;
+        border-radius: 14px;
+        border: 1px solid rgba(0,0,0,0.06);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+    .cotacao-card:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-receipt-cutoff text-danger me-2"></i>Gestão de Cotações P1+2
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Processos de orçamentos, compras e cotações do projeto.</p>
+        </div>
+
+        <button class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="abrirModalNovaCotacao()">
+            <i class="bi bi-plus-lg me-1"></i> Nova Cotação
+        </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-8">
+                <span class="text-muted small fw-bold">PROCESSOS DE COMPRA E COTAÇÃO</span>
+            </div>
+            <div class="col-md-4">
+                <select id="filtro-status" class="form-select form-select-sm bg-light border-0" onchange="carregarCotacoes()">
+                    <option value="TODOS">Todos os Status</option>
+                    <option value="Aberta">Aberta</option>
+                    <option value="Em Análise">Em Análise</option>
+                    <option value="Concluída">Concluída</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Cotações -->
+    <div id="container-cotacoes" class="row g-3">
+        <div class="col-12 text-center py-5 text-muted">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            Carregando cotações...
+        </div>
+    </div>
+</main>
+
+<!-- Modal: Nova / Editar Cotação -->
+<div class="modal fade" id="modalCotacao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="modalTituloCotacao">
+                    <i class="bi bi-cart-plus text-primary me-2"></i>Nova Cotação P1+2
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formCotacao" onsubmit="salvarCotacao(event)">
+                    <input type="hidden" id="cot-id">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Código da Cotação *</label>
+                            <input type="text" id="cot-codigo" class="form-control" required placeholder="Ex: COT-P12-001">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Título do Processo *</label>
+                            <input type="text" id="cot-titulo" class="form-control" required placeholder="Ex: Aquisição de Mudas e Sementes">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select id="cot-status" class="form-select">
+                                <option value="Aberta" selected>Aberta</option>
+                                <option value="Em Elaboração">Em Elaboração</option>
+                                <option value="Concluída">Concluída</option>
+                                <option value="Cancelada">Cancelada</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Descrição / Finalidade</label>
+                        <textarea id="cot-descricao" class="form-control" rows="2" placeholder="Finalidade da cotação..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+                        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-list-check me-1 text-primary"></i> Itens da Cotação</h6>
+                        <span class="small text-muted">Subtotal calculado em tempo real</span>
+                    </div>
+
+                    <div id="itens-container" class="mb-2">
+                        <!-- Itens dinâmicos aqui -->
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" onclick="adicionarLinhaItem()">
+                            <i class="bi bi-plus-circle me-1"></i> Adicionar Item
+                        </button>
+                        <div class="text-end">
+                            <span class="small text-muted me-2">Total Estimado:</span>
+                            <span class="fw-bold text-success fs-6" id="modal-total-estimado">R$ 0,00</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Salvar Cotação</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const formatBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarCotacoes();
+    });
+
+    async function carregarCotacoes() {
+        const st = document.getElementById('filtro-status').value;
+        const container = document.getElementById('container-cotacoes');
+
+        let url = `/api/p1-2/cotacoes`;
+        if (st && st !== 'TODOS') url += `?status=${encodeURIComponent(st)}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Erro ao buscar cotações");
+            const data = await res.json();
+            const lista = data.dados || [];
+
+            if (lista.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center py-5 text-muted">
+                        <i class="bi bi-receipt fs-2 d-block mb-2 text-secondary"></i>
+                        Nenhuma cotação cadastrada no momento.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            lista.forEach(c => {
+                const totalValor = c.valor_total !== undefined ? c.valor_total : (c.valor_total_estimado || 0);
+                const statusBadge = c.status === 'Concluída' ? 'bg-success bg-opacity-10 text-success' : 'bg-primary bg-opacity-10 text-primary';
+                
+                html += `
+                    <div class="col-md-6">
+                        <div class="cotacao-card p-4 h-100 d-flex flex-column justify-content-between">
+                            <div>
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <span class="badge ${statusBadge} rounded-pill px-3">${c.status || 'Aberta'}</span>
+                                    <small class="text-muted fw-bold">${c.codigo_cotacao}</small>
+                                </div>
+                                <h5 class="fw-bold text-dark mb-1">${escapeHtml(c.titulo)}</h5>
+                                <p class="text-muted small mb-3">${escapeHtml(c.descricao || 'Sem descrição detalhada.')}</p>
+
+                                <div class="bg-light p-3 rounded-3 mb-3">
+                                    <div class="d-flex justify-content-between small text-muted mb-1">
+                                        <span>Total de Itens:</span>
+                                        <span class="fw-bold text-dark">${c.total_itens || (c.itens ? c.itens.length : 0)} itens</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span>Valor Total Estimado:</span>
+                                        <span class="fw-bold text-success fs-6">${formatBRL.format(totalValor)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                <small class="text-muted">${c.data_abertura ? 'Aberto em: ' + c.data_abertura.split('T')[0].split('-').reverse().join('/') : ''}</small>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-outline-primary btn-sm p-1 rounded-circle border-0" onclick="editarCotacao(${c.id})" title="Editar Cotação">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm p-1 rounded-circle border-0" onclick="excluirCotacao(${c.id})" title="Excluir Cotação">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<div class="col-12 text-center text-danger py-4">Erro ao carregar cotações.</div>`;
+        }
+    }
+
+    function abrirModalNovaCotacao() {
+        document.getElementById('formCotacao').reset();
+        document.getElementById('cot-id').value = '';
+        document.getElementById('cot-codigo').value = `COT-P12-${Math.floor(100 + Math.random() * 900)}`;
+        document.getElementById('cot-status').value = 'Aberta';
+        document.getElementById('modalTituloCotacao').innerHTML = '<i class="bi bi-cart-plus text-primary me-2"></i>Nova Cotação P1+2';
+        
+        const container = document.getElementById('itens-container');
+        container.innerHTML = '';
+        adicionarLinhaItem();
+        recalcularTotalModal();
+
+        const modal = new bootstrap.Modal(document.getElementById('modalCotacao'));
+        modal.show();
+    }
+
+    async function editarCotacao(id) {
+        try {
+            const res = await fetch(`/api/p1-2/cotacoes/${id}`);
+            if (!res.ok) throw new Error("Erro ao buscar dados da cotação.");
+            const c = await res.json();
+
+            document.getElementById('cot-id').value = c.id;
+            document.getElementById('cot-codigo').value = c.codigo_cotacao || '';
+            document.getElementById('cot-titulo').value = c.titulo || '';
+            document.getElementById('cot-descricao').value = c.descricao || '';
+            document.getElementById('cot-status').value = c.status || 'Aberta';
+            document.getElementById('modalTituloCotacao').innerHTML = '<i class="bi bi-pencil-square text-primary me-2"></i>Editar Cotação P1+2';
+
+            const container = document.getElementById('itens-container');
+            container.innerHTML = '';
+            const itens = c.itens || [];
+            if (itens.length > 0) {
+                itens.forEach(it => {
+                    adicionarLinhaItem(
+                        it.descricao_item || it.item_nome || '',
+                        it.unidade || 'UN',
+                        it.quantidade || 1,
+                        it.valor_unitario_estimado || 0
+                    );
+                });
+            } else {
+                adicionarLinhaItem();
+            }
+            recalcularTotalModal();
+
+            const modal = new bootstrap.Modal(document.getElementById('modalCotacao'));
+            modal.show();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function adicionarLinhaItem(desc = '', un = 'UN', qtd = 1, val = 0.0) {
+        const div = document.createElement('div');
+        div.className = 'row g-2 mb-2 item-row align-items-center';
+        div.innerHTML = `
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm item-desc" required placeholder="Descrição do item" value="${escapeHtml(desc)}">
+            </div>
+            <div class="col-2">
+                <input type="text" class="form-control form-control-sm item-un" placeholder="UN" value="${escapeHtml(un)}">
+            </div>
+            <div class="col-2">
+                <input type="number" class="form-control form-control-sm item-qtd" required placeholder="Qtd" min="0.01" step="any" value="${qtd}" oninput="recalcularTotalModal()">
+            </div>
+            <div class="col-2">
+                <input type="number" class="form-control form-control-sm item-val" placeholder="R$ Unit." min="0" step="any" value="${val}" oninput="recalcularTotalModal()">
+            </div>
+            <div class="col-1 text-center">
+                <button type="button" class="btn btn-link btn-sm text-danger p-0 border-0" onclick="removerItemLinha(this)" title="Remover item">
+                    <i class="bi bi-x-circle fs-5"></i>
+                </button>
+            </div>
+        `;
+        document.getElementById('itens-container').appendChild(div);
+        recalcularTotalModal();
+    }
+
+    function removerItemLinha(btn) {
+        const container = document.getElementById('itens-container');
+        if (container.querySelectorAll('.item-row').length > 1) {
+            btn.closest('.item-row').remove();
+            recalcularTotalModal();
+        } else {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro("A cotação precisa conter pelo menos 1 item.");
+            } else {
+                alert("A cotação precisa conter pelo menos 1 item.");
+            }
+        }
+    }
+
+    function recalcularTotalModal() {
+        const rows = document.querySelectorAll('.item-row');
+        let total = 0;
+        rows.forEach(r => {
+            const qtd = parseFloat(r.querySelector('.item-qtd').value || 0);
+            const val = parseFloat(r.querySelector('.item-val').value || 0);
+            total += (qtd * val);
+        });
+        document.getElementById('modal-total-estimado').textContent = formatBRL.format(total);
+    }
+
+    async function salvarCotacao(e) {
+        e.preventDefault();
+        const id = document.getElementById('cot-id').value;
+        const rows = document.querySelectorAll('.item-row');
+        const itens = [];
+        
+        rows.forEach(r => {
+            const desc = r.querySelector('.item-desc').value;
+            const un = r.querySelector('.item-un').value || 'UN';
+            const qtd = parseFloat(r.querySelector('.item-qtd').value || 1);
+            const val = parseFloat(r.querySelector('.item-val').value || 0);
+            if (desc && desc.trim()) {
+                itens.push({
+                    descricao_item: desc.trim(),
+                    item_nome: desc.trim(),
+                    unidade: un,
+                    quantidade: qtd,
+                    valor_unitario_estimado: val,
+                    valor_total_estimado: qtd * val
+                });
+            }
+        });
+
+        if (itens.length === 0) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro("Preencha a descrição de pelo menos um item.");
+            } else {
+                alert("Preencha a descrição de pelo menos um item.");
+            }
+            return;
+        }
+
+        const payload = {
+            codigo_cotacao: document.getElementById('cot-codigo').value,
+            titulo: document.getElementById('cot-titulo').value,
+            descricao: document.getElementById('cot-descricao').value,
+            status: document.getElementById('cot-status').value,
+            itens: itens
+        };
+
+        try {
+            const url = id ? `/api/p1-2/cotacoes/${id}` : `/api/p1-2/cotacoes`;
+            const method = id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                let errorMsg = "Erro ao salvar cotação.";
+                try {
+                    const errData = await res.json();
+                    if (Array.isArray(errData.detail)) {
+                        errorMsg = errData.detail.map(d => `${d.loc ? d.loc.slice(1).join('.') : ''}: ${d.msg}`).join(', ');
+                    } else if (typeof errData.detail === 'object' && errData.detail !== null) {
+                        errorMsg = JSON.stringify(errData.detail);
+                    } else {
+                        errorMsg = errData.detail || errorMsg;
+                    }
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+
+            const modalEl = document.getElementById('modalCotacao');
+            const modalInst = bootstrap.Modal.getInstance(modalEl);
+            if (modalInst) modalInst.hide();
+
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso(id ? "Cotação atualizada com sucesso!" : "Processo de cotação registrado com sucesso!");
+            }
+            carregarCotacoes();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function excluirCotacao(id) {
+        const executarExclusao = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/cotacoes/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao excluir.");
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Cotação excluída com sucesso.");
+                }
+                carregarCotacoes();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar("Excluir Cotação?", "Deseja realmente excluir este processo de cotação e seus itens?", executarExclusao, "Sim, excluir");
+        } else if (confirm("Deseja realmente excluir este processo de cotação?")) {
+            executarExclusao();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+</script>
+{% endblock %}

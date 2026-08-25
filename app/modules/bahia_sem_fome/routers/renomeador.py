@@ -25,8 +25,28 @@ class RenameInfo(BaseModel):
     cpf: str = Field(description="CPF do beneficiário, formatado com pontos e hífen (ex: '000.000.000-00'), ou vazio se não encontrado")
     atividade: str = Field(description="Descrição resumida da atividade que está assinalada/marcada com um 'X' (ou circulada, assinalada de qualquer forma) na tabela/lista de TIPO DE ATIVIDADE, em maiúsculas e sem acentos")
     data: str = Field(description="Data da atividade escrita no documento no formato DD-MM-AAAA ou vazio se não encontrada")
+    tecnico: str = Field(description="Nome do técnico(a) responsável indicado no campo 'TÉCNICO(A)' ou 'TÉCNICO', em maiúsculas e sem acentos, ou vazio se não encontrado")
+    comunidade: str = Field(description="Nome da localidade/comunidade indicada no campo 'COMUNIDADE' ou 'LOCAL', em maiúsculas e sem acentos, ou vazio se não encontrada")
 
-MODELOS_PERMITIDOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"]
+MODELOS_PERMITIDOS = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash"
+]
+
+_current_model_index = 0
+
+def obter_modelos_ordenados() -> List[str]:
+    """Retorna a lista de modelos ordenados a partir do modelo atual no rodízio (Round-Robin/Load Balancer)."""
+    global _current_model_index
+    _current_model_index = (_current_model_index + 1) % len(MODELOS_PERMITIDOS)
+    return MODELOS_PERMITIDOS[_current_model_index:] + MODELOS_PERMITIDOS[:_current_model_index]
 
 def get_gemini_client():
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -106,11 +126,25 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
         client = get_gemini_client()
         if client:
             try:
-                # Converte a primeira página do PDF em imagem PNG em memória
-                img_bytes = pdf_page_to_png_bytes(file_content, 0)
+                # Detecta se é imagem direta (JPEG/PNG/BMP) ou PDF
+                if file_content.startswith(b'\xff\xd8'):
+                    img_bytes = file_content
+                    mime_type = "image/jpeg"
+                elif file_content.startswith(b'\x89PNG'):
+                    img_bytes = file_content
+                    mime_type = "image/png"
+                else:
+                    try:
+                        img_bytes = pdf_page_to_png_bytes(file_content, 0)
+                        mime_type = "image/png"
+                    except Exception:
+                        # Se não for PDF válido, tenta usar como imagem genérica
+                        img_bytes = file_content
+                        mime_type = "image/jpeg"
+
                 image_part = types.Part.from_bytes(
                     data=img_bytes,
-                    mime_type="image/png"
+                    mime_type=mime_type
                 )
                 
                 if mode == "ateste":
@@ -124,27 +158,31 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
                         "4. Qual atividade específica está assinalada ou marcada com um 'X' (ou circulada, marcada de qualquer outra forma) na tabela/lista de 'TIPO DE ATIVIDADE'.\n"
                         "   Retorne uma descrição curta e resumida da atividade em maiúsculas e sem acentos (ex: 'VISITA TECNICA', 'CADASTRO', 'CARACTERIZACAO UPF I', 'LEVANTAMENTO SOCIOECONOMICO', etc.).\n"
                         "5. A data da atividade, geralmente preenchida à mão na linha da tabela do cabeçalho sob a coluna 'DATA'.\n"
-                        "   Formate a data obrigatoriamente como DD-MM-AAAA (ex: '15-08-2026'). Se não encontrar ou não estiver preenchida, retorne vazio.\n\n"
-                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
+                        "   Formate a data obrigatoriamente como DD-MM-AAAA (ex: '15-08-2026'). Se não encontrar ou não estiver preenchida, retorne vazio.\n"
+                        "6. O nome do Técnico(a) responsável, localizado no campo 'TÉCNICO(A)' ou 'TÉCNICO' no cabeçalho. Retorne em maiúsculas e sem acentos.\n"
+                        "7. O nome da Comunidade / Localidade, localizado no campo 'COMUNIDADE' ou 'LOCAL' no cabeçalho. Retorne em maiúsculas e sem acentos.\n\n"
+                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\", \"tecnico\": \"TECNICO\", \"comunidade\": \"COMUNIDADE\"}."
                     )
-                else: # colletum
+                else: # colletum ou auto
                     prompt = (
                         "Você é um assistente especialista em processamento de documentos do projeto 'Bahia Sem Fome'.\n"
-                        "Analise a imagem da página do documento de Colletum fornecida.\n"
+                        "Analise a imagem da página do documento fornecido (pode ser um COLLETUM ou ATESTE).\n"
                         "Você deve identificar e extrair as seguintes informações:\n"
-                        "1. O nome completo do beneficiário principal, localizado no campo de nome.\n"
-                        "2. O tipo de documento: Deve ser 'COLLETUM'.\n"
+                        "1. O nome completo do beneficiário principal (titular da família), localizado no campo de nome/beneficiário.\n"
+                        "2. O tipo de documento: Se for um formulário Colletum, retorne 'COLLETUM'. Se for um Ateste, retorne 'ATESTE'.\n"
                         "3. O CPF do beneficiário principal. Retorne formatado com pontos e hífen (ex: '123.456.789-00'). Se não encontrar, retorne vazio.\n"
-                        "4. A atividade descrita no formulário. Retorne uma descrição curta em maiúsculas (ex: 'FORMULARIO COLLETUM').\n"
-                        "5. A data do documento. Formate como DD-MM-AAAA ou vazio se não encontrar.\n\n"
-                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\"}."
+                        "4. A atividade descrita no formulário. Retorne uma descrição curta em maiúsculas (ex: 'FORMULARIO COLLETUM', 'CADASTRO', etc.).\n"
+                        "5. A data do documento. Formate obrigatoriamente como DD-MM-AAAA ou vazio se não encontrar.\n"
+                        "6. O nome do Técnico(a) responsável, se indicado no formulário. Retorne em maiúsculas e sem acentos.\n"
+                        "7. O nome da Comunidade / Localidade, se indicado no formulário. Retorne em maiúsculas e sem acentos.\n\n"
+                        "Retorne APENAS um JSON no formato estrito: {\"nome\": \"NOME\", \"tipo\": \"TIPO\", \"cpf\": \"CPF\", \"atividade\": \"ATIVIDADE\", \"data\": \"DATA\", \"tecnico\": \"TECNICO\", \"comunidade\": \"COMUNIDADE\"}."
                     )
 
-                for nome_modelo in MODELOS_PERMITIDOS:
-                    tentativas = 2
-                    for tentativa in range(1, tentativas + 1):
+                # Tenta até 2 vezes (com pausa de 60s entre elas se der 429)
+                for tentativa_batch in range(2):
+                    for nome_modelo in obter_modelos_ordenados():
                         try:
-                            logger.info(f"Tentando analisar visualmente '{filename}' com o modelo: {nome_modelo} no modo: {mode} (Tentativa {tentativa}/{tentativas})")
+                            logger.info(f"Tentando analisar visualmente '{filename}' com modelo: {nome_modelo} no modo: {mode}")
                             response = await asyncio.to_thread(
                                 client.models.generate_content,
                                 model=nome_modelo,
@@ -162,12 +200,16 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
                             cpf = data.get("cpf", "").strip()
                             atividade = data.get("atividade", "").strip().upper()
                             data_doc = data.get("data", "").strip()
+                            tecnico = data.get("tecnico", "").strip().upper()
+                            comunidade = data.get("comunidade", "").strip().upper()
                             
                             # Saneamento dos dados
                             nome_saneado = "".join(c for c in nome if c.isalnum() or c in (" ", "-", "_")).strip()
                             cpf_saneado = "".join(c for c in cpf if c.isalnum() or c in (".", "-")).strip()
                             atividade_saneada = "".join(c for c in atividade if c.isalnum() or c in (" ", "-", "_")).strip()
                             data_saneada = "".join(c for c in data_doc if c.isalnum() or c == "-").strip()
+                            tecnico_saneado = "".join(c for c in tecnico if c.isalnum() or c in (" ", "-", "_")).strip()
+                            comunidade_saneada = "".join(c for c in comunidade if c.isalnum() or c in (" ", "-", "_")).strip()
                             
                             # Monta o novo nome com traços
                             parts = [nome_saneado]
@@ -182,23 +224,28 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
                                 parts.append(data_saneada)
                                 
                             new_name = " - ".join(parts) + ".pdf"
-                            logger.info(f"✅ Sucesso visual com {nome_modelo} para {filename}: {new_name}")
+                            logger.info(f"✅ Sucesso visual com modelo '{nome_modelo}' para {filename}: {new_name}")
                             return new_name, {
                                 "nome": nome_saneado,
                                 "cpf": cpf_saneado,
                                 "tipo": tipo,
                                 "atividade": atividade_saneada,
-                                "data": data_saneada
+                                "data": data_saneada,
+                                "tecnico": tecnico_saneado,
+                                "comunidade": comunidade_saneada
                             }
 
                         except Exception as e:
                             err_str = str(e)
-                            if tentativa < tentativas and ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str):
-                                logger.warning(f"⚠️ Rate limit ou indisponibilidade (erro: {err_str}) no modelo {nome_modelo}. Aguardando 4s antes de re-tentativa {tentativa + 1}...")
-                                await asyncio.sleep(4)
-                            else:
-                                logger.warning(f"⚠️ Falha no modelo {nome_modelo} para o arquivo {filename}: {e}")
-                                break
+                            logger.warning(f"⚠️ Modelo '{nome_modelo}' atingiu limite ou falhou ({err_str[:120]}). Alternando instantaneamente para o próximo modelo do pool...")
+                            continue
+                            
+                    # Se todos os modelos falharem, verifica se é a primeira tentativa.
+                    if tentativa_batch == 0:
+                        logger.warning(f"⏳ Todos os modelos falharam (provável limite de cota 429 atingido). Pausando a fila por 60 segundos antes de tentar novamente para o arquivo {filename}...")
+                        await asyncio.sleep(60)
+                    else:
+                        logger.error(f"❌ Falha definitiva na IA para {filename} após pausa de recuperação.")
             except Exception as e_img:
                 logger.error(f"Erro no processamento visual com Gemini para {filename}: {e_img}")
         else:
@@ -237,7 +284,9 @@ async def extrair_e_analisar(file_content: bytes, filename: str, mode: str = "at
                 "cpf": "",
                 "tipo": tipo_local,
                 "atividade": "",
-                "data": ""
+                "data": "",
+                "tecnico": "",
+                "comunidade": ""
             }
 
         logger.error(f"❌ Todos os métodos falharam para o arquivo {filename}. Mantendo original.")
@@ -263,8 +312,8 @@ async def renomear_individual(file: UploadFile = File(...), mode: str = "ateste"
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/renomeador-lote")
-async def renomear_lote(files: List[UploadFile] = File(...)):
-    """Recebe múltiplos PDFs, renomeia-os via IA e retorna um ZIP."""
+async def renomear_lote(files: List[UploadFile] = File(...), mode: str = "ateste"):
+    """Recebe múltiplos PDFs, renomeia-os via IA e retorna um ZIP organizado em estrutura de pastas por Técnico/Comunidade/Beneficiário."""
     if not files:
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado.")
 
@@ -276,14 +325,23 @@ async def renomear_lote(files: List[UploadFile] = File(...)):
                 content = await file.read()
                 
                 # Processamento assíncrono para cada arquivo
-                new_filename, _ = await extrair_e_analisar(content, file.filename, "ateste")
+                new_filename, data = await extrair_e_analisar(content, file.filename, mode)
                 
                 # Se o nome falhar ou for vazio, usa o original
                 if not new_filename or new_filename.strip() == "":
                     new_filename = file.filename
                 
-                # Adiciona ao ZIP
-                zip_file.writestr(new_filename, content)
+                # Estrutura hierárquica de pastas dentro do ZIP: TECNICO / COMUNIDADE / BENEFICIARIO / ARQUIVO.pdf
+                if data:
+                    tecnico = data.get("tecnico") or "SEM_TECNICO"
+                    comunidade = data.get("comunidade") or "SEM_COMUNIDADE"
+                    nome = data.get("nome") or "DESCONHECIDO"
+                    zip_path = f"{tecnico}/{comunidade}/{nome}/{new_filename}"
+                else:
+                    zip_path = new_filename
+                
+                # Adiciona ao ZIP na estrutura de pastas
+                zip_file.writestr(zip_path, content)
 
         zip_buffer.seek(0)
         

@@ -1,0 +1,648 @@
+{% extends "base.html" %}
+{% block title %}Acompanhamento do Plano Produtivo - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .spreadsheet-container {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+        border: 1px solid #e9ecef;
+        overflow-x: auto;
+        position: relative;
+    }
+    .table-spreadsheet {
+        margin-bottom: 0;
+        min-width: 1000px;
+        font-size: 0.9rem;
+    }
+    .table-spreadsheet th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        border-bottom: 2px solid #dee2e6;
+        vertical-align: middle;
+        padding: 0.85rem 0.75rem;
+        white-space: nowrap;
+    }
+    .table-spreadsheet td {
+        vertical-align: middle;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid #f1f3f5;
+    }
+    .table-spreadsheet tbody tr:hover {
+        background-color: rgba(13, 110, 253, 0.02);
+    }
+    .cell-editable {
+        border-radius: 6px;
+        padding: 4px 8px;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+        width: 100%;
+        background: transparent;
+    }
+    .cell-editable:hover, .cell-editable:focus {
+        border-color: #86b7fe;
+        background: #ffffff;
+        outline: none;
+        box-shadow: 0 0 0 0.2rem rgba(13,110,253,.15);
+    }
+    .status-select {
+        font-weight: 600;
+        font-size: 0.8rem;
+        border-radius: 20px;
+        padding: 4px 12px;
+        border: 1px solid transparent;
+        cursor: pointer;
+    }
+    .status-Pendente { background-color: #fff3cd; color: #856404; border-color: #ffeeba; }
+    .status-Em-Análise, .status-Em-Analise { background-color: #cff4fc; color: #055160; border-color: #b6effb; }
+    .status-Liberado { background-color: #d1e7dd; color: #0f5132; border-color: #badbcc; }
+    .status-Pago { background-color: #198754; color: #ffffff; border-color: #198754; }
+    .status-Prestado-Contas { background-color: #e2d9f3; color: #432874; border-color: #d3c4ed; }
+    .status-Bloqueado { background-color: #f8d7da; color: #842029; border-color: #f5c2c7; }
+    .status-Cancelado { background-color: #e9ecef; color: #6c757d; border-color: #ced4da; }
+
+    .save-indicator {
+        font-size: 0.75rem;
+        color: #198754;
+        transition: opacity 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container-fluid px-4 py-4">
+    <!-- Barra Superior -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Acompanhamento do Plano Produtivo
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Planilha dinâmica de beneficiários, controle da 1ª e 2ª parcela e colunas personalizadas.</p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span id="save-status" class="save-indicator me-2" style="display: none;">
+                <i class="bi bi-check-circle-fill me-1"></i> Salvo automaticamente
+            </span>
+            <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="abrirModalNovaLinha()">
+                <i class="bi bi-plus-lg me-1"></i> Adicionar Linha
+            </button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="abrirModalNovaColuna()">
+                <i class="bi bi-layout-three-columns me-1"></i> Adicionar Coluna
+            </button>
+            <a href="/api/p1-2/plano-produtivo/exportar-excel" class="btn btn-success btn-sm rounded-pill px-3 shadow-sm">
+                <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards de Resumo Rápido -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 rounded-4" style="background: white;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted small fw-bold">TOTAL DE LINHAS</span>
+                        <h3 class="fw-bold mb-0 text-dark" id="stat-total">0</h3>
+                    </div>
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary rounded-3 p-3">
+                        <i class="bi bi-people-fill fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 rounded-4" style="background: white;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted small fw-bold">1ª PARCELA LIBERADA/PAGA</span>
+                        <h3 class="fw-bold mb-0 text-success" id="stat-p1">0</h3>
+                    </div>
+                    <div class="stat-icon bg-success bg-opacity-10 text-success rounded-3 p-3">
+                        <i class="bi bi-cash-stack fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 rounded-4" style="background: white;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted small fw-bold">2ª PARCELA LIBERADA/PAGA</span>
+                        <h3 class="fw-bold mb-0 text-teal" id="stat-p2">0</h3>
+                    </div>
+                    <div class="stat-icon bg-info bg-opacity-10 text-info rounded-3 p-3">
+                        <i class="bi bi-check2-all fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 rounded-4" style="background: white;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted small fw-bold">PENDENTES</span>
+                        <h3 class="fw-bold mb-0 text-warning" id="stat-pendentes">0</h3>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning rounded-3 p-3">
+                        <i class="bi bi-clock-history fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros de Busca -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="filtro-busca" class="form-control bg-light border-0" placeholder="Buscar por beneficiário, município, comunidade..." onkeyup="aplicarFiltros()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-p1" class="form-select form-select-sm bg-light border-0" onchange="aplicarFiltros()">
+                    <option value="">Status 1ª Parcela (Todos)</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em Análise">Em Análise</option>
+                    <option value="Liberado">Liberado</option>
+                    <option value="Pago">Pago</option>
+                    <option value="Prestado Contas">Prestado Contas</option>
+                    <option value="Bloqueado">Bloqueado</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-p2" class="form-select form-select-sm bg-light border-0" onchange="aplicarFiltros()">
+                    <option value="">Status 2ª Parcela (Todos)</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em Análise">Em Análise</option>
+                    <option value="Liberado">Liberado</option>
+                    <option value="Pago">Pago</option>
+                    <option value="Prestado Contas">Prestado Contas</option>
+                    <option value="Bloqueado">Bloqueado</option>
+                </select>
+            </div>
+            <div class="col-md-1 text-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limparFiltros()" title="Limpar Filtros">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid / Spreadsheet Interativo -->
+    <div class="spreadsheet-container mb-4">
+        <table class="table table-spreadsheet align-middle" id="tabela-plano">
+            <thead id="tabela-header">
+                <!-- Cabeçalho Dinâmico via JS -->
+            </thead>
+            <tbody id="tabela-body">
+                <tr>
+                    <td colspan="8" class="text-center py-5 text-muted">
+                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                        Carregando dados da planilha...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<!-- Modal: Adicionar Nova Linha -->
+<div class="modal fade" id="modalNovaLinha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-person-plus-fill text-primary me-2"></i>Adicionar Linha</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formNovaLinha" onsubmit="salvarNovaLinha(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Beneficiário / Titular *</label>
+                        <input type="text" id="nova-linha-nome" class="form-control" required placeholder="Ex: Maria das Graças">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Município</label>
+                            <input type="text" id="nova-linha-municipio" class="form-control" placeholder="Ex: Abaré">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Comunidade</label>
+                            <input type="text" id="nova-linha-comunidade" class="form-control" placeholder="Ex: Icozeira">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Status 1ª Parcela</label>
+                            <select id="nova-linha-p1" class="form-select">
+                                <option value="Pendente" selected>Pendente</option>
+                                <option value="Em Análise">Em Análise</option>
+                                <option value="Liberado">Liberado</option>
+                                <option value="Pago">Pago</option>
+                                <option value="Prestado Contas">Prestado Contas</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Status 2ª Parcela</label>
+                            <select id="nova-linha-p2" class="form-select">
+                                <option value="Pendente" selected>Pendente</option>
+                                <option value="Em Análise">Em Análise</option>
+                                <option value="Liberado">Liberado</option>
+                                <option value="Pago">Pago</option>
+                                <option value="Prestado Contas">Prestado Contas</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações</label>
+                        <textarea id="nova-linha-obs" class="form-control" rows="2" placeholder="Observações iniciais..."></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Salvar Linha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Adicionar Nova Coluna -->
+<div class="modal fade" id="modalNovaColuna" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-layout-three-columns text-primary me-2"></i>Adicionar Nova Coluna</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formNovaColuna" onsubmit="salvarNovaColuna(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Título da Coluna *</label>
+                        <input type="text" id="nova-coluna-titulo" class="form-control" required placeholder="Ex: Data do Pagamento, Nº Processo, Técnico Responsável">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tipo de Dado</label>
+                        <select id="nova-coluna-tipo" class="form-select">
+                            <option value="texto" selected>Texto Livre</option>
+                            <option value="data">Data</option>
+                            <option value="numero">Número / Valor</option>
+                        </select>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Criar Coluna</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let dadosPlanilhaGlobal = { colunas: [], linhas: [], status_opcoes: [] };
+    let saveTimeout = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarDadosPlanilha();
+    });
+
+    async function carregarDadosPlanilha() {
+        try {
+            const busca = document.getElementById('filtro-busca').value;
+            const p1 = document.getElementById('filtro-p1').value;
+            const p2 = document.getElementById('filtro-p2').value;
+
+            let url = `/api/p1-2/plano-produtivo/dados?`;
+            if (busca) url += `search=${encodeURIComponent(busca)}&`;
+            if (p1) url += `status_p1=${encodeURIComponent(p1)}&`;
+            if (p2) url += `status_p2=${encodeURIComponent(p2)}&`;
+
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Falha ao carregar dados.");
+            const data = await res.json();
+            dadosPlanilhaGlobal = data;
+
+            atualizarStats(data.linhas);
+            renderizarTabela(data);
+        } catch (err) {
+            console.error("Erro na planilha:", err);
+            document.getElementById('tabela-body').innerHTML = `
+                <tr><td colspan="8" class="text-center text-danger py-4">Erro ao carregar os dados. Verifique a conexão.</td></tr>
+            `;
+        }
+    }
+
+    function atualizarStats(linhas) {
+        const total = linhas.length;
+        const p1Concluidas = linhas.filter(l => ['pago', 'paga', 'liberado', 'liberada', 'prestado contas'].includes(String(l.status_parcela_1 || '').toLowerCase())).length;
+        const p2Concluidas = linhas.filter(l => ['pago', 'paga', 'liberado', 'liberada', 'prestado contas'].includes(String(l.status_parcela_2 || '').toLowerCase())).length;
+        const pendentes = linhas.filter(l => String(l.status_parcela_1 || '').toLowerCase() === 'pendente' || String(l.status_parcela_2 || '').toLowerCase() === 'pendente').length;
+
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-p1').textContent = p1Concluidas;
+        document.getElementById('stat-p2').textContent = p2Concluidas;
+        document.getElementById('stat-pendentes').textContent = pendentes;
+    }
+
+    function renderizarTabela(data) {
+        const thead = document.getElementById('tabela-header');
+        const tbody = document.getElementById('tabela-body');
+
+        const colunas = data.colunas || [];
+        const linhas = data.linhas || [];
+        const statusOpcoes = data.status_opcoes || ["Pendente", "Em Análise", "Liberado", "Pago", "Prestado Contas", "Bloqueado"];
+
+        // 1. Cabeçalho
+        let thHtml = '<tr><th style="width: 50px;" class="text-center">#</th>';
+        colunas.forEach(col => {
+            const tit = col.titulo || col.titulo_coluna || 'Coluna';
+            const ch = col.chave || col.chave_coluna;
+            if (col.fixa) {
+                thHtml += `<th>${escapeHtml(tit)}</th>`;
+            } else {
+                thHtml += `
+                    <th>
+                        <div class="d-flex align-items-center justify-content-between gap-2">
+                            <span>${escapeHtml(tit)}</span>
+                            <button class="btn btn-link btn-sm text-danger p-0 text-decoration-none" onclick="removerColuna('${escapeHtml(ch)}')" title="Excluir Coluna">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </th>
+                `;
+            }
+        });
+        thHtml += '<th style="width: 60px;" class="text-center">Ações</th></tr>';
+        thead.innerHTML = thHtml;
+
+        // 2. Linhas
+        if (linhas.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="${colunas.length + 2}" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-3 d-block mb-2 text-secondary"></i>
+                        Nenhum registro encontrado no Plano Produtivo.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let tbHtml = '';
+        linhas.forEach((linha, index) => {
+            tbHtml += `<tr>`;
+            tbHtml += `<td class="text-center text-muted small">${index + 1}</td>`;
+
+            colunas.forEach(col => {
+                const k = col.chave || col.chave_coluna;
+                if (k === 'status_parcela_1' || k === 'status_parcela_2') {
+                    const stVal = linha[k] || 'Pendente';
+                    const stClass = 'status-' + String(stVal).replace(/\s+/g, '-');
+                    tbHtml += `
+                        <td>
+                            <select class="status-select ${stClass}" onchange="alterarStatusCelula(${linha.id}, '${k}', this.value, this)">
+                                ${statusOpcoes.map(opt => `<option value="${opt}" ${opt === stVal ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        </td>
+                    `;
+                } else if (col.fixa) {
+                    const val = linha[k] !== undefined && linha[k] !== null ? linha[k] : '';
+                    tbHtml += `
+                        <td>
+                            <input type="text" class="cell-editable" value="${escapeHtml(val)}" 
+                                   onchange="salvarValorCelula(${linha.id}, '${k}', this.value)">
+                        </td>
+                    `;
+                } else {
+                    // Coluna dinâmica
+                    const valDin = (linha.campos_dinamicos_dict && linha.campos_dinamicos_dict[k] !== undefined) ? linha.campos_dinamicos_dict[k] : '';
+                    tbHtml += `
+                        <td>
+                            <input type="text" class="cell-editable" value="${escapeHtml(valDin)}" 
+                                   onchange="salvarValorCelula(${linha.id}, '${k}', this.value)">
+                        </td>
+                    `;
+                }
+            });
+
+            tbHtml += `
+                <td class="text-center">
+                    <button class="btn btn-outline-danger btn-sm p-1 rounded-circle border-0" onclick="removerLinha(${linha.id})" title="Remover Linha">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbHtml += `</tr>`;
+        });
+        tbody.innerHTML = tbHtml;
+    }
+
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    async function alterarStatusCelula(linhaId, campo, valor, selectElement) {
+        // Atualiza classe de cor do select
+        selectElement.className = 'status-select status-' + valor.replace(/\s+/g, '-');
+        await salvarValorCelula(linhaId, campo, valor);
+    }
+
+    async function salvarValorCelula(linhaId, campo, valor) {
+        mostrarStatusSalvando();
+        try {
+            const res = await fetch('/api/p1-2/plano-produtivo/salvar-celula', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ linha_id: linhaId, campo: campo, valor: valor })
+            });
+            if (!res.ok) throw new Error("Erro ao salvar célula.");
+            mostrarStatusSalvo();
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao salvar alteração.");
+        }
+    }
+
+    function mostrarStatusSalvando() {
+        const el = document.getElementById('save-status');
+        el.innerHTML = '<div class="spinner-border spinner-border-sm text-secondary me-1" role="status"></div> Salvando...';
+        el.className = 'save-indicator text-muted me-2';
+        el.style.display = 'inline-flex';
+    }
+
+    function mostrarStatusSalvo() {
+        const el = document.getElementById('save-status');
+        el.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Salvo!';
+        el.className = 'save-indicator text-success me-2';
+        el.style.display = 'inline-flex';
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+
+    function abrirModalNovaLinha() {
+        document.getElementById('formNovaLinha').reset();
+        const modal = new bootstrap.Modal(document.getElementById('modalNovaLinha'));
+        modal.show();
+    }
+
+    async function salvarNovaLinha(e) {
+        e.preventDefault();
+        const payload = {
+            nome_beneficiario: document.getElementById('nova-linha-nome').value,
+            municipio: document.getElementById('nova-linha-municipio').value,
+            comunidade: document.getElementById('nova-linha-comunidade').value,
+            status_parcela_1: document.getElementById('nova-linha-p1').value,
+            status_parcela_2: document.getElementById('nova-linha-p2').value,
+            observacoes: document.getElementById('nova-linha-obs').value
+        };
+        try {
+            const res = await fetch('/api/p1-2/plano-produtivo/linha', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro ao criar linha.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalNovaLinha')).hide();
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso("Linha adicionada com sucesso!");
+            }
+            carregarDadosPlanilha();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function abrirModalNovaColuna() {
+        document.getElementById('formNovaColuna').reset();
+        const modal = new bootstrap.Modal(document.getElementById('modalNovaColuna'));
+        modal.show();
+    }
+
+    async function salvarNovaColuna(e) {
+        e.preventDefault();
+        const tit = document.getElementById('nova-coluna-titulo').value;
+        const tip = document.getElementById('nova-coluna-tipo').value;
+        const chave = tit.toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+        try {
+            const res = await fetch('/api/p1-2/plano-produtivo/coluna', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chave_coluna: chave, titulo_coluna: tit, tipo_coluna: tip })
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro ao adicionar coluna.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalNovaColuna')).hide();
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso("Coluna customizada adicionada!");
+            }
+            carregarDadosPlanilha();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function removerColuna(chave) {
+        const executarRemover = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/plano-produtivo/coluna/${encodeURIComponent(chave)}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao remover coluna.");
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Coluna removida com sucesso.");
+                }
+                carregarDadosPlanilha();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar("Remover Coluna?", `Deseja realmente remover a coluna '${chave}'?`, executarRemover, "Sim, remover");
+        } else if (confirm(`Deseja realmente remover a coluna customizada '${chave}'?`)) {
+            executarRemover();
+        }
+    }
+
+    function removerLinha(id) {
+        const executarRemover = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/plano-produtivo/linha/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao remover linha.");
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Linha removida com sucesso.");
+                }
+                carregarDadosPlanilha();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar("Remover Linha?", "Deseja realmente remover esta linha do plano produtivo?", executarRemover, "Sim, remover");
+        } else if (confirm("Deseja realmente remover esta linha do plano produtivo?")) {
+            executarRemover();
+        }
+    }
+
+    let searchTimer = null;
+    function aplicarFiltros() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            carregarDadosPlanilha();
+        }, 300);
+    }
+
+    function limparFiltros() {
+        document.getElementById('filtro-busca').value = '';
+        document.getElementById('filtro-p1').value = '';
+        document.getElementById('filtro-p2').value = '';
+        carregarDadosPlanilha();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,166 @@
+﻿{% extends "base.html" %}
+{% block title %}Consolidado Geral - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .kpi-card {
+        border: none;
+        border-radius: 16px;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        background: #ffffff;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+    }
+    .table-consolidado th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+            <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-table text-primary me-2"></i>Consolidado do Projeto P1+2
+                </h4>
+                <small class="text-muted">Visão executiva de metas, beneficiários, parcelas e monitoramentos.</small>
+            </div>
+        </div>
+        <div>
+            <a href="/p1-2/graficos" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                <i class="bi bi-pie-chart-fill me-1"></i> Ver Gráficos
+            </a>
+        </div>
+    </div>
+
+    <!-- KPIs Principais -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="kpi-card p-4 shadow-sm border-start border-primary border-4">
+                <span class="text-muted small fw-bold">BENEFICIÁRIOS TOTAIS</span>
+                <h3 class="fw-bold my-2 text-dark" id="kpi-ben-total">-</h3>
+                <small class="text-success"><i class="bi bi-check-circle me-1"></i><span id="kpi-ben-ativos">-</span> Ativos</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card p-4 shadow-sm border-start border-info border-4">
+                <span class="text-muted small fw-bold">MONITORAMENTOS (TOTAL)</span>
+                <h3 class="fw-bold my-2 text-dark" id="kpi-mon-total">-</h3>
+                <small class="text-muted">GAPA: <b id="kpi-mon-gapa">-</b> | SISMA: <b id="kpi-mon-sisma">-</b> | INTERC.: <b id="kpi-mon-inter">-</b></small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card p-4 shadow-sm border-start border-success border-4">
+                <span class="text-muted small fw-bold">PLANO PRODUTIVO (PAGO/LIB.)</span>
+                <h3 class="fw-bold my-2 text-dark"><span id="kpi-plano-p1">-</span> / <span id="kpi-plano-p2">-</span></h3>
+                <small class="text-muted">1ª Parcela vs 2ª Parcela</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card p-4 shadow-sm border-start border-warning border-4">
+                <span class="text-muted small fw-bold">EXECUÇÃO FÍSICA / METAS</span>
+                <h3 class="fw-bold my-2 text-dark" id="kpi-plan-percent">- %</h3>
+                <small class="text-muted"><span id="kpi-plan-exec">-</span> de <span id="kpi-plan-meta">-</span> planejados</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela por Município -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white mb-4">
+        <div class="card-header bg-white py-3 border-0">
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-geo-alt-fill text-danger me-2"></i>Consolidação Territorial por Município</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-consolidado align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Município</th>
+                        <th class="text-center">Beneficiários Totais</th>
+                        <th class="text-center">Beneficiários Ativos</th>
+                        <th class="text-center">GAPA</th>
+                        <th class="text-center">SISMA</th>
+                        <th class="text-center">INTERCÂMBIO</th>
+                        <th class="text-center">1ª Parcela Paga</th>
+                        <th class="text-center">2ª Parcela Paga</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-consolidado-body">
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                            Carregando consolidado...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            // 1. KPIs
+            const resKpi = await fetch('/api/p1-2/consolidado/kpis');
+            if (resKpi.ok) {
+                const k = await resKpi.json();
+                document.getElementById('kpi-ben-total').textContent = k.beneficiarios.total;
+                document.getElementById('kpi-ben-ativos').textContent = k.beneficiarios.ativos;
+                document.getElementById('kpi-mon-total').textContent = k.monitoramento.total;
+                document.getElementById('kpi-mon-gapa').textContent = k.monitoramento.gapa;
+                document.getElementById('kpi-mon-sisma').textContent = k.monitoramento.sisma;
+                document.getElementById('kpi-mon-inter').textContent = k.monitoramento.intercambio;
+                document.getElementById('kpi-plano-p1').textContent = k.plano_produtivo.parcela_1_concluida;
+                document.getElementById('kpi-plano-p2').textContent = k.plano_produtivo.parcela_2_concluida;
+                document.getElementById('kpi-plan-percent').textContent = k.planejamento.percentual + '%';
+                document.getElementById('kpi-plan-exec').textContent = k.planejamento.executado;
+                document.getElementById('kpi-plan-meta').textContent = k.planejamento.meta;
+            }
+
+            // 2. Tabela por Município
+            const resMun = await fetch('/api/p1-2/consolidado/por-municipio');
+            if (resMun.ok) {
+                const lista = await resMun.json();
+                const tbody = document.getElementById('tabela-consolidado-body');
+                if (lista.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">Nenhum dado consolidado no momento.</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                lista.forEach(item => {
+                    html += `
+                        <tr>
+                            <td class="fw-bold">${item.municipio}</td>
+                            <td class="text-center"><span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3">${item.beneficiarios_total}</span></td>
+                            <td class="text-center"><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3">${item.beneficiarios_ativos}</span></td>
+                            <td class="text-center">${item.gapa_count}</td>
+                            <td class="text-center">${item.sisma_count}</td>
+                            <td class="text-center">${item.intercambio_count}</td>
+                            <td class="text-center text-success fw-bold">${item.p1_pagas}</td>
+                            <td class="text-center text-info fw-bold">${item.p2_pagas}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            }
+        } catch (e) {
+            console.error("Erro ao carregar consolidado:", e);
+        }
+    });
+</script>
+{% endblock %}

@@ -55,6 +55,14 @@ async def get_dashboard_summary():
     except Exception:
         biomas_beneficiarios = 0
         
+    # 6. P1+2: Beneficiários, Consolidado e Planejamento
+    p12_beneficiarios = fetch_all('p12_beneficiarios')
+    p12_total = len(p12_beneficiarios)
+    p12_cronograma = fetch_all('p12_cronograma_execucao')
+    p12_meta = sum(int(c.get('meta_planejada') or 0) for c in p12_cronograma)
+    p12_exec = sum(int(c.get('qtd_executada') or 0) for c in p12_cronograma)
+    p12_percent = round((p12_exec / p12_meta * 100), 1) if p12_meta > 0 else 0.0
+
     return {
         "bsf": {
             "realizado": int(bsf_realizado),
@@ -63,6 +71,12 @@ async def get_dashboard_summary():
         },
         "aqa": {
             "beneficiarios": int(aqa_total)
+        },
+        "p12": {
+            "beneficiarios": int(p12_total),
+            "meta": int(p12_meta),
+            "executado": int(p12_exec),
+            "percent": float(p12_percent)
         },
         "financeiro": {
             "executado": float(financeiro_total)
@@ -75,4 +89,5 @@ async def get_dashboard_summary():
             "beneficiarios": int(biomas_beneficiarios)
         }
     }
+
 

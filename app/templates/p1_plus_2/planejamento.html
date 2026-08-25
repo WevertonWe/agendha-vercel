@@ -1,0 +1,391 @@
+{% extends "base.html" %}
+{% block title %}Planejamento e Cronograma - P1+2{% endblock %}
+
+{% block styles %}
+<style>
+    .table-plan th {
+        background-color: #f8f9fa;
+        color: #495057;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/p1-2/portal" class="btn btn-outline-secondary btn-sm rounded-circle p-2" title="Voltar ao Portal">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-calendar-range-fill text-primary me-2"></i>Planejamento e Metas P1+2
+                </h4>
+            </div>
+            <p class="text-muted small mb-0 ms-5">Gestão de metas planejadas vs executadas e cronograma semanal.</p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="abrirModalNovaMeta()">
+                <i class="bi bi-plus-lg me-1"></i> Nova Meta
+            </button>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="abrirModalGerarSemanas()">
+                <i class="bi bi-magic me-1"></i> Gerar Semanas
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra de Progresso Físico -->
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <span class="text-muted small fw-bold">PROGRESSO TOTAL DA EXECUÇÃO</span>
+                <h3 class="fw-bold text-primary mb-0 mt-1" id="stat-percent">0%</h3>
+                <small class="text-muted"><span id="stat-exec">0</span> de <span id="stat-meta">0</span> planejados</small>
+            </div>
+            <div class="col-md-8">
+                <div class="progress" style="height: 14px; border-radius: 8px;">
+                    <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated" id="progresso-barra" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtro por Município -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-8">
+                <span class="text-muted small fw-bold">CRONOGRAMA SEMANAL POR MUNICÍPIO</span>
+            </div>
+            <div class="col-md-4">
+                <select id="filtro-municipio" class="form-select form-select-sm bg-light border-0" onchange="carregarPlanejamento()">
+                    <option value="TODOS">Todos os Municípios</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela do Cronograma -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white mb-4">
+        <div class="table-responsive">
+            <table class="table table-plan align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;" class="text-center">Sem.</th>
+                        <th>Município</th>
+                        <th style="width: 130px;" class="text-center">Meta Planejada</th>
+                        <th style="width: 130px;" class="text-center">Qtd. Executada</th>
+                        <th class="text-center">Status</th>
+                        <th>Observações</th>
+                        <th style="width: 100px;" class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-planejamento-body">
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                            Carregando cronograma...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<!-- Modal: Nova Meta -->
+<div class="modal fade" id="modalMeta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-calendar-plus text-primary me-2"></i>Adicionar Meta Semanal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formMeta" onsubmit="salvarMeta(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Município *</label>
+                        <input type="text" id="meta-municipio" class="form-control" required placeholder="Ex: Abaré">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Semana Nº *</label>
+                            <input type="number" id="meta-semana" class="form-control" required min="1" max="52" value="1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Ano</label>
+                            <input type="number" id="meta-ano" class="form-control" value="2026">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Meta Planejada</label>
+                            <input type="number" id="meta-planejada" class="form-control" min="0" value="5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Qtd Executada</label>
+                            <input type="number" id="meta-executada" class="form-control" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Observações</label>
+                        <textarea id="meta-obs" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Gerar Semanas Automáticas -->
+<div class="modal fade" id="modalGerarSemanas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-magic text-primary me-2"></i>Gerar Semanas Automáticas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <form id="formGerarSemanas" onsubmit="executarGerarSemanas(event)">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Município *</label>
+                        <input type="text" id="gerar-municipio" class="form-control" required placeholder="Ex: Chorrochó">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Qtd. Semanas</label>
+                            <input type="number" id="gerar-qtd-semanas" class="form-control" value="12" min="1" max="52">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Meta por Semana</label>
+                            <input type="number" id="gerar-meta-semana" class="form-control" value="5" min="1">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Gerar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarPlanejamento();
+    });
+
+    async function carregarPlanejamento() {
+        const mun = document.getElementById('filtro-municipio').value;
+        const tbody = document.getElementById('tabela-planejamento-body');
+
+        let url = `/api/p1-2/planejamento`;
+        if (mun && mun !== 'TODOS') url += `?municipio=${encodeURIComponent(mun)}`;
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Erro ao buscar planejamento");
+            const data = await res.json();
+
+            // Atualiza barra de progresso e KPIs
+            document.getElementById('stat-percent').textContent = data.percentual + '%';
+            document.getElementById('stat-exec').textContent = data.executado_total;
+            document.getElementById('stat-meta').textContent = data.meta_total;
+            document.getElementById('progresso-barra').style.width = Math.min(data.percentual, 100) + '%';
+
+            // Atualiza select de municípios
+            const selMun = document.getElementById('filtro-municipio');
+            if (selMun.options.length <= 1 && data.municipios) {
+                data.municipios.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    selMun.appendChild(opt);
+                });
+            }
+
+            const lista = data.dados || [];
+            if (lista.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-muted">Nenhum cronograma registrado.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            lista.forEach(item => {
+                html += `
+                    <tr>
+                        <td class="text-center fw-bold text-muted">S${item.semana_referencia}</td>
+                        <td class="fw-bold">${escapeHtml(item.municipio)}</td>
+                        <td class="text-center">
+                            <input type="number" class="form-control form-control-sm text-center" value="${item.meta_planejada || 0}" 
+                                   onchange="atualizarItem(${item.id}, 'meta_planejada', this.value)">
+                        </td>
+                        <td class="text-center">
+                            <input type="number" class="form-control form-control-sm text-center text-success fw-bold" value="${item.qtd_executada || 0}" 
+                                   onchange="atualizarItem(${item.id}, 'qtd_executada', this.value)">
+                        </td>
+                        <td class="text-center">
+                            <span class="badge ${item.qtd_executada >= item.meta_planejada && item.meta_planejada > 0 ? 'bg-success bg-opacity-10 text-success' : 'bg-warning bg-opacity-10 text-warning'} rounded-pill px-3">
+                                ${item.qtd_executada >= item.meta_planejada && item.meta_planejada > 0 ? 'Atingida' : 'Em Execução'}
+                            </span>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" value="${escapeHtml(item.observacoes || '')}" 
+                                   onchange="atualizarItem(${item.id}, 'observacoes', this.value)">
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-outline-danger btn-sm p-1 rounded-circle border-0" onclick="excluirItem(${item.id})" title="Excluir">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        } catch (err) {
+            console.error(err);
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Erro ao carregar planejamento.</td></tr>`;
+        }
+    }
+
+    async function atualizarItem(id, campo, valor) {
+        try {
+            const payload = {};
+            payload[campo] = campo.includes('qtd') || campo.includes('meta') ? parseInt(valor || 0) : valor;
+            const res = await fetch(`/api/p1-2/planejamento/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error("Erro ao atualizar.");
+            carregarPlanejamento();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    function abrirModalNovaMeta() {
+        document.getElementById('formMeta').reset();
+        const modal = new bootstrap.Modal(document.getElementById('modalMeta'));
+        modal.show();
+    }
+
+    async function salvarMeta(e) {
+        e.preventDefault();
+        const payload = {
+            municipio: document.getElementById('meta-municipio').value,
+            semana_referencia: parseInt(document.getElementById('meta-semana').value),
+            ano: parseInt(document.getElementById('meta-ano').value),
+            meta_planejada: parseInt(document.getElementById('meta-planejada').value),
+            qtd_executada: parseInt(document.getElementById('meta-executada').value),
+            observacoes: document.getElementById('meta-obs').value
+        };
+
+        try {
+            const res = await fetch('/api/p1-2/planejamento', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro ao criar meta.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalMeta')).hide();
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso("Meta semanal adicionada com sucesso!");
+            }
+            carregarPlanejamento();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function abrirModalGerarSemanas() {
+        document.getElementById('formGerarSemanas').reset();
+        const modal = new bootstrap.Modal(document.getElementById('modalGerarSemanas'));
+        modal.show();
+    }
+
+    async function executarGerarSemanas(e) {
+        e.preventDefault();
+        const mun = document.getElementById('gerar-municipio').value;
+        const qtd = document.getElementById('gerar-qtd-semanas').value;
+        const meta = document.getElementById('gerar-meta-semana').value;
+
+        try {
+            const res = await fetch(`/api/p1-2/planejamento/gerar-semanas?municipio=${encodeURIComponent(mun)}&qtd_semanas=${qtd}&meta_por_semana=${meta}`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                let errorMsg = "Erro ao gerar semanas.";
+                try {
+                    const errData = await res.json();
+                    errorMsg = errData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalGerarSemanas')).hide();
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso("Cronograma gerado com sucesso!");
+            }
+            carregarPlanejamento();
+        } catch (err) {
+            if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                ui.feedbackErro(err.message);
+            } else {
+                alert(err.message);
+            }
+        }
+    }
+
+    function excluirItem(id) {
+        const executarExclusao = async () => {
+            try {
+                const res = await fetch(`/api/p1-2/planejamento/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao excluir.");
+                if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                    ui.feedbackSucesso("Meta excluída com sucesso.");
+                }
+                carregarPlanejamento();
+            } catch (err) {
+                if (typeof ui !== 'undefined' && ui.feedbackErro) {
+                    ui.feedbackErro(err.message);
+                } else {
+                    alert(err.message);
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && ui.confirmar) {
+            ui.confirmar("Excluir Meta?", "Deseja realmente remover esta semana do cronograma?", executarExclusao, "Sim, excluir");
+        } else if (confirm("Deseja realmente excluir esta meta semanal?")) {
+            executarExclusao();
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+</script>
+{% endblock %}
