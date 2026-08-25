@@ -23,88 +23,318 @@
         </a>
     </div>
 
-    <!-- Filters -->
-    <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 900px;">
-        <div class="card-body">
-            <div class="row g-3 justify-content-center">
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small">Município</label>
-                    <select id="filtroMunicipio" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                    </select>
+    <!-- Nav Tabs para Alternar entre Lista de Beneficiários, Auditoria Local e Coletum -->
+    <div class="d-flex justify-content-center mb-4">
+        <ul class="nav nav-pills p-1 bg-white rounded shadow-sm border" id="bsfMainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active fw-semibold btn-sm px-3" id="tab-beneficiarios" data-bs-toggle="pill" data-bs-target="#conteudo-beneficiarios" type="button" role="tab">
+                    <i class="fas fa-users me-1 text-primary"></i> Beneficiários
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary" id="tab-auditoria" data-bs-toggle="pill" data-bs-target="#conteudo-auditoria" type="button" role="tab" onclick="carregarAuditoriaLocal()">
+                    <i class="fas fa-folder-open me-1 text-success"></i> Auditoria de Pastas (Ateste + Coletum)
+                    <span id="badgeAvisosAuditoria" class="badge bg-danger ms-1 d-none">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary" id="tab-coletum" data-bs-toggle="pill" data-bs-target="#conteudo-coletum" type="button" role="tab" onclick="carregarAuditoriaColetum()">
+                    <i class="fas fa-sync-alt me-1 text-info"></i> Verificação Coletum API
+                    <span id="badgeAvisosColetum" class="badge bg-warning text-dark ms-1 d-none">0</span>
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content" id="bsfMainTabsContent">
+        <!-- ============================================================= -->
+        <!-- ABA 1: LISTA DE BENEFICIÁRIOS (PADRÃO) -->
+        <!-- ============================================================= -->
+        <div class="tab-pane fade show active" id="conteudo-beneficiarios" role="tabpanel">
+            <!-- Filters -->
+            <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 900px;">
+                <div class="card-body">
+                    <div class="row g-3 justify-content-center">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Município</label>
+                            <select id="filtroMunicipio" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Técnico</label>
+                            <select id="filtroTecnico" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Status</label>
+                            <select id="filtroStatus" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button onclick="carregarBeneficiarios()" class="btn btn-primary btn-sm w-100" id="btnFiltrar">
+                                <i class="fas fa-filter me-1"></i> Filtrar
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small">Técnico</label>
-                    <select id="filtroTecnico" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                    </select>
+            </div>
+
+            <!-- Results Table -->
+            <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-secondary mb-0 d-inline-block me-2">Beneficiários</h6>
+                        <span id="benefCount" class="badge bg-primary">0</span>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalWizardImportacao()">
+                            <i class="fas fa-magic me-1"></i> Assistente de Importação (4 Passos)
+                        </button>
+                        <button class="btn btn-sm btn-primary" onclick="abrirModalCadastro()">
+                            <i class="fas fa-plus me-1"></i> Novo Beneficiário
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-bold small">Status</label>
-                    <select id="filtroStatus" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                    </select>
+                <div class="card-body">
+                    <!-- Loading -->
+                    <div id="loadingState" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="text-muted mt-2 small">Carregando beneficiários...</p>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle d-none" id="tabelaBeneficiarios">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>CPF</th>
+                                    <th>Município</th>
+                                    <th>Comunidade</th>
+                                    <th>Técnico</th>
+                                    <th>Status</th>
+                                    <th class="text-center" style="width:80px;">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benefBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="noResults" class="text-center py-5 d-none">
+                        <i class="fas fa-search text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">Nenhum beneficiário encontrado.</p>
+                    </div>
+
+                    <!-- Pagination -->
+                    <nav id="paginacao" class="d-none mt-3" aria-label="Paginação de beneficiários">
+                        <ul class="pagination pagination-sm justify-content-center mb-0" id="paginacaoList"></ul>
+                    </nav>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button onclick="carregarBeneficiarios()" class="btn btn-primary btn-sm w-100" id="btnFiltrar">
-                        <i class="fas fa-filter me-1"></i> Filtrar
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ABA 2: AUDITORIA LOCAL DE PASTAS (ATESTE + COLETUM) -->
+        <!-- ============================================================= -->
+        <div class="tab-pane fade" id="conteudo-auditoria" role="tabpanel">
+            <!-- Header e Ações -->
+            <div class="d-flex justify-content-between align-items-center mb-3 mx-auto" style="max-width: 1100px;">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="fas fa-shield-alt text-success me-2"></i>Conformidade de Pastas Locais
+                    </h5>
+                    <small class="text-muted" id="auditUltimaExecucao">Última auditoria: Carregando...</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-danger btn-sm" id="btnConsolidarDuplicados" onclick="consolidarPastasDuplicadasAgora()">
+                        <i class="fas fa-compress-arrows-alt me-1"></i> Corrigir Pastas Duplicadas (Acentos)
+                    </button>
+                    <button class="btn btn-success btn-sm" id="btnExecutarAuditoriaLocal" onclick="executarVarreduraLocalAgora()">
+                        <i class="fas fa-search me-1"></i> Auditar Pastas Agora
                     </button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Results Table -->
-    <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="fw-bold text-secondary mb-0 d-inline-block me-2">Beneficiários</h6>
-                <span id="benefCount" class="badge bg-primary">0</span>
-            </div>
-            <div>
-                <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalWizardImportacao()">
-                    <i class="fas fa-magic me-1"></i> Assistente de Importação (4 Passos)
-                </button>
-                <button class="btn btn-sm btn-primary" onclick="abrirModalCadastro()">
-                    <i class="fas fa-plus me-1"></i> Novo Beneficiário
-                </button>
-            </div>
-        </div>
-        <div class="card-body">
-            <!-- Loading -->
-            <div id="loadingState" class="text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Carregando...</span>
+            <!-- Alerta de Pastas Duplicadas por Acentos -->
+            <div id="alertaDuplicidades" class="alert alert-warning border-warning d-none mx-auto shadow-sm" style="max-width: 1100px;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <strong class="d-block"><i class="fas fa-exclamation-triangle me-2"></i>Pastas Duplicadas por Acentuação Detectadas!</strong>
+                        <span class="small" id="textoAlertaDuplicidades">Foram identificadas pastas com pequenas variações de acento (ex: JOSÉ vs JOSE).</span>
+                    </div>
+                    <button class="btn btn-warning btn-sm fw-semibold" onclick="consolidarPastasDuplicadasAgora()">
+                        <i class="fas fa-magic me-1"></i> Unificar e Limpar Duplicidades
+                    </button>
                 </div>
-                <p class="text-muted mt-2 small">Carregando beneficiários...</p>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-hover table-sm align-middle d-none" id="tabelaBeneficiarios">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Nome</th>
-                            <th>CPF</th>
-                            <th>Município</th>
-                            <th>Comunidade</th>
-                            <th>Técnico</th>
-                            <th>Status</th>
-                            <th class="text-center" style="width:80px;">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="benefBody"></tbody>
-                </table>
+            <!-- Stat Cards de Auditoria -->
+            <div class="row g-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center">
+                        <div class="text-secondary small fw-bold mb-1">TOTAL BENEFICIÁRIOS</div>
+                        <h3 class="fw-bold text-dark mb-0" id="cardAuditTotalBenef">0</h3>
+                        <span class="text-muted small" id="cardAuditTotalAtiv">0 atividades</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-success border-4">
+                        <div class="text-success small fw-bold mb-1"><i class="fas fa-check-circle me-1"></i>100% COMPLETAS</div>
+                        <h3 class="fw-bold text-success mb-0" id="cardAuditCompletas">0</h3>
+                        <span class="text-muted small">Ateste + Coletum</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-warning border-4">
+                        <div class="text-warning small fw-bold mb-1"><i class="fas fa-clock me-1"></i>PENDENTE ATESTE</div>
+                        <h3 class="fw-bold text-warning mb-0" id="cardAuditPendAteste">0</h3>
+                        <span class="text-muted small">Só possui Coletum</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-danger border-4">
+                        <div class="text-danger small fw-bold mb-1"><i class="fas fa-exclamation-circle me-1"></i>PENDENTE COLETUM</div>
+                        <h3 class="fw-bold text-danger mb-0" id="cardAuditPendColetum">0</h3>
+                        <span class="text-muted small">Só possui Ateste</span>
+                    </div>
+                </div>
             </div>
 
-            <div id="noResults" class="text-center py-5 d-none">
-                <i class="fas fa-search text-muted" style="font-size: 2rem;"></i>
-                <p class="text-muted mt-2">Nenhum beneficiário encontrado.</p>
+            <!-- Filtros de Auditoria -->
+            <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control form-control-sm" id="filtroAuditBusca" placeholder="Buscar por Beneficiário, Município..." onkeyup="filtrarTabelaAuditoria()">
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="filtroAuditTecnico" onchange="filtrarTabelaAuditoria()">
+                                <option value="">Todos os Técnicos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="filtroAuditStatus" onchange="filtrarTabelaAuditoria()">
+                                <option value="">Todos os Status</option>
+                                <option value="COMPLETO">Apenas 100% Completas</option>
+                                <option value="PENDENTE_ATESTE">Pendente Ateste</option>
+                                <option value="PENDENTE_COLETUM">Pendente Coletum</option>
+                                <option value="VAZIA">Vazias / Sem Arquivos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <span class="badge bg-secondary" id="contagemAuditFiltrados">0 registros</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Pagination -->
-            <nav id="paginacao" class="d-none mt-3" aria-label="Paginação de beneficiários">
-                <ul class="pagination pagination-sm justify-content-center mb-0" id="paginacaoList"></ul>
-            </nav>
+            <!-- Tabela de Auditoria -->
+            <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
+                <div class="card-body p-0">
+                    <div id="loadingAuditLocal" class="text-center py-5">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="text-muted small mt-2">Carregando dados da auditoria local...</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0 d-none" id="tabelaAuditLocal">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Técnico</th>
+                                    <th>Comunidade</th>
+                                    <th>Beneficiário</th>
+                                    <th>Atividade (Pasta)</th>
+                                    <th class="text-center">Ateste</th>
+                                    <th class="text-center">Coletum</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditLocalBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ABA 3: VERIFICAÇÃO COLETUM API -->
+        <!-- ============================================================= -->
+        <div class="tab-pane fade" id="conteudo-coletum" role="tabpanel">
+            <!-- Header e Ações -->
+            <div class="d-flex justify-content-between align-items-center mb-3 mx-auto" style="max-width: 1100px;">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="fas fa-sync-alt text-info me-2"></i>Cruzamento com a API do Coletum
+                    </h5>
+                    <small class="text-muted" id="coletumUltimaSync">Análise de grafia de nomes, datas e formulários enviados.</small>
+                </div>
+                <div>
+                    <button class="btn btn-info text-white btn-sm fw-semibold" id="btnSyncColetum" onclick="carregarAuditoriaColetum(true)">
+                        <i class="fas fa-sync-alt me-1"></i> Atualizar Respostas Coletum
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stat Cards Coletum -->
+            <div class="row g-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-primary border-4">
+                        <div class="text-primary small fw-bold mb-1">TOTAL PROCESSADOS</div>
+                        <h3 class="fw-bold text-dark mb-0" id="cardColetumTotal">0</h3>
+                        <span class="text-muted small">Respostas de formulários</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-success border-4">
+                        <div class="text-success small fw-bold mb-1"><i class="fas fa-check-circle me-1"></i>SINCRONIZADOS</div>
+                        <h3 class="fw-bold text-success mb-0" id="cardColetumSinc">0</h3>
+                        <span class="text-muted small">Match Exato 100%</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-warning border-4">
+                        <div class="text-warning small fw-bold mb-1"><i class="fas fa-exclamation-triangle me-1"></i>REVISÃO MANUAL</div>
+                        <h3 class="fw-bold text-warning mb-0" id="cardColetumAtencao">0</h3>
+                        <span class="text-muted small">Grafia/Nome divergente</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-info border-4">
+                        <div class="text-info small fw-bold mb-1"><i class="fas fa-calendar-alt me-1"></i>AVISO DE DATA</div>
+                        <h3 class="fw-bold text-info mb-0" id="cardColetumData">0</h3>
+                        <span class="text-muted small">Data Coletum != Ateste</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela Coletum -->
+            <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
+                <div class="card-body p-0">
+                    <div id="loadingColetum" class="text-center py-5">
+                        <div class="spinner-border text-info" role="status"></div>
+                        <p class="text-muted small mt-2">Consultando respostas via API Coletum v2...</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0 d-none" id="tabelaColetumDiscrepancias">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID / Form</th>
+                                    <th>Nome no Coletum</th>
+                                    <th>Correspondência no Sistema</th>
+                                    <th class="text-center">Similaridade</th>
+                                    <th class="text-center">Data Coletum vs Sistema</th>
+                                    <th class="text-center">Status</th>
+                                    <th>Observação / Alerta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="coletumBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1686,13 +1916,383 @@ async function carregarPlanoProdutivo(beneficiarioId) {
         }
         
         container.innerHTML = htmlContent;
+// ==============================================================================
+// MÓDULO DE AUDITORIA LOCAL & CONFORMIDADE DE PASTAS (ATESTE + COLETUM)
+// ==============================================================================
+let dadosAuditoriaLocalCache = null;
+let dadosColetumCache = null;
+
+async function carregarAuditoriaLocal() {
+    const loading = document.getElementById('loadingAuditLocal');
+    const tabela = document.getElementById('tabelaAuditLocal');
+    if (loading) loading.classList.remove('d-none');
+    if (tabela) tabela.classList.add('d-none');
+
+    try {
+        const res = await fetch('/api/bsf/auditoria/relatorio');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        dadosAuditoriaLocalCache = data;
+
+        // Atualiza cards de resumo
+        const resumo = data.resumo || {};
+        document.getElementById('cardAuditTotalBenef').innerText = resumo.total_beneficiarios || 0;
+        document.getElementById('cardAuditTotalAtiv').innerText = `${resumo.total_atividades || 0} atividades (${resumo.percentual_conformidade || 0}% conformidade)`;
+        document.getElementById('cardAuditCompletas').innerText = resumo.atividades_completas || 0;
+        document.getElementById('cardAuditPendAteste').innerText = resumo.pendentes_ateste || 0;
+        document.getElementById('cardAuditPendColetum').innerText = resumo.pendentes_coletum || 0;
+        document.getElementById('auditUltimaExecucao').innerText = `Última auditoria: ${data.data_formatada || 'Agora'}`;
+
+        // Alerta de duplicidades por acentos
+        const dups = data.duplicidades_detectadas || [];
+        const alertaEl = document.getElementById('alertaDuplicidades');
+        const badgeAvisos = document.getElementById('badgeAvisosAuditoria');
+        if (dups.length > 0) {
+            if (alertaEl) {
+                alertaEl.classList.remove('d-none');
+                document.getElementById('textoAlertaDuplicidades').innerText = 
+                    `Foram identificadas ${dups.length} duplicidades de pastas por variação de acentos (ex: ${dups[0].nome_canonico}). Clique para unificar com segurança.`;
+            }
+            if (badgeAvisos) {
+                badgeAvisos.innerText = dups.length;
+                badgeAvisos.classList.remove('d-none');
+            }
+        } else {
+            if (alertaEl) alertaEl.classList.add('d-none');
+            if (badgeAvisos) badgeAvisos.classList.add('d-none');
+        }
+
+        // Popula select de técnicos
+        const selectTec = document.getElementById('filtroAuditTecnico');
+        if (selectTec) {
+            const tecnicos = Object.keys(data.tecnicos || {}).sort();
+            const valAtual = selectTec.value;
+            selectTec.innerHTML = '<option value="">Todos os Técnicos</option>';
+            tecnicos.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.innerText = t;
+                selectTec.appendChild(opt);
+            });
+            selectTec.value = valAtual;
+        }
+
+        renderizarTabelaAuditoriaLocal(data.detalhes || []);
     } catch (e) {
-        console.error("Erro em carregarPlanoProdutivo:", e);
-        container.innerHTML = `
-            <div class="text-danger small text-center py-4">
-                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                <p class="mb-0">Erro ao carregar o plano produtivo individual.</p>
-            </div>`;
+        console.error("Erro ao carregar auditoria local:", e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro na Auditoria',
+                text: 'Não foi possível carregar os dados de auditoria local.'
+            });
+        }
+    } finally {
+        if (loading) loading.classList.add('d-none');
+        if (tabela) tabela.classList.remove('d-none');
+    }
+}
+
+function renderizarTabelaAuditoriaLocal(detalhes) {
+    const tbody = document.getElementById('auditLocalBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    let totalLinhas = 0;
+
+    detalhes.forEach(benef => {
+        const atividades = benef.atividades || [];
+        if (atividades.length === 0) {
+            totalLinhas++;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
+                <td><span class="small">${benef.comunidade || '-'}</span></td>
+                <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
+                <td><span class="text-muted small">Sem pastas de atividade</span></td>
+                <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
+                <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
+                <td class="text-center"><span class="badge bg-secondary">VAZIA</span></td>
+            `;
+            tbody.appendChild(tr);
+        } else {
+            atividades.forEach(ativ => {
+                totalLinhas++;
+                const tr = document.createElement('tr');
+                
+                let badgeStatus = '';
+                if (ativ.status === 'COMPLETO') {
+                    badgeStatus = '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Completo</span>';
+                } else if (ativ.status === 'PENDENTE_ATESTE') {
+                    badgeStatus = '<span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Pendente Ateste</span>';
+                } else if (ativ.status === 'PENDENTE_COLETUM') {
+                    badgeStatus = '<span class="badge bg-danger"><i class="fas fa-exclamation-circle me-1"></i>Pendente Coletum</span>';
+                } else {
+                    badgeStatus = '<span class="badge bg-secondary">Vazia / Outros</span>';
+                }
+
+                const badgeAteste = ativ.tem_ateste 
+                    ? `<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_ateste.length})</span>` 
+                    : `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+
+                const badgeColetum = ativ.tem_coletum 
+                    ? `<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_coletum.length})</span>` 
+                    : `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+
+                tr.innerHTML = `
+                    <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
+                    <td><span class="small">${benef.comunidade || '-'}</span></td>
+                    <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
+                    <td><code class="small text-dark fw-semibold">${ativ.pasta_atividade}</code></td>
+                    <td class="text-center">${badgeAteste}</td>
+                    <td class="text-center">${badgeColetum}</td>
+                    <td class="text-center">${badgeStatus}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    });
+
+    const contador = document.getElementById('contagemAuditFiltrados');
+    if (contador) contador.innerText = `${totalLinhas} registros encontrados`;
+}
+
+function filtrarTabelaAuditoria() {
+    if (!dadosAuditoriaLocalCache || !dadosAuditoriaLocalCache.detalhes) return;
+    
+    const termo = (document.getElementById('filtroAuditBusca')?.value || '').toLowerCase().trim();
+    const tecSelecionado = (document.getElementById('filtroAuditTecnico')?.value || '').toLowerCase().trim();
+    const statusSelecionado = document.getElementById('filtroAuditStatus')?.value || '';
+
+    const filtrados = dadosAuditoriaLocalCache.detalhes.filter(benef => {
+        const bateTec = !tecSelecionado || (benef.tecnico && benef.tecnico.toLowerCase().includes(tecSelecionado));
+        const bateTexto = !termo || 
+            (benef.beneficiario && benef.beneficiario.toLowerCase().includes(termo)) ||
+            (benef.comunidade && benef.comunidade.toLowerCase().includes(termo)) ||
+            (benef.tecnico && benef.tecnico.toLowerCase().includes(termo));
+        
+        if (!bateTec || !bateTexto) return false;
+
+        if (statusSelecionado) {
+            const temAtivComStatus = (benef.atividades || []).some(a => a.status === statusSelecionado);
+            if (!temAtivComStatus) return false;
+        }
+
+        return true;
+    });
+
+    renderizarTabelaAuditoriaLocal(filtrados);
+}
+
+async function executarVarreduraLocalAgora() {
+    const btn = document.getElementById('btnExecutarAuditoriaLocal');
+    const textoOriginal = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Varrendo Pastas...';
+    }
+
+    try {
+        const res = await fetch('/api/bsf/auditoria/executar-local', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Varredura Concluída!',
+                    text: `Auditoria finalizada. ${data.resumo?.total_beneficiarios || 0} beneficiários auditados (${data.resumo?.percentual_conformidade || 0}% conformidade).`,
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+            }
+            await carregarAuditoriaLocal();
+        } else {
+            throw new Error(data.detail || 'Erro ao executar');
+        }
+    } catch (e) {
+        console.error("Erro na varredura local:", e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Falha na Varredura',
+                text: e.message || 'Ocorreu um erro ao auditar pastas locais.'
+            });
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+}
+
+async function consolidarPastasDuplicadasAgora() {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: 'Unificar Pastas Duplicadas?',
+            text: 'O sistema irá mesclar com segurança as pastas com pequenas variações de acento (ex: JOSÉ e JOSE), movendo todos os arquivos sem perda e removendo pastas vazias redundantes.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#198754',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sim, Unificar Agora',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!result.isConfirmed) return;
+    }
+
+    const btn = document.getElementById('btnConsolidarDuplicados');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/bsf/auditoria/consolidar-duplicados', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Consolidação Concluída!',
+                    text: data.mensagem || 'Pastas duplicadas unificadas com sucesso.',
+                    timer: 4000
+                });
+            }
+            await carregarAuditoriaLocal();
+        } else {
+            throw new Error(data.detail || 'Erro ao consolidar');
+        }
+    } catch (e) {
+        console.error("Erro na consolidação:", e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro na Consolidação',
+                text: e.message || 'Falha ao unificar pastas.'
+            });
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// ==============================================================================
+// MÓDULO DE VERIFICAÇÃO COLETUM API
+// ==============================================================================
+async function carregarAuditoriaColetum(forcar = false) {
+    const loading = document.getElementById('loadingColetum');
+    const tabela = document.getElementById('tabelaColetumDiscrepancias');
+    const btn = document.getElementById('btnSyncColetum');
+
+    if (loading) loading.classList.remove('d-none');
+    if (tabela) tabela.classList.add('d-none');
+    if (btn && forcar) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Consultando Coletum...';
+    }
+
+    try {
+        const res = await fetch('/api/bsf/auditoria/coletum-discrepancias');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        dadosColetumCache = data;
+
+        const resumo = data.resumo || {};
+        document.getElementById('cardColetumTotal').innerText = data.total_respostas || 0;
+        document.getElementById('cardColetumSinc').innerText = resumo.sincronizados || 0;
+        document.getElementById('cardColetumAtencao').innerText = resumo.atencao_revisao_manual || 0;
+        document.getElementById('cardColetumData').innerText = resumo.aviso_data || 0;
+
+        const badgeColetum = document.getElementById('badgeAvisosColetum');
+        const totalAvisos = (resumo.atencao_revisao_manual || 0) + (resumo.aviso_data || 0);
+        if (badgeColetum) {
+            if (totalAvisos > 0) {
+                badgeColetum.innerText = totalAvisos;
+                badgeColetum.classList.remove('d-none');
+            } else {
+                badgeColetum.classList.add('d-none');
+            }
+        }
+
+        const tbody = document.getElementById('coletumBody');
+        if (tbody) {
+            tbody.innerHTML = '';
+            const discrepancias = data.discrepancias || [];
+
+            if (discrepancias.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="fas fa-info-circle me-1"></i> Nenhuma resposta encontrada nos formulários do Coletum.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                discrepancias.forEach(item => {
+                    const tr = document.createElement('tr');
+
+                    let badgeStatus = '';
+                    if (item.status === 'SINCRONIZADO') {
+                        badgeStatus = '<span class="badge bg-success"><i class="fas fa-check me-1"></i>Sincronizado</span>';
+                    } else if (item.status === 'ATENCAO_REVISAO_MANUAL') {
+                        badgeStatus = '<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle me-1"></i>Revisão Manual</span>';
+                    } else if (item.status === 'AVISO_DATA') {
+                        badgeStatus = '<span class="badge bg-info text-dark"><i class="fas fa-calendar-alt me-1"></i>Aviso de Data</span>';
+                    } else {
+                        badgeStatus = '<span class="badge bg-secondary">Não Localizado</span>';
+                    }
+
+                    const match = item.match_beneficiario || {};
+                    const nomeSistema = match.nome ? `<strong>${match.nome}</strong><br><small class="text-muted">CPF: ${match.cpf || '-'}</small>` : '<span class="text-muted italic">Não cadastrado</span>';
+                    const dataSistema = match.data_sistema || '-';
+                    const dataColetum = item.data_coletum || '-';
+
+                    let dataCompHtml = '';
+                    if (dataColetum !== '-' && dataSistema !== '-' && dataColetum !== dataSistema) {
+                        dataCompHtml = `<span class="badge bg-warning-subtle text-dark border border-warning">Coletum: ${dataColetum}</span><br><span class="badge bg-light text-muted border mt-1">Ateste: ${dataSistema}</span>`;
+                    } else {
+                        dataCompHtml = `<span class="small">${dataColetum}</span>`;
+                    }
+
+                    const msgs = (item.mensagens || []).join('<br>');
+
+                    tr.innerHTML = `
+                        <td>
+                            <code class="small text-dark">#${item.coletum_id}</code><br>
+                            <small class="text-muted">${item.formulario_nome || '-'}</small>
+                        </td>
+                        <td>
+                            <strong class="text-dark small">${item.nome_coletum || 'SEM NOME'}</strong><br>
+                            <small class="text-muted">CPF: ${item.cpf_coletum || '-'}</small>
+                        </td>
+                        <td>${nomeSistema}</td>
+                        <td class="text-center">
+                            <span class="badge ${item.similaridade >= 95 ? 'bg-success' : item.similaridade >= 70 ? 'bg-warning text-dark' : 'bg-secondary'}">
+                                ${item.similaridade}%
+                            </span>
+                        </td>
+                        <td class="text-center">${dataCompHtml}</td>
+                        <td class="text-center">${badgeStatus}</td>
+                        <td><small class="text-danger fw-semibold">${msgs || '<span class="text-success small">Tudo certo</span>'}</small></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Erro ao cruzar com Coletum:", e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro na Consulta Coletum',
+                text: 'Não foi possível conectar ou processar as respostas da API do Coletum.'
+            });
+        }
+    } finally {
+        if (loading) loading.classList.add('d-none');
+        if (tabela) tabela.classList.remove('d-none');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i> Atualizar Respostas Coletum';
+        }
     }
 }
 </script>

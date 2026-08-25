@@ -147,11 +147,29 @@ async def lifespan(app: FastAPI):
 
     logging.info(">>> FIM INICIALIZAÇÃO <<<")
 
-    # 5. Inicialização do Scheduler de Backup
+    # 5. Inicialização do Scheduler de Tarefas (Backup & Auditoria BSF)
     scheduler = AsyncIOScheduler()
     scheduler.add_job(realizar_backup_agora, 'cron', hour=23, minute=0)
+
+    # Auditoria diária de conformidade e pastas às 08:30
+    async def executar_auditoria_matinal_bsf():
+        try:
+            from app.modules.bahia_sem_fome.services.auditoria_service import executar_auditoria_completa_pastas_locais
+            logging.info("Iniciando auditoria diária matinal das pastas do Bahia Sem Fome (08:30)...")
+            executar_auditoria_completa_pastas_locais(auto_consolidar_acentos=False)
+            logging.info("Auditoria matinal BSF concluída com sucesso.")
+        except Exception as e:
+            logging.error(f"Erro na auditoria matinal BSF: {e}")
+
+    scheduler.add_job(executar_auditoria_matinal_bsf, 'cron', hour=8, minute=30)
     scheduler.start()
-    logging.info("Scheduler de backup iniciado.")
+    logging.info("Scheduler de backup e auditoria BSF iniciado.")
+
+    # Executa uma auditoria inicial em background no startup se local
+    try:
+        asyncio.create_task(executar_auditoria_matinal_bsf())
+    except Exception:
+        pass
     
     from app.services.queue_service import queue_manager
     queue_manager.start()
@@ -312,12 +330,15 @@ from app.modules.bahia_sem_fome.routers import scanner as bsf_scanner  # noqa: E
 from app.modules.bahia_sem_fome import views as bsf_views  # noqa: E402
 from app.modules.bahia_sem_fome.routers import classificador as bsf_classificador
 
+from app.modules.bahia_sem_fome.routers import auditoria as bsf_auditoria  # noqa: E402
+
 app.include_router(bsf_renomeador.router)
 app.include_router(bsf_atestes.router)
 app.include_router(bsf_beneficiarios.router)
 app.include_router(bsf_scanner.router)
 app.include_router(bsf_views.router)
 app.include_router(bsf_classificador.router)
+app.include_router(bsf_auditoria.router)
 
 # Módulo: Projeto P1+2
 from app.modules.p1_plus_2 import views as p12_views  # noqa: E402
