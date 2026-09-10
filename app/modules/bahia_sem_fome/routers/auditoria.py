@@ -6,13 +6,14 @@ deduplicação de diretórios com acentos e cruzamento inteligente com a API Col
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from app.modules.bahia_sem_fome.services.auditoria_service import (
     executar_auditoria_completa_pastas_locais,
     obter_ultimo_snapshot_auditoria,
     consolidar_pastas_duplicadas_segura,
+    consolidar_todas_atividades_divididas,
     get_base_storage_path
 )
 from app.services.coletum_service import auditar_discrepancias_coletum
@@ -43,11 +44,12 @@ async def obter_status_auditoria():
 async def obter_relatorio_auditoria(
     tecnico: Optional[str] = Query(None, description="Filtro por técnico"),
     status: Optional[str] = Query(None, description="Filtro por status (COMPLETO, PENDENTE_ATESTE, PENDENTE_COLETUM, VAZIA)"),
+    atividade: Optional[str] = Query(None, description="Filtro por categoria de atividade (ex: PLANO PRODUTIVO, SOCIOECONOMICO)"),
     apenas_duplicados: bool = Query(False, description="Exibir apenas beneficiários com pastas duplicadas")
 ):
     """
     Retorna o relatório completo de auditoria das pastas locais,
-    com suporte a filtros por técnico e status de conformidade documental.
+    com suporte a filtros por técnico, status de conformidade e categoria de atividade.
     """
     try:
         snapshot = obter_ultimo_snapshot_auditoria()
@@ -56,6 +58,17 @@ async def obter_relatorio_auditoria(
         if tecnico:
             tec_upper = tecnico.upper()
             detalhes = [d for d in detalhes if tec_upper in d.get("tecnico", "").upper()]
+
+        if atividade:
+            ativ_upper = atividade.upper()
+            detalhes_filtrados = []
+            for d in detalhes:
+                atividades = [a for a in d.get("atividades", []) if ativ_upper in a.get("categoria", "").upper() or ativ_upper in a.get("pasta_atividade", "").upper()]
+                if atividades:
+                    d_copy = dict(d)
+                    d_copy["atividades"] = atividades
+                    detalhes_filtrados.append(d_copy)
+            detalhes = detalhes_filtrados
 
         if status:
             status_upper = status.upper()
@@ -132,14 +145,21 @@ async def consolidar_pastas_duplicadas():
                         pastas_consolidadas_total += len(res_ben.get("pastas_removidas", []))
                         arquivos_movidos_total += res_ben.get("arquivos_movidos", 0)
 
+        # 3. Consolida atividades complementares divididas (Ateste em uma pasta e Coletum em outra)
+        res_ativ = consolidar_todas_atividades_divididas(base_path)
+        pastas_consolidadas_total += res_ativ.get("total_pastas_removidas", 0)
+        arquivos_movidos_total += res_ativ.get("total_arquivos_movidos", 0)
+        total_atividades_unificadas = res_ativ.get("total_atividades_mescladas", 0)
+
         # Re-executa auditoria para atualizar snapshot em memória
         executar_auditoria_completa_pastas_locais()
 
         return {
             "status": "sucesso",
-            "mensagem": f"Consolidação concluída. {pastas_consolidadas_total} pastas duplicadas unificadas e {arquivos_movidos_total} arquivos remanejados com segurança.",
+            "mensagem": f"Consolidação concluída com sucesso! {total_atividades_unificadas} atividades unificadas (Ateste + Coletum), {pastas_consolidadas_total} pastas duplicadas removidas e {arquivos_movidos_total} arquivos remanejados.",
             "pastas_removidas": pastas_consolidadas_total,
-            "arquivos_movidos": arquivos_movidos_total
+            "arquivos_movidos": arquivos_movidos_total,
+            "atividades_unificadas": total_atividades_unificadas
         }
     except HTTPException:
         raise
@@ -160,3 +180,61 @@ async def obter_discrepancias_coletum():
     except Exception as e:
         logger.error(f"Erro ao auditar discrepâncias do Coletum: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao cruzar dados com o Coletum: {str(e)}")
+
+
+@router.post("/importar-lote-sigater")
+async def importar_lote_sigater(
+    file: UploadFile = File(...),
+    atividade_padrao: str = Form("PLANO PRODUTIVO")
+):
+    """
+    Recebe um arquivo ZIP ou PDF único do SIGATER, extrai os dados de cada ateste
+    e distribui automaticamente nas pastas dos beneficiários correspondentes.
+    """
+    from app.modules.bahia_sem_fome.services.sigater_service import (
+        processar_pacote_zip_sigater,
+        organizar_ateste_no_disco_local,
+        extrair_metadados_ateste_pdf
+    )
+    try:
+        content = await file.read()
+        nome = file.filename.lower()
+
+        if nome.endswith('.zip'):
+            res = processar_pacote_zip_sigater(content, atividade_padrao=atividade_padrao)
+        elif nome.endswith('.pdf'):
+            meta = extrair_metadados_ateste_pdf(content, file.filename)
+            res_item = organizar_ateste_no_disco_local(
+                pdf_bytes=content,
+                nome_beneficiario=meta["beneficiario"],
+                comunidade=meta["comunidade"],
+                tecnico=meta["tecnico"],
+                data_atividade=meta["data"],
+                atividade_nome=meta["atividade"] or atividade_padrao
+            )
+            res = {
+                "sucesso": True,
+                "total_processados": 1,
+                "total_erros": 0,
+                "processados": [res_item],
+                "erros": []
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Formato não suportado. Envie um arquivo .ZIP ou .PDF.")
+
+        # Re-executa a auditoria para atualizar os cards imediatamente
+        executar_auditoria_completa_pastas_locais()
+
+        return {
+            "status": "sucesso",
+            "mensagem": f"Importação concluída: {res.get('total_processados', 0)} atestes organizados nas pastas locais com sucesso.",
+            "total_processados": res.get("total_processados", 0),
+            "total_erros": res.get("total_erros", 0),
+            "erros": res.get("erros", [])
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao importar lote do SIGATER: {e}")
+        raise HTTPException(status_code=500, detail=f"Falha no processamento do lote: {str(e)}")
+

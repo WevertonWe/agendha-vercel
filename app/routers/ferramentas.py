@@ -11,7 +11,7 @@ try:
 except ImportError:
     fitz = None
 
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 router = APIRouter(tags=["Ferramentas"])
 

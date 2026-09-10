@@ -20,6 +20,7 @@ if sys.platform == "win32":
 
 
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
 
@@ -156,7 +157,7 @@ async def lifespan(app: FastAPI):
         try:
             from app.modules.bahia_sem_fome.services.auditoria_service import executar_auditoria_completa_pastas_locais
             logging.info("Iniciando auditoria diária matinal das pastas do Bahia Sem Fome (08:30)...")
-            executar_auditoria_completa_pastas_locais(auto_consolidar_acentos=False)
+            await asyncio.to_thread(executar_auditoria_completa_pastas_locais, auto_consolidar_acentos=False)
             logging.info("Auditoria matinal BSF concluída com sucesso.")
         except Exception as e:
             logging.error(f"Erro na auditoria matinal BSF: {e}")
@@ -165,7 +166,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logging.info("Scheduler de backup e auditoria BSF iniciado.")
 
-    # Executa uma auditoria inicial em background no startup se local
+    # Executa uma auditoria inicial em background no startup se local (sem travar o boot)
     try:
         asyncio.create_task(executar_auditoria_matinal_bsf())
     except Exception:

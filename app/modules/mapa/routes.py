@@ -19,7 +19,9 @@ router = APIRouter(prefix="/api/mapa", tags=["Mapa"])
 view_router = APIRouter(include_in_schema=False)
 
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+from app.core.auth.utils import get_user_context_from_request
+
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 
 # --- Auth Helper ---
@@ -40,7 +42,9 @@ def get_user_auth(request: Request) -> Optional[str]:
         return None
 
     if token.startswith(f"{settings.AUTH_BEARER_PREFIX} "):
-        token = token.split(" ")[1]
+        token = token[len(settings.AUTH_BEARER_PREFIX) + 1:].strip()
+    elif token.startswith("Bearer "):
+        token = token[7:].strip()
 
     try:
         from app.core.auth.utils import SECRET_KEY, ALGORITHM
@@ -63,26 +67,8 @@ def get_user_role(username: str) -> Optional[str]:
         return None
 
 async def get_map_user_context(request: Request):
-    is_admin = False
-    user_username = "Anônimo"
-    token = request.cookies.get("access_token")
-    if token:
-        try:
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-            from jose import jwt
-            from app.core.auth.utils import SECRET_KEY, ALGORITHM
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            user_username = payload.get("sub", "Anônimo")
-            
-            from app.core.database import get_supabase
-            supabase = get_supabase()
-            res_user = supabase.table('users').select('role').eq('username', user_username).execute()
-            if res_user.data and res_user.data[0].get('role') == 'admin':
-                is_admin = True
-        except Exception:
-            pass
-    return {"is_admin": is_admin, "user_username": user_username}
+    return get_user_context_from_request(request, default_context_project="mapa")
+
 
 # --- Views ---
 

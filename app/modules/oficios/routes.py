@@ -10,7 +10,7 @@ from app.modules.oficios import services
 
 router = APIRouter(prefix="/oficios", tags=["Ofícios"])
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 
 def date_br_filter(value):

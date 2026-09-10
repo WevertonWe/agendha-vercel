@@ -231,6 +231,49 @@ def run_all_tests():
 
     test("Cruzamento Coletum v2 com Detecção de Discrepâncias de Nomes e Datas", test_cruzamento_coletum_discrepancias)
 
+    # 9. Testes de Extração e Padronização de Categorias de Atividades
+    def test_extracao_categoria_atividade():
+        from app.modules.bahia_sem_fome.services.auditoria_service import extrair_categoria_atividade
+        assert extrair_categoria_atividade("23.10.2025 - PLANO PRODUTIVO") == "PLANO PRODUTIVO"
+        assert extrair_categoria_atividade("24.07.2025 - SOCIOECONOMICO") == "SOCIOECONÔMICO"
+        assert extrair_categoria_atividade("10.09.2025 - CARACTERIZAÇÃO I") == "CARACTERIZAÇÃO"
+        assert extrair_categoria_atividade("07.07.2026 - VISITA TÉCNICA AVALIATIVA") == "VISITA TÉCNICA AVALIATIVA"
+        assert extrair_categoria_atividade("18.06.2026 - VISITA TECNICA") == "VISITA TÉCNICA"
+        assert extrair_categoria_atividade("CADASTRO DO GRUPO FAMILIAR") == "CADASTRO GRUPO FAMILIAR"
+    test("Extração e Padronização de Categorias de Atividades", test_extracao_categoria_atividade)
+
+    # 10. Testes de Organização em Disco de Atestes do SIGATER
+    def test_sigater_organizacao_disco():
+        from app.modules.bahia_sem_fome.services.sigater_service import (
+            extrair_metadados_ateste_pdf,
+            organizar_ateste_no_disco_local
+        )
+        temp_dir = Path(tempfile.mkdtemp(prefix="test_sigater_"))
+        try:
+            # Simula um arquivo de Ateste em PDF bytes
+            dummy_pdf = b"%PDF-1.4 Mock Ateste Content"
+            res = organizar_ateste_no_disco_local(
+                pdf_bytes=dummy_pdf,
+                nome_beneficiario="ADENILSA LAURINDA DA SILVA",
+                comunidade="ALDEIA TUXI",
+                tecnico="caroline",
+                data_atividade="23/10/2025",
+                atividade_nome="PLANO PRODUTIVO",
+                base_storage_dir=temp_dir
+            )
+            assert res["status"] == "sucesso"
+            assert res["beneficiario"] == "ADENILSA LAURINDA DA SILVA"
+            assert res["atividade"] == "PLANO PRODUTIVO"
+            
+            # Valida se o arquivo físico foi criado no padrão de diretórios
+            pasta_criada = temp_dir / "caroline" / "documentos-atividades" / "ALDEIA TUXI" / "ADENILSA LAURINDA DA SILVA"
+            assert pasta_criada.exists()
+            arquivos_pdf = list(pasta_criada.glob("**/*ATEST*.pdf"))
+            assert len(arquivos_pdf) >= 1
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    test("Organização e Roteamento Automático de Atestes SIGATER no Disco", test_sigater_organizacao_disco)
+
     print("=" * 70)
     print(f"📊 RESUMO DOS TESTES: {sucessos} Passaram, {falhas} Falharam.")
     print("=" * 70)

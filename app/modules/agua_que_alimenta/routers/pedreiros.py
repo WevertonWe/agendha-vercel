@@ -14,7 +14,7 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/pedreiros", tags=["Pedreiros"])
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 
 @router.get("", response_model=List[Pedreiro])

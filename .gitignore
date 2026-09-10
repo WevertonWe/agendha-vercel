@@ -20,6 +20,8 @@ temp/
 temp_downloads/
 backups/
 prints_erros/
+/*.xlsx
+/*.csv
 
 # --- IDEs ---
 .vscode/

@@ -91,35 +91,70 @@ async def listar_formularios_coletum() -> List[Dict[str, Any]]:
             return []
 
 
-async def buscar_respostas_formulario(form_id: str, limit: int = 200) -> List[Dict[str, Any]]:
-    """Busca as respostas submetidas para um formulário específico no Coletum."""
+async def buscar_respostas_formulario(form_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    """
+    Busca todas as respostas submetidas para um formulário no Coletum,
+    paginando automaticamente até obter 100% dos dados.
+    """
     headers = {
         "Token": COLETUM_TOKEN,
         "Accept": "application/json"
     }
-    url = f"{BASE_URL_V2}/forms/{form_id}/answers?limit={limit}"
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    todas_respostas = []
+    page = 1
+
+    async with httpx.AsyncClient(timeout=40.0) as client:
         try:
-            response = await client.get(url, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("data", [])
-            else:
-                logger.error(f"Erro ao buscar respostas do formulário {form_id}: HTTP {response.status_code}")
-                return []
+            while True:
+                url = f"{BASE_URL_V2}/forms/{form_id}/answers?page={page}&limit=100"
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("data", [])
+                    if not items:
+                        break
+                    todas_respostas.extend(items)
+                    if len(items) < 100 or len(todas_respostas) >= limit:
+                        break
+                    page += 1
+                else:
+                    logger.error(f"Erro ao buscar respostas do formulário {form_id} (página {page}): HTTP {response.status_code}")
+                    break
+            return todas_respostas
         except Exception as e:
             logger.error(f"Exceção ao buscar respostas do Coletum {form_id}: {e}")
-            return []
+            return todas_respostas
+
+
+def extrair_todos_campos_recursivo(obj: Any, prefix: str = "") -> Dict[str, Any]:
+    """Varre recursivamente dicionários e listas aninhadas do Coletum."""
+    campos = {}
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            k_limpo = re.sub(r"\d+$", "", str(k)).strip().lower()
+            novo_prefixo = f"{prefix}.{k_limpo}" if prefix else k_limpo
+            if isinstance(v, (dict, list)):
+                campos.update(extrair_todos_campos_recursivo(v, novo_prefixo))
+            else:
+                campos[novo_prefixo] = v
+    elif isinstance(obj, list):
+        for idx, item in enumerate(obj):
+            if isinstance(item, (dict, list)):
+                campos.update(extrair_todos_campos_recursivo(item, f"{prefix}[{idx}]"))
+    return campos
 
 
 def extrair_metadados_resposta_coletum(resposta_raw: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extrai de forma resiliente os campos-chave (Nome, CPF, Data, Técnico, Município)
-    a partir da estrutura dinâmica de resposta da API Coletum.
+    a partir da estrutura dinâmica de resposta aninhada da API Coletum v2.
     """
     ans = resposta_raw.get("answer", {}) or {}
-    ans_id = resposta_raw.get("id") or resposta_raw.get("code") or "N/A"
-    data_envio = resposta_raw.get("created_at") or resposta_raw.get("updated_at") or ""
+    meta_info = resposta_raw.get("meta_data", {}) or {}
+    ans_id = str(resposta_raw.get("id") or resposta_raw.get("code") or "N/A")
+    data_envio = meta_info.get("created_at") or resposta_raw.get("created_at") or ""
+
+    campos_achatados = extrair_todos_campos_recursivo(ans)
 
     nome_benef = ""
     cpf_benef = ""
@@ -128,31 +163,52 @@ def extrair_metadados_resposta_coletum(resposta_raw: Dict[str, Any]) -> Dict[str
     tecnico = ""
     data_atividade = ""
 
-    # Varre as chaves do dicionário de respostas de forma normalizada (sem acento)
-    for k, v in ans.items():
-        k_norm = normalizar_texto_comparacao(str(k))
-        v_str = str(v).strip()
+    for chave, valor in campos_achatados.items():
+        if valor is None or str(valor).strip() in ("", "."):
+            continue
+        v_str = str(valor).strip()
+        ch_norm = normalizar_texto_comparacao(chave)
 
-        # Nome
-        if any(term in k_norm for term in ["NOME DO BENEFICI", "BENEFICIARIO", "NOME COMPLETO", "NOME"]) and not nome_benef:
-            if "TECNICO" not in k_norm:
+        # 1. Nome do Beneficiário
+        if any(term in ch_norm for term in ["NOME TITULAR", "NOME BENEFICIARIO", "NOME8", "NOME DO BENEFICIARIO", "NOME COMPLETO", "NOME GRUPO FAMILIAR"]) and not nome_benef:
+            if "TECNICO" not in ch_norm:
                 nome_benef = v_str
-        # CPF
-        if "CPF" in k_norm and not cpf_benef:
-            if "TECNICO" not in k_norm:
-                cpf_benef = normalizar_cpf_comparacao(v_str)
-        # Município
-        if "MUNICIPIO" in k_norm or "CIDADE" in k_norm:
-            municipio = v_str
-        # Comunidade
-        if "COMUNIDADE" in k_norm or "LOCALIDADE" in k_norm:
-            comunidade = v_str
-        # Técnico
-        if any(term in k_norm for term in ["TECNICO", "RESPONSAVEL"]):
+        elif ("NOME" in ch_norm and "TECNICO" not in ch_norm and "MAE" not in ch_norm and "CONJUGE" not in ch_norm) and not nome_benef:
+            if len(v_str.split()) >= 2 and not any(char.isdigit() for char in v_str):
+                nome_benef = v_str
+
+        # 2. CPF do Beneficiário
+        if any(term in ch_norm for term in ["CPF", "CPF TITULAR", "CPF DO TITULAR", "CPF BENEFICIARIO", "CPF RESPONSAVEL"]) and not cpf_benef:
+            if "TECNICO" not in ch_norm:
+                m_cpf = re.search(r"(\d{3}\.?\d{3}\.?\d{3}\-?\d{2}|\d{11})", v_str)
+                if m_cpf:
+                    cpf_benef = normalizar_cpf_comparacao(m_cpf.group(1))
+                else:
+                    cpf_limpo = normalizar_cpf_comparacao(v_str)
+                    if len(cpf_limpo) == 11:
+                        cpf_benef = cpf_limpo
+
+        # 3. Técnico
+        if any(term in ch_norm for term in ["NOME DOA TECNICOA", "TECNICO RESPONSAVEL", "TECNICO"]):
             tecnico = v_str
-        # Data
-        if any(term in k_norm for term in ["DATA DA ATIVIDADE", "DATA ATIVIDADE", "DATA REALIZACAO", "DATA"]):
-            data_atividade = extrair_data_coletum(v_str) or v_str
+
+        # 4. Data
+        if any(term in ch_norm for term in ["DATA DA REALIZACAO", "DATA ATIVIDADE", "DATA VISITA", "DATA"]) and not data_atividade:
+            m_dt = re.search(r"(\d{4})[-/](\d{2})[-/](\d{2})", v_str)
+            if m_dt:
+                y, m, d = m_dt.groups()
+                data_atividade = f"{d}/{m}/{y}"
+            else:
+                data_atividade = extrair_data_coletum(v_str) or v_str
+
+        # 5. Comunidade / Município
+        if "COMUNIDADE" in ch_norm and not comunidade:
+            comunidade = v_str
+        if ("MUNICIPIO" in ch_norm or "CIDADE" in ch_norm) and not municipio:
+            municipio = re.sub(r"-\d+$", "", v_str).strip()
+
+    if not tecnico and meta_info.get("created_by_user_name"):
+        tecnico = meta_info["created_by_user_name"]
 
     return {
         "coletum_id": ans_id,
@@ -171,14 +227,14 @@ async def auditar_discrepancias_coletum(
     beneficiarios_bd: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
-    Executa o cruzamento completo entre a API Coletum e os beneficiários cadastrados.
+    Executa o cruzamento completo entre a API Coletum e os 490 beneficiários cadastrados.
     Classifica divergências em:
     - SINCRONIZADO (100% match)
     - ATENCAO_REVISAO_MANUAL (70% - 99% similaridade ou variação de nome)
     - AVISO_DATA_DIVERGENTE (data diferente da esperada / ateste)
     - BENEFICIARIO_NAO_ENCONTRADO (< 70% match)
     """
-    # 1. Carrega beneficiários do banco se não fornecidos
+    # 1. Carrega beneficiários do banco ou catálogo local se não fornecidos
     if beneficiarios_bd is None:
         try:
             supabase = get_supabase()
@@ -187,6 +243,22 @@ async def auditar_discrepancias_coletum(
         except Exception as e:
             logger.warning(f"Não foi possível buscar beneficiários no Supabase: {e}")
             beneficiarios_bd = []
+
+        # Fallback automático para as 490 pastas de técnicos se o banco estiver desatualizado
+        if not beneficiarios_bd:
+            from app.modules.bahia_sem_fome.services.sigater_service import carregar_mapa_beneficiarios_reais
+            cat = carregar_mapa_beneficiarios_reais()
+            beneficiarios_bd = [
+                {
+                    "id": idx + 1,
+                    "nome_completo": info["nome_original"],
+                    "cpf": "",
+                    "comunidade": info["comunidade"],
+                    "nome_tecnico": info["tecnico"],
+                    "data_atividade": ""
+                }
+                for idx, info in enumerate(cat.values())
+            ]
 
     # Cria índice por CPF e mapa normalizado de nomes
     mapa_cpf: Dict[str, Dict[str, Any]] = {}

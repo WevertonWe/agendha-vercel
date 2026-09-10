@@ -36,7 +36,10 @@ def get_db_connection(request=None):
     import sqlite3
     try:
         from app.database.wrapper import AuditConnection
-        conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), check_same_thread=False)
+        conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), timeout=30.0, check_same_thread=False)
+        conexao.execute("PRAGMA journal_mode = WAL")
+        conexao.execute("PRAGMA busy_timeout = 5000")
+        conexao.execute("PRAGMA synchronous = NORMAL")
         conexao.execute("PRAGMA foreign_keys = ON")
         conexao.row_factory = sqlite3.Row
     except Exception as e:
@@ -117,7 +120,10 @@ def init_db():
     DB_PATH_FIX = os.path.join(os.getcwd(), "agendha.db")
     logging.info(f"Inicializando banco de dados local em: {DB_PATH_FIX}")
     
-    conn = sqlite3.connect(DB_PATH_FIX)
+    conn = sqlite3.connect(DB_PATH_FIX, timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = OFF")
     cursor = conn.cursor()
 
@@ -711,7 +717,10 @@ def _get_sqlite_conn():
                     pass
     import sqlite3
     db_path = os.path.join(os.getcwd(), "agendha.db")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.row_factory = sqlite3.Row
     return conn
 

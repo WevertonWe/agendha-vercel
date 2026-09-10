@@ -4,9 +4,11 @@ from fastapi.templating import Jinja2Templates
 from app.core.database import get_supabase
 import logging
 
+from app.core.auth.utils import get_user_context_from_request
+
 router = APIRouter(prefix="/projetos", tags=["Projetos"])
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 
 # Mapping slugs to display names
@@ -21,26 +23,15 @@ PROJECTS_INFO = {
 
 @router.get("/{projeto_slug}", response_class=HTMLResponse)
 async def get_projeto_page(request: Request, projeto_slug: str):
-    username = "Anônimo"
-    token = request.cookies.get("access_token")
-    if token:
-        try:
-            if token.startswith("Bearer "):
-                token = token.split(" ")[1]
-            from app.core.auth.utils import SECRET_KEY, ALGORITHM
-            from jose import jwt
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username = payload.get("sub", "Anônimo")
-        except:  # noqa: E722
-            pass
-
+    ctx = get_user_context_from_request(request)
     project_name = PROJECTS_INFO.get(projeto_slug, "Projeto Desconhecido")
     
     return templates.TemplateResponse("projetos/projeto_base.html", {
         "request": request,
         "projeto_slug": projeto_slug,
         "projeto_name": project_name,
-        "user_username": username
+        "user_username": ctx.get("user_username", "Anônimo"),
+        **ctx
     })
 
 @router.get("/admin/sugestoes", response_class=HTMLResponse)

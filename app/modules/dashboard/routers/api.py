@@ -1,19 +1,24 @@
+import time
 from fastapi import APIRouter
 from typing import Dict, Any
 from app.core.database import fetch_all
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
+_DASHBOARD_CACHE: Dict[str, Any] = {"timestamp": 0, "data": None}
+_CACHE_TTL_SECONDS = 20
+
 @router.get("/resumo", response_model=Dict[str, Any])
-async def get_dashboard_summary():
+def get_dashboard_summary():
     """
     Retorna métricas consolidadas para o Dashboard Executivo.
-    - BSF: Visitas Realizadas vs Meta Total
-    - AQA: Total de Beneficiários Cadastrados
-    - Financeiro: Total Executado
-    - Ofícios: Total de Ofícios Registrados
-    - Biomas: Consolidação dos Biomas (Soma Real)
+    - Executado em ThreadPool para não bloquear o Event Loop.
+    - Cache em memória de 20s para máxima velocidade entre abas.
     """
+    now = time.time()
+    if _DASHBOARD_CACHE["data"] and (now - _DASHBOARD_CACHE["timestamp"]) < _CACHE_TTL_SECONDS:
+        return _DASHBOARD_CACHE["data"]
+
     # 1. BSF: Visitas Realizadas vs Meta
     visitas = fetch_all('bsf_visitas')
     bsf_realizado = len([v for v in visitas if str(v.get('status') or '').strip().lower() == 'realizada'])
@@ -63,7 +68,7 @@ async def get_dashboard_summary():
     p12_exec = sum(int(c.get('qtd_executada') or 0) for c in p12_cronograma)
     p12_percent = round((p12_exec / p12_meta * 100), 1) if p12_meta > 0 else 0.0
 
-    return {
+    res = {
         "bsf": {
             "realizado": int(bsf_realizado),
             "meta": int(bsf_meta),
@@ -89,5 +94,10 @@ async def get_dashboard_summary():
             "beneficiarios": int(biomas_beneficiarios)
         }
     }
+
+    _DASHBOARD_CACHE["timestamp"] = time.time()
+    _DASHBOARD_CACHE["data"] = res
+    return res
+
 
 

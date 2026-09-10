@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 
 router = APIRouter(tags=["Dashboard Views"])
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 
 @router.get("/dashboard", response_class=HTMLResponse)

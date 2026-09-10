@@ -3,18 +3,23 @@ BSF Beneficiários - API Router
 Endpoints para listagem, filtros e preparação de arquivos do módulo BSF.
 """
 import logging
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
-from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+import urllib.parse
+import re
+import difflib
 import io
 import csv
 import os
 import unicodedata
 
+from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
+from fastapi.responses import JSONResponse, FileResponse
+from pydantic import BaseModel
+
 from app.core.database import get_supabase
 from app.services.utils import limpar_cpf
+from app.services.scanner_service import get_base_storage_path
 
 class BeneficiarioBSFCreate(BaseModel):
     nome_completo: str
@@ -193,33 +198,50 @@ def parse_links_safe(paths, supabase, context_info: str = "") -> list:
 
 @router.get("")
 async def listar_beneficiarios(
+    busca: Optional[str] = Query(None, description="Busca textual por nome, CPF ou comunidade"),
+    nome: Optional[str] = Query(None, description="Filtro por nome do beneficiário"),
     tecnico: Optional[str] = Query(None, description="Filtro por técnico responsável"),
     municipio: Optional[str] = Query(None, description="Filtro por município"),
     status: Optional[str] = Query(None, description="Filtro por status"),
     page: int = Query(1, ge=1, description="Página atual"),
     page_size: int = Query(50, ge=1, le=200, description="Itens por página"),
 ):
-    """Lista beneficiários com filtros opcionais por técnico e município."""
+    """Lista beneficiários com busca inteligente por nome, CPF e filtros por técnico, município e status."""
     try:
         supabase = get_supabase()
         
         cols = (
             "id, nome_completo, cpf, caf, nis, municipio, comunidade, "
             "nome_tecnico, tecnico_agua_que_alimenta, status, "
-            "verificado_bsf, data_atividade, projeto"
+            "verificado_bsf, data_atividade, projeto, codigo_plano"
         )
         
         query = supabase.table("beneficiarios").select(cols, count="exact").eq("projeto", "Bahia Sem Fome")
         
-        if tecnico:
-            query = query.ilike("nome_tecnico", f"%{tecnico}%")
-        if municipio:
-            query = query.ilike("municipio", f"%{municipio}%")
-        if status:
-            query = query.ilike("status", f"%{status}%")
+        # Filtro de Busca Textual (Nome, CPF, Comunidade, CAF)
+        termo_busca = (busca or nome or "").strip()
+        if termo_busca:
+            digs = re.sub(r"\D", "", termo_busca)
+            filtros_or = [
+                f"nome_completo.ilike.%{termo_busca}%",
+                f"cpf.ilike.%{termo_busca}%",
+                f"comunidade.ilike.%{termo_busca}%",
+                f"caf.ilike.%{termo_busca}%"
+            ]
+            if len(digs) == 11:
+                cpf_fmt = f"{digs[:3]}.{digs[3:6]}.{digs[6:9]}-{digs[9:]}"
+                filtros_or.append(f"cpf.ilike.%{cpf_fmt}%")
+            elif len(digs) >= 3:
+                filtros_or.append(f"cpf.ilike.%{digs}%")
+                
+            query = query.or_(",".join(filtros_or))
         
-        # BSF filter: only verified beneficiaries if needed
-        # query = query.not_.is_("verificado_bsf", "null")
+        if tecnico:
+            query = query.ilike("nome_tecnico", f"%{tecnico.strip()}%")
+        if municipio:
+            query = query.ilike("municipio", f"%{municipio.strip()}%")
+        if status:
+            query = query.ilike("status", f"%{status.strip()}%")
         
         offset = (page - 1) * page_size
         query = query.range(offset, offset + page_size - 1)
@@ -274,6 +296,51 @@ async def obter_filtros():
         raise HTTPException(status_code=500, detail="Erro ao buscar filtros.")
 
 
+@router.get("/documento-local")
+async def obter_documento_local(
+    caminho: str = Query(..., description="Caminho relativo do arquivo PDF na pasta de técnicos"),
+    download: bool = Query(False, description="Forçar download do arquivo")
+):
+    """Serve de forma segura arquivos locais (PDFs) para visualização inline ou download."""
+    try:
+        base_dir = get_base_storage_path().resolve()
+        caminho_decodificado = urllib.parse.unquote(caminho).strip().replace("\\", "/").lstrip("/")
+        
+        # Resolver caminho absoluto seguro
+        caminho_completo = (base_dir / caminho_decodificado).resolve()
+        
+        # Proteção estrita contra Path Traversal
+        if not str(caminho_completo).startswith(str(base_dir)):
+            raise HTTPException(status_code=403, detail="Acesso negado: Caminho fora do diretório autorizado.")
+            
+        if not caminho_completo.exists() or not caminho_completo.is_file():
+            raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado no servidor.")
+            
+        ext = caminho_completo.suffix.lower()
+        media_types = {
+            ".pdf": "application/pdf",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg"
+        }
+        media_type = media_types.get(ext, "application/pdf")
+        disposition_type = "attachment" if download else "inline"
+        filename = caminho_completo.name
+        
+        headers = {
+            "Content-Disposition": f'{disposition_type}; filename="{filename}"',
+            "Cache-Control": "public, max-age=3600"
+        }
+        
+        return FileResponse(path=caminho_completo, media_type=media_type, headers=headers)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao servir documento local '{caminho}': {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao abrir o documento.")
+
+
 @router.get("/{beneficiario_id}")
 async def detalhar_beneficiario(beneficiario_id: int):
     """Retorna os dados completos de um beneficiário específico."""
@@ -293,26 +360,226 @@ async def detalhar_beneficiario(beneficiario_id: int):
         raise HTTPException(status_code=500, detail="Erro ao buscar beneficiário.")
 
 
+def _normalizar_para_busca(texto: str) -> str:
+    if not texto:
+        return ""
+    nfkd = unicodedata.normalize('NFKD', str(texto))
+    s = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    return re.sub(r'[^A-Z0-9]', '', s.upper())
+
+
+def escanear_atividades_locais_beneficiario(
+    beneficiario_id: int,
+    nome_beneficiario: str,
+    nome_tecnico: Optional[str] = None,
+    comunidade: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Escanear a pasta física do beneficiário e extrair todas as atividades com seus PDFs correspondentes."""
+    base_dir = get_base_storage_path()
+    if not base_dir.exists():
+        return []
+        
+    norm_nome = _normalizar_para_busca(nome_beneficiario)
+    if not norm_nome:
+        return []
+        
+    pasta_beneficiario = None
+    
+    # 1. Tentar busca direcionada pelo técnico se informado
+    pastas_alvo = []
+    if nome_tecnico:
+        norm_tec = _normalizar_para_busca(nome_tecnico)
+        for t in base_dir.iterdir():
+            if t.is_dir() and _normalizar_para_busca(t.name) in norm_tec or norm_tec in _normalizar_para_busca(t.name):
+                pastas_alvo.append(t)
+                
+    if not pastas_alvo:
+        pastas_alvo = [t for t in base_dir.iterdir() if t.is_dir() and not t.name.startswith("_")]
+        
+    for p_tec in pastas_alvo:
+        doc_ativ = p_tec / "documentos-atividades"
+        alvo = doc_ativ if doc_ativ.exists() else p_tec
+        
+        for root_dir, dirs, files in os.walk(str(alvo)):
+            for d in dirs:
+                if _normalizar_para_busca(d) == norm_nome:
+                    pasta_beneficiario = Path(root_dir) / d
+                    break
+            if pasta_beneficiario:
+                break
+        if pasta_beneficiario:
+            break
+            
+    # Fallback: fuzzy search em todas as pastas se match exato falhar
+    if not pasta_beneficiario:
+        melhor_ratio = 0
+        for p_tec in [t for t in base_dir.iterdir() if t.is_dir() and not t.name.startswith("_")]:
+            doc_ativ = p_tec / "documentos-atividades"
+            alvo = doc_ativ if doc_ativ.exists() else p_tec
+            for root_dir, dirs, files in os.walk(str(alvo)):
+                for d in dirs:
+                    d_norm = _normalizar_para_busca(d)
+                    if d_norm:
+                        r = difflib.SequenceMatcher(None, norm_nome, d_norm).ratio()
+                        if r > melhor_ratio and r >= 0.85:
+                            melhor_ratio = r
+                            pasta_beneficiario = Path(root_dir) / d
+                            
+    if not pasta_beneficiario or not pasta_beneficiario.exists():
+        return []
+        
+    atividades = []
+    subpastas = [s for s in pasta_beneficiario.iterdir() if s.is_dir()]
+    
+    for idx, sub in enumerate(sorted(subpastas, key=lambda x: x.name)):
+        nome_pasta = sub.name
+        data_str = None
+        tipo_str = nome_pasta
+        
+        m_data = re.search(r'(\d{2})[.\-\/](\d{2})[.\-\/](\d{4})', nome_pasta)
+        if m_data:
+            dia, mes, ano = m_data.groups()
+            data_str = f"{ano}-{mes}-{dia}"
+            tipo_str = re.sub(r'^\d{2}[.\-\/]\d{2}[.\-\/]\d{4}\s*[\-\_]?\s*', '', nome_pasta).strip()
+        else:
+            m_data_iso = re.search(r'(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})', nome_pasta)
+            if m_data_iso:
+                ano, mes, dia = m_data_iso.groups()
+                data_str = f"{ano}-{mes}-{dia}"
+                tipo_str = re.sub(r'^\d{4}[.\-\/]\d{2}[.\-\/]\d{2}\s*[\-\_]?\s*', '', nome_pasta).strip()
+                
+        tipo_limpo = tipo_str.upper()
+        if "SOCIO" in tipo_limpo:
+            tipo_display = "Socioeconômico"
+        elif "CARACTER" in tipo_limpo:
+            tipo_display = "Caracterização"
+        elif "PLANO" in tipo_limpo:
+            tipo_display = "Plano Produtivo"
+        elif "VISITA" in tipo_limpo:
+            tipo_display = "Visita Técnica"
+        elif "CADASTRO" in tipo_limpo:
+            tipo_display = "Cadastro Familiar"
+        else:
+            tipo_display = tipo_str.title() if tipo_str else "Atividade"
+            
+        arquivos = []
+        links_ateste = []
+        links_colletum = []
+        links_sigater = []
+        
+        for f in sorted(sub.iterdir()):
+            if f.is_file() and f.suffix.lower() == '.pdf':
+                rel_path = str(f.relative_to(base_dir)).replace("\\", "/")
+                url_doc = f"/api/bsf/beneficiarios/documento-local?caminho={urllib.parse.quote(rel_path)}"
+                f_upper = f.name.upper()
+                
+                doc_type = "outro"
+                if "ATEST" in f_upper:
+                    doc_type = "ateste"
+                    links_ateste.append(url_doc)
+                elif "COLLETUM" in f_upper or "COLETUM" in f_upper:
+                    doc_type = "colletum"
+                    links_colletum.append(url_doc)
+                elif "SIGATER" in f_upper:
+                    doc_type = "sigater"
+                    links_sigater.append(url_doc)
+                else:
+                    links_ateste.append(url_doc)
+                    
+                arquivos.append({
+                    "nome": f.name,
+                    "tamanho": f.stat().st_size,
+                    "tipo": doc_type,
+                    "url": url_doc,
+                    "caminho_relativo": rel_path
+                })
+                
+        status_conf = "COMPLETO" if (links_ateste and links_colletum) else ("PENDENTE_COLETUM" if links_ateste else "PENDENTE_ATESTE")
+        
+        atividades.append({
+            "id": f"local_{idx + 1}",
+            "tipo_atividade": tipo_display,
+            "data": data_str,
+            "data_atividade": data_str,
+            "link_ateste": links_ateste,
+            "link_colletum": links_colletum,
+            "link_sigater": links_sigater,
+            "iniciativas_vinculadas": [],
+            "arquivos": arquivos,
+            "origem": "pasta_local",
+            "status_conformidade": status_conf,
+            "tem_ateste": len(links_ateste) > 0,
+            "tem_colletum": len(links_colletum) > 0
+        })
+        
+    return atividades
+
+
 @router.get("/{beneficiario_id}/atividades")
 async def listar_atividades_beneficiario(beneficiario_id: int):
-    """Retorna as atividades associadas a um beneficiário."""
+    """Retorna as atividades associadas a um beneficiário (do banco e/ou sincronizadas das pastas físicas locais)."""
     try:
         supabase = get_supabase()
-        res = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data_atividade", desc=True).execute()
         
-        # Parse arrays if they are returned as None
-        atividades = res.data or []
-        for a in atividades:
+        # 1. Obter dados cadastrais do beneficiário
+        res_ben = supabase.table("beneficiarios").select("id, nome_completo, nome_tecnico, comunidade").eq("id", beneficiario_id).execute()
+        ben = res_ben.data[0] if res_ben.data else None
+        
+        # 2. Buscar atividades cadastradas no banco
+        res_db = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data_atividade", desc=True).execute()
+        atividades_db = res_db.data or []
+        
+        # 3. Buscar atividades das pastas físicas locais
+        atividades_locais = []
+        if ben and ben.get("nome_completo"):
+            atividades_locais = escanear_atividades_locais_beneficiario(
+                beneficiario_id=beneficiario_id,
+                nome_beneficiario=ben["nome_completo"],
+                nome_tecnico=ben.get("nome_tecnico"),
+                comunidade=ben.get("comunidade")
+            )
+            
+        # 4. Combinar e consolidar (se o banco estiver vazio ou para enriquecer atividades com arquivos locais)
+        if not atividades_db and atividades_locais:
+            return atividades_locais
+            
+        if atividades_db and atividades_locais:
+            # Enriquecer atividades do banco com links locais se estiverem sem link
+            for adb in atividades_db:
+                adb["link_sigater"] = parse_links_safe(adb.get("link_sigater"), supabase)
+                adb["link_colletum"] = parse_links_safe(adb.get("link_colletum"), supabase)
+                adb["link_ateste"] = parse_links_safe(adb.get("link_ateste"), supabase)
+                adb["data"] = adb.get("data_atividade")
+                adb["iniciativas_vinculadas"] = adb.get("iniciativas_vinculadas") or []
+                
+                for aloc in atividades_locais:
+                    if (adb.get("tipo_atividade") or "").upper() in (aloc.get("tipo_atividade") or "").upper() or (aloc.get("tipo_atividade") or "").upper() in (adb.get("tipo_atividade") or "").upper():
+                        if not adb["link_ateste"] and aloc.get("link_ateste"):
+                            adb["link_ateste"] = aloc["link_ateste"]
+                        if not adb["link_colletum"] and aloc.get("link_colletum"):
+                            adb["link_colletum"] = aloc["link_colletum"]
+                        if not adb["link_sigater"] and aloc.get("link_sigater"):
+                            adb["link_sigater"] = aloc["link_sigater"]
+                        if not adb.get("arquivos") and aloc.get("arquivos"):
+                            adb["arquivos"] = aloc.get("arquivos")
+                            
+            tipos_db = [(a.get("tipo_atividade") or "").upper() for a in atividades_db]
+            for aloc in atividades_locais:
+                if (aloc.get("tipo_atividade") or "").upper() not in tipos_db:
+                    atividades_db.append(aloc)
+                    
+            return atividades_db
+            
+        for a in atividades_db:
             context = f"da atividade {a.get('id')} do beneficiário {beneficiario_id}"
             a["link_sigater"] = parse_links_safe(a.get("link_sigater"), supabase, f"sigater {context}")
             a["link_colletum"] = parse_links_safe(a.get("link_colletum"), supabase, f"colletum {context}")
             a["link_ateste"] = parse_links_safe(a.get("link_ateste"), supabase, f"ateste {context}")
-            
-            # Retrocompatibilidade no response para o frontend (que lê atv.data e iniciativas_vinculadas)
             a["data"] = a.get("data_atividade")
             a["iniciativas_vinculadas"] = a.get("iniciativas_vinculadas") or []
             
-        return atividades
+        return atividades_db
+        
     except Exception as e:
         logger.error(f"Erro ao listar atividades {beneficiario_id}: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar atividades.")
@@ -1406,4 +1673,216 @@ async def importar_iniciativas(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Erro ao importar Passo 4: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+def _obter_mapa_planilha_oficial() -> Dict[str, Dict[str, Any]]:
+    csv_map = {}
+    caminhos_tentativas = [
+        Path("Familias Beneficiarias Tecnicos.csv"),
+        Path(os.getcwd()) / "Familias Beneficiarias Tecnicos.csv",
+        Path(r"c:\Users\CLIENTE\Desktop\weverton\agendha-vercel\Familias Beneficiarias Tecnicos.csv")
+    ]
+    for p in caminhos_tentativas:
+        if p.exists():
+            try:
+                with open(p, mode="r", encoding="utf-8-sig", errors="ignore") as f:
+                    reader = csv.DictReader(f, delimiter=";")
+                    for r in reader:
+                        nome = r.get("Nome Beneficiário", "").strip()
+                        cpf_raw = r.get("CPF Beneficiário", "").strip()
+                        caf_raw = r.get("DAP / CAF", "").strip()
+                        tec = r.get("Técnico Responsável", "").strip()
+                        mun = r.get("Município", "").strip()
+                        
+                        cpf_formatado = None
+                        if cpf_raw and cpf_raw != "-":
+                            digs = re.sub(r"\D", "", cpf_raw)
+                            if len(digs) == 11:
+                                cpf_formatado = f"{digs[:3]}.{digs[3:6]}.{digs[6:9]}-{digs[9:]}"
+                            else:
+                                cpf_formatado = cpf_raw
+                                
+                        caf_formatado = caf_raw if (caf_raw and caf_raw != "-") else None
+                        
+                        if nome:
+                            csv_map[_normalizar_para_busca(nome)] = {
+                                "nome": nome,
+                                "cpf": cpf_formatado,
+                                "caf": caf_formatado,
+                                "tecnico": tec.title() if tec else None,
+                                "municipio": mun.title() if mun else None
+                            }
+                break
+            except Exception as e:
+                logger.warning(f"Erro ao ler planilha oficial de beneficiários '{p}': {e}")
+    return csv_map
+
+
+@router.post("/sincronizar-das-pastas")
+async def sincronizar_beneficiarios_pastas_locais():
+    """
+    Carrega os 490 beneficiários oficiais das pastas locais de técnicos,
+    enriquece com os CPFs/CAFs da Planilha Oficial e API Coletum,
+    e atualiza a tabela 'beneficiarios' no Supabase.
+    """
+    try:
+        base = get_base_storage_path()
+        if not base.exists():
+            raise HTTPException(status_code=404, detail="Diretório base de técnicos não localizado.")
+
+        ignorar_pastas = {
+            "ATESTES", "CARACTERIZAÇÃO", "CARACTERIZACAO", "PLANOS PRODUTIVOS",
+            "TEMP", "UPLOADS", "ANDERLAINE", "_IMPORTACOES_PENDENTES_REVISAO", "ATIVIDADES BAIXADAS"
+        }
+
+        mapa_municipios = {
+            "ALDEIA TUXI": "Abaré",
+            "ALTO VERMELHO": "Abaré",
+            "LAGOA DO JOSE ALVES": "Abaré",
+            "BAIXA FUNDA": "Paulo Afonso",
+            "CASA DE PEDRA": "Paulo Afonso",
+            "LAGOA GRANDE": "Paulo Afonso",
+            "1. MINADOR": "Chorrochó",
+            "2. RIACHO DOS CALDEIROES": "Chorrochó",
+            "3. VARZEA DA EMA": "Chorrochó",
+            "SANSAITE": "Macururé",
+            "SERRA DO TONAN": "Macururé",
+            "MARRUA": "Rodelas",
+            "ROCINHA": "Rodelas",
+            "RODELAS": "Rodelas",
+            "RODELAS - CACHAUI": "Rodelas",
+            "SANTO ANTONIO": "Rodelas",
+            "BREJO DO BURGO": "Glória",
+            "KANTARURE": "Glória",
+            "PANKARARE": "Glória",
+            "1. GOLF": "Rodelas",
+            "2. ROCADO": "Rodelas",
+            "3. SAO JOSE": "Rodelas"
+        }
+
+        # 1. Carrega mapa da planilha oficial de famílias
+        mapa_planilha = _obter_mapa_planilha_oficial()
+
+        # 2. Varre pastas locais
+        beneficiarios_pastas = []
+        for tec in sorted(base.iterdir()):
+            if not tec.is_dir() or tec.name.startswith("_") or tec.name.upper() in ignorar_pastas:
+                continue
+            doc_ativ = tec / "documentos-atividades"
+            alvo = doc_ativ if doc_ativ.exists() else tec
+
+            for com in sorted(alvo.iterdir()):
+                if not com.is_dir() or "ATIVIDADE COLETIVA" in com.name.upper() or "ATIVIDADES COLETIVAS" in com.name.upper():
+                    continue
+
+                for benef in sorted(com.iterdir()):
+                    if not benef.is_dir():
+                        continue
+                    if "ATIVIDADE COLETIVA" in benef.name.upper() or benef.name.upper() in ignorar_pastas:
+                        continue
+                    if not any(benef.glob("**/*.pdf")):
+                        continue
+
+                    mun = mapa_municipios.get(com.name.upper(), "Bahia")
+                    nome_benef = benef.name.strip()
+                    norm_b = _normalizar_para_busca(nome_benef)
+                    
+                    # Cruzar com planilha oficial
+                    cpf_encontrado = None
+                    caf_encontrado = None
+                    if norm_b in mapa_planilha:
+                        cpf_encontrado = mapa_planilha[norm_b]["cpf"]
+                        caf_encontrado = mapa_planilha[norm_b]["caf"]
+                        if mapa_planilha[norm_b]["municipio"] and mun == "Bahia":
+                            mun = mapa_planilha[norm_b]["municipio"]
+                    else:
+                        # Fuzzy match na planilha oficial
+                        best_match = None
+                        best_ratio = 0
+                        for k_pl, v_pl in mapa_planilha.items():
+                            r = difflib.SequenceMatcher(None, norm_b, k_pl).ratio()
+                            if r > best_ratio and r >= 0.82:
+                                best_ratio = r
+                                best_match = v_pl
+                        if best_match:
+                            cpf_encontrado = best_match["cpf"]
+                            caf_encontrado = best_match["caf"]
+                            if best_match["municipio"] and mun == "Bahia":
+                                mun = best_match["municipio"]
+
+                    beneficiarios_pastas.append({
+                        "nome_completo": nome_benef,
+                        "nome_tecnico": tec.name.capitalize(),
+                        "comunidade": com.name,
+                        "municipio": mun,
+                        "projeto": "Bahia Sem Fome",
+                        "status": "ATIVO",
+                        "verificado_bsf": True,
+                        "cpf": cpf_encontrado,
+                        "caf": caf_encontrado
+                    })
+
+        # 3. Fallback de CPFs pelo Coletum API para os que restaram sem CPF
+        try:
+            sem_cpf = [b for b in beneficiarios_pastas if not b.get("cpf")]
+            if sem_cpf:
+                from app.services.coletum_service import (
+                    listar_formularios_coletum,
+                    buscar_respostas_formulario,
+                    extrair_metadados_resposta_coletum,
+                    normalizar_texto_comparacao
+                )
+                forms = await listar_formularios_coletum()
+                cpfs_por_nome = {}
+                for f in forms:
+                    respostas = await buscar_respostas_formulario(str(f.get("id")), limit=200)
+                    for r in respostas:
+                        meta = extrair_metadados_resposta_coletum(r)
+                        n = meta.get("beneficiario")
+                        c = meta.get("cpf")
+                        if n and c and len(c) >= 11:
+                            cpfs_por_nome[normalizar_texto_comparacao(n)] = c
+
+                for b in sem_cpf:
+                    b_norm = normalizar_texto_comparacao(b["nome_completo"])
+                    cpf_col = cpfs_por_nome.get(b_norm)
+                    if not cpf_col:
+                        for c_nome, c_cpf in cpfs_por_nome.items():
+                            if difflib.SequenceMatcher(None, b_norm, c_nome).ratio() >= 0.88:
+                                cpf_col = c_cpf
+                                break
+                    if cpf_col:
+                        digs = re.sub(r"\D", "", cpf_col)
+                        if len(digs) == 11:
+                            b["cpf"] = f"{digs[:3]}.{digs[3:6]}.{digs[6:9]}-{digs[9:]}"
+        except Exception as e_col:
+            logger.warning(f"Aviso ao complementar com Coletum: {e_col}")
+
+        # 4. Atualiza Supabase
+        supabase = get_supabase()
+        try:
+            supabase.table("beneficiarios").delete().eq("projeto", "Bahia Sem Fome").execute()
+        except Exception as e_del:
+            logger.warning(f"Erro ao limpar tabela para sincronização: {e_del}")
+
+        total_inseridos = 0
+        lote_size = 50
+        for i in range(0, len(beneficiarios_pastas), lote_size):
+            lote = beneficiarios_pastas[i:i + lote_size]
+            try:
+                supabase.table("beneficiarios").insert(lote).execute()
+                total_inseridos += len(lote)
+            except Exception as e_ins:
+                logger.error(f"Erro ao inserir lote: {e_ins}")
+
+        return {
+            "status": "sucesso",
+            "mensagem": f"{total_inseridos} beneficiários oficiais enriquecidos e sincronizados com sucesso!",
+            "total": total_inseridos
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao sincronizar beneficiários: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro na sincronização: {str(e)}")
 

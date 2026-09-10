@@ -30,7 +30,7 @@ class RelatorioRequest(BaseModel):
     colunas: List[str]
     email: Optional[str] = None
 
-_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=0)
+_env = Environment(loader=FileSystemLoader("app/templates"), cache_size=400)
 templates = Jinja2Templates(env=_env)
 logger = logging.getLogger(__name__)
 

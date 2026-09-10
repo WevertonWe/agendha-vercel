@@ -15,6 +15,7 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set, Tuple
+from collections import defaultdict
 
 from app.services.scanner_service import get_base_storage_path, DEFAULT_STORAGE_PATH
 
@@ -47,6 +48,45 @@ def normalizar_nome_canonico(texto: str) -> str:
     Ex: 'JOSÉ DA SILVA' -> 'JOSE DA SILVA', 'SÃO PEDRO' -> 'SAO PEDRO'
     """
     return sanitizar_nome_seguro(texto)
+
+
+def extrair_categoria_atividade(nome_pasta: str) -> str:
+    """
+    Identifica e padroniza a categoria da atividade pelo nome da pasta.
+    Exemplos:
+    - '23.10.2025 - PLANO PRODUTIVO' -> 'PLANO PRODUTIVO'
+    - '24.07.2025 - SOCIOECONOMICO' -> 'SOCIOECONÔMICO'
+    - '10.09.2025 - CARACTERIZAÇÃO' -> 'CARACTERIZAÇÃO'
+    - '07.07.2026 - VISITA TÉCNICA AVALIATIVA' -> 'VISITA TÉCNICA AVALIATIVA'
+    - '18.06.2026 - VISITA TECNICA' -> 'VISITA TÉCNICA'
+    """
+    if not nome_pasta:
+        return "OUTROS"
+    
+    n = sanitizar_nome_seguro(nome_pasta)
+    
+    if "PLANO PRODUTIVO" in n or "PLANO" in n:
+        return "PLANO PRODUTIVO"
+    if "SOCIOECONOMICO" in n or "SOCIO" in n or "GEOLOCALIZACAO" in n:
+        return "SOCIOECONÔMICO"
+    if "CARACTERIZACAO" in n or "UPF" in n:
+        return "CARACTERIZAÇÃO"
+    if "AVALIATIVA" in n:
+        return "VISITA TÉCNICA AVALIATIVA"
+    if "VISITA TECNICA" in n or "VISITA SOCIAL" in n or "VISITA" in n:
+        return "VISITA TÉCNICA"
+    if "GRUPO FAMILIAR" in n or "CADASTRO" in n:
+        return "CADASTRO GRUPO FAMILIAR"
+    if "OFICINA" in n:
+        return "OFICINA TEMÁTICA"
+    if "CAMPO" in n:
+        return "DIA DE CAMPO"
+    if "CURSO" in n:
+        return "CURSO"
+    if "SEMINARIO" in n:
+        return "SEMINÁRIO"
+    
+    return "OUTROS"
 
 
 def identificar_pastas_duplicadas_por_acentos(diretorio_pai: Path) -> List[Dict[str, Any]]:
@@ -169,6 +209,139 @@ def consolidar_pastas_duplicadas_segura(diretorio_pai: Path) -> Dict[str, Any]:
     }
 
 
+def consolidar_atividades_complementares_beneficiario(pasta_beneficiario: Path) -> Dict[str, Any]:
+    """
+    Identifica se um mesmo beneficiário possui atividades da mesma categoria
+    divididas em pastas diferentes (ex: uma pasta com o Ateste e outra com o Coletum)
+    e consolida tudo em uma única pasta completa (priorizando a data original do Coletum).
+    """
+    if not pasta_beneficiario.exists() or not pasta_beneficiario.is_dir():
+        return {"mescladas": 0, "arquivos_movidos": 0, "pastas_removidas": 0}
+
+    por_categoria = defaultdict(list)
+    for sub in pasta_beneficiario.iterdir():
+        if sub.is_dir():
+            cat = extrair_categoria_atividade(sub.name)
+            pdfs = list(sub.glob("*.pdf"))
+            tem_ateste = any("ATEST" in f.name.upper() for f in pdfs)
+            tem_coletum = any("COL" in f.name.upper() for f in pdfs)
+            por_categoria[cat].append({
+                "pasta": sub,
+                "nome": sub.name,
+                "pdfs": pdfs,
+                "tem_ateste": tem_ateste,
+                "tem_coletum": tem_coletum
+            })
+
+    mescladas = 0
+    arquivos_movidos = 0
+    pastas_removidas = 0
+
+    for cat, lista in por_categoria.items():
+        if cat == "OUTROS":
+            continue
+
+        # 1. Remove pastas vazias
+        for p in list(lista):
+            if len(p["pdfs"]) == 0:
+                try:
+                    shutil.rmtree(str(p["pasta"]), ignore_errors=True)
+                    pastas_removidas += 1
+                    lista.remove(p)
+                except Exception:
+                    pass
+
+        # 2. Se sobrou mais de uma pasta para a mesma categoria de atividade
+        if len(lista) > 1:
+            tem_at = any(p["tem_ateste"] for p in lista)
+            tem_col = any(p["tem_coletum"] for p in lista)
+
+            # Se temos ateste em uma e coletum em outra
+            if tem_at and tem_col:
+                # Pasta destino: prioriza a pasta que já tem o Coletum (data original de campo)
+                pasta_destino_info = next((p for p in lista if p["tem_coletum"]), lista[0])
+                pasta_destino = pasta_destino_info["pasta"]
+
+                for pasta_origem_info in lista:
+                    if pasta_origem_info["pasta"] == pasta_destino:
+                        continue
+
+                    pasta_origem = pasta_origem_info["pasta"]
+                    for f in list(pasta_origem.glob("*")):
+                        if f.is_file():
+                            f_dest = pasta_destino / f.name
+                            if not f_dest.exists():
+                                shutil.move(str(f), str(f_dest))
+                                arquivos_movidos += 1
+                            else:
+                                if f.stat().st_size != f_dest.stat().st_size:
+                                    f_dest_alt = pasta_destino / f"ATEST_{f.name}"
+                                    shutil.move(str(f), str(f_dest_alt))
+                                    arquivos_movidos += 1
+                                else:
+                                    f.unlink(missing_ok=True)
+
+                    # Remove pasta de origem esvaziada
+                    try:
+                        shutil.rmtree(str(pasta_origem), ignore_errors=True)
+                        pastas_removidas += 1
+                    except Exception:
+                        pass
+
+                mescladas += 1
+
+    return {
+        "mescladas": mescladas,
+        "arquivos_movidos": arquivos_movidos,
+        "pastas_removidas": pastas_removidas
+    }
+
+
+def consolidar_todas_atividades_divididas(base_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Varre todos os técnicos, comunidades e beneficiários, unificando pastas de
+    atividades complementares divididas (Ateste em uma e Coletum em outra).
+    """
+    caminho_base = base_dir or get_base_storage_path()
+    total_mescladas = 0
+    total_movidos = 0
+    total_removidas = 0
+
+    if not caminho_base.exists():
+        return {
+            "sucesso": False,
+            "total_atividades_mescladas": 0,
+            "total_arquivos_movidos": 0,
+            "total_pastas_removidas": 0
+        }
+
+    ignorar = {"ATESTES", "CARACTERIZAÇÃO", "CARACTERIZACAO", "PLANOS PRODUTIVOS", "TEMP", "UPLOADS", "_IMPORTACOES_PENDENTES_REVISAO"}
+
+    for tec in caminho_base.iterdir():
+        if not tec.is_dir() or tec.name.startswith("_") or tec.name.upper() in ignorar:
+            continue
+        doc_ativ = tec / "documentos-atividades"
+        alvo = doc_ativ if doc_ativ.exists() else tec
+
+        for com in alvo.iterdir():
+            if not com.is_dir() or com.name.upper() == "ATIVIDADE COLETIVA":
+                continue
+
+            for benef in com.iterdir():
+                if benef.is_dir():
+                    res = consolidar_atividades_complementares_beneficiario(benef)
+                    total_mescladas += res["mescladas"]
+                    total_movidos += res["arquivos_movidos"]
+                    total_removidas += res["pastas_removidas"]
+
+    return {
+        "sucesso": True,
+        "total_atividades_mescladas": total_mescladas,
+        "total_arquivos_movidos": total_movidos,
+        "total_pastas_removidas": total_removidas
+    }
+
+
 def verificar_conformidade_atividade(pasta_atividade: Path) -> Dict[str, Any]:
     """
     Analisa os arquivos dentro de uma pasta de atividade de beneficiário
@@ -251,7 +424,9 @@ def executar_auditoria_completa_pastas_locais(
             "pendentes_coletum": 0,
             "vazias_ou_erro": 0,
             "total_pastas_duplicadas_acentos": 0,
-            "percentual_conformidade": 0.0
+            "percentual_conformidade": 0.0,
+            "por_atividade": {},
+            "lista_atividades": []
         },
         "duplicidades_detectadas": [],
         "tecnicos": {},
@@ -263,12 +438,16 @@ def executar_auditoria_completa_pastas_locais(
         _ULTIMO_SNAPSHOT_AUDITORIA = resultado
         return resultado
 
-    ignorar_pastas = {"ATESTES", "DOCUMENTOS", "UPLOADS", "TEMP", "__PYCACHE__", ".GIT"}
+    ignorar_pastas = {
+        "ATESTES", "DOCUMENTOS", "UPLOADS", "TEMP", "__PYCACHE__", ".GIT",
+        "ANDERLAINE", "CARACTERIZAÇÃO", "CARACTERIZACAO", "PLANOS PRODUTIVOS",
+        "_IMPORTACOES_PENDENTES_REVISAO", "ATIVIDADES BAIXADAS"
+    }
 
     # 1. Varre Técnicos
     pastas_tecnicos = [
         p for p in caminho_base.iterdir()
-        if p.is_dir() and p.name.upper() not in ignorar_pastas
+        if p.is_dir() and p.name.upper() not in ignorar_pastas and not p.name.startswith("_")
     ]
     resultado["resumo"]["total_tecnicos"] = len(pastas_tecnicos)
 
@@ -276,7 +455,6 @@ def executar_auditoria_completa_pastas_locais(
         nome_tec = pasta_tec.name
         doc_ativ = pasta_tec / "documentos-atividades"
         if not doc_ativ.exists():
-            # Se não tem a subpasta documentos-atividades, considera a própria pasta do técnico
             doc_ativ = pasta_tec
 
         # Checagem de pastas duplicadas de comunidades
@@ -286,7 +464,10 @@ def executar_auditoria_completa_pastas_locais(
             if auto_consolidar_acentos:
                 consolidar_pastas_duplicadas_segura(doc_ativ)
 
-        comunidades_pastas = [c for c in doc_ativ.iterdir() if c.is_dir()]
+        comunidades_pastas = [
+            c for c in doc_ativ.iterdir()
+            if c.is_dir() and "ATIVIDADE COLETIVA" not in c.name.upper() and "ATIVIDADES COLETIVAS" not in c.name.upper()
+        ]
         resultado["resumo"]["total_comunidades"] += len(comunidades_pastas)
 
         resumo_tec = {
@@ -309,7 +490,17 @@ def executar_auditoria_completa_pastas_locais(
                 if auto_consolidar_acentos:
                     consolidar_pastas_duplicadas_segura(pasta_com)
 
-            benef_pastas = [b for b in pasta_com.iterdir() if b.is_dir()]
+            # Filtra apenas pastas que possuam documentos (ignora pastas 100% vazias)
+            benef_pastas = []
+            for b in pasta_com.iterdir():
+                if b.is_dir():
+                    tem_pdfs = any(b.glob("**/*.pdf"))
+                    if tem_pdfs:
+                        benef_pastas.append(b)
+                    else:
+                        # Remove pasta vazia órfã
+                        shutil.rmtree(str(b), ignore_errors=True)
+
             resumo_tec["total_beneficiarios"] += len(benef_pastas)
             resultado["resumo"]["total_beneficiarios"] += len(benef_pastas)
 
@@ -330,23 +521,39 @@ def executar_auditoria_completa_pastas_locais(
                 for pasta_ativ in atividades_pastas:
                     conf = verificar_conformidade_atividade(pasta_ativ)
                     status = conf["status"]
+                    nome_exibicao_ativ = pasta_ativ.name if pasta_ativ != pasta_benef else "DOCUMENTOS_GERAIS"
+                    cat_ativ = extrair_categoria_atividade(nome_exibicao_ativ)
+
+                    if cat_ativ not in resultado["resumo"]["por_atividade"]:
+                        resultado["resumo"]["por_atividade"][cat_ativ] = {
+                            "total": 0,
+                            "completas": 0,
+                            "pendentes_ateste": 0,
+                            "pendentes_coletum": 0,
+                            "vazias": 0
+                        }
+                    resultado["resumo"]["por_atividade"][cat_ativ]["total"] += 1
 
                     if status == "COMPLETO":
                         resumo_tec["atividades_completas"] += 1
                         resultado["resumo"]["atividades_completas"] += 1
+                        resultado["resumo"]["por_atividade"][cat_ativ]["completas"] += 1
                     elif status == "PENDENTE_ATESTE":
                         resumo_tec["pendentes_ateste"] += 1
                         resultado["resumo"]["pendentes_ateste"] += 1
+                        resultado["resumo"]["por_atividade"][cat_ativ]["pendentes_ateste"] += 1
                     elif status == "PENDENTE_COLETUM":
                         resumo_tec["pendentes_coletum"] += 1
                         resultado["resumo"]["pendentes_coletum"] += 1
+                        resultado["resumo"]["por_atividade"][cat_ativ]["pendentes_coletum"] += 1
                     else:
                         resumo_tec["vazias"] += 1
                         resultado["resumo"]["vazias_ou_erro"] += 1
+                        resultado["resumo"]["por_atividade"][cat_ativ]["vazias"] += 1
 
-                    nome_exibicao_ativ = pasta_ativ.name if pasta_ativ != pasta_benef else "DOCUMENTOS_GERAIS"
                     atividades_info.append({
                         "pasta_atividade": nome_exibicao_ativ,
+                        "categoria": cat_ativ,
                         "status": status,
                         "tem_ateste": conf["tem_ateste"],
                         "tem_coletum": conf["tem_coletum"],
@@ -374,6 +581,7 @@ def executar_auditoria_completa_pastas_locais(
     else:
         resultado["resumo"]["percentual_conformidade"] = 100.0
 
+    resultado["resumo"]["lista_atividades"] = sorted(list(resultado["resumo"]["por_atividade"].keys()))
     resultado["resumo"]["total_pastas_duplicadas_acentos"] = len(resultado["duplicidades_detectadas"])
 
     _ULTIMO_SNAPSHOT_AUDITORIA = resultado

@@ -155,23 +155,72 @@ async def gerar_atestes(file: UploadFile = File(...)):
         if df is None or df.empty:
             raise HTTPException(status_code=400, detail="Planilha inválida. Aba de dados não encontrada.")
 
-        # Busca Flexível de Colunas (insensível a acentos e maiúsculas/minúsculas)
+        # Busca Flexível e Inteligente de Colunas (insensível a acentos e maiúsculas/minúsculas)
         import unicodedata
         def normalize_str(s):
-            s = str(s).upper()
+            if not s:
+                return ""
+            s = str(s).upper().strip()
             return "".join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
-        def find_col(key):
-            norm_key = normalize_str(key)
-            return next((c for c in df.columns if norm_key in normalize_str(c)), None)
+        cols = list(df.columns)
 
-        col_nome = find_col("DADOS DO GRUPO FAMILIAR > NOME") or find_col("NOME")
-        col_cpf = find_col("DADOS DO GRUPO FAMILIAR > CPF") or find_col("CPF DO BENEFICIÁRIO") or find_col("CPF")
-        col_caf = find_col("DAP / CAF") or find_col("DAP") or find_col("CAF")
-        col_nome_tecnico = find_col("DADOS DE EXECUÇÃO > NOME DO(A) TÉCNICO(A) RESPONSÁVEL") or find_col("NOME DO TÉCNICO") or find_col("TECNICO")
-        col_cpf_tecnico = find_col("DADOS DE EXECUÇÃO > CPF DO(A) TÉCNICO(A) RESPONSÁVEL") or find_col("CPF DO TÉCNICO")
-        col_municipio = find_col("MUNICIPIO")
-        col_comunidade = find_col("DADOS DE EXECUÇÃO > COMUNIDADE") or find_col("COMUNIDADE")
+        # 1. Identificação do Técnico (Responsável)
+        col_nome_tecnico = None
+        col_cpf_tecnico = None
+        for c in cols:
+            c_norm = normalize_str(c)
+            if "TECNIC" in c_norm:
+                if "CPF" in c_norm:
+                    col_cpf_tecnico = c
+                elif any(term in c_norm for term in ["NOME", "RESPONSAVEL", "TECNICO", "TECNICA"]):
+                    col_nome_tecnico = c
+
+        # 2. Identificação do Beneficiário (Titular / Familiar)
+        col_nome = None
+        col_cpf = None
+        
+        # Prioridade para termos específicos de Beneficiário/Familiar/Titular
+        for c in cols:
+            c_norm = normalize_str(c)
+            if "TECNIC" not in c_norm:
+                if any(term in c_norm for term in [
+                    "NOME FAMILIAR", "NOME DO FAMILIAR", "NOME BENEFICIARIO", 
+                    "NOME DO BENEFICIARIO", "NOME TITULAR", "NOME DO TITULAR", 
+                    "DADOS DO GRUPO FAMILIAR > NOME", "FAMILIAR", "BENEFICIARIO", "TITULAR"
+                ]):
+                    if "CPF" not in c_norm:
+                        col_nome = c
+                if any(term in c_norm for term in [
+                    "CPF FAMILIAR", "CPF DO FAMILIAR", "CPF BENEFICIARIO", 
+                    "CPF DO BENEFICIARIO", "CPF TITULAR", "CPF DO TITULAR", 
+                    "DADOS DO GRUPO FAMILIAR > CPF"
+                ]):
+                    col_cpf = c
+
+        # Fallback genérico para Nome e CPF caso não encontre com prefixos acima
+        if not col_nome:
+            for c in cols:
+                c_norm = normalize_str(c)
+                if "TECNIC" not in c_norm and "NOME" in c_norm:
+                    col_nome = c
+                    break
+
+        if not col_cpf:
+            for c in cols:
+                c_norm = normalize_str(c)
+                if "TECNIC" not in c_norm and "CPF" in c_norm:
+                    col_cpf = c
+                    break
+
+        # 3. Identificação DAP / CAF (Prioriza CAF NOVA se presente, senão DAP/CAF)
+        col_caf = next((c for c in cols if "CAF NOVA" in normalize_str(c)), None)
+        if not col_caf:
+            col_caf = next((c for c in cols if any(t in normalize_str(c) for t in ["DAP / CAF", "DAP/CAF", "CAF", "DAP"])), None)
+
+        # 4. Município e Comunidade
+        col_municipio = next((c for c in cols if "MUNICIP" in normalize_str(c) or "CIDADE" in normalize_str(c)), None)
+        col_comunidade = next((c for c in cols if "COMUNIDADE" in normalize_str(c)), None)
         
         if col_nome:
             df = df.dropna(subset=[col_nome])

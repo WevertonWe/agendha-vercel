@@ -51,31 +51,61 @@
         <!-- ABA 1: LISTA DE BENEFICIÁRIOS (PADRÃO) -->
         <!-- ============================================================= -->
         <div class="tab-pane fade show active" id="conteudo-beneficiarios" role="tabpanel">
-            <!-- Filters -->
-            <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 900px;">
-                <div class="card-body">
-                    <div class="row g-3 justify-content-center">
+            <!-- Filters & Search Bar -->
+            <div class="card bg-white shadow-sm border rounded-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="card-body p-3 p-md-4">
+                    <!-- Campo Principal de Busca por Nome / CPF / Comunidade -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold small text-secondary mb-1">
+                                <i class="fas fa-search me-1 text-primary"></i> Consultar Beneficiário (Nome, CPF ou Comunidade)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text" id="filtroBusca" class="form-control border-start-0 ps-0" 
+                                       placeholder="Digite o nome completo ou parte do nome (ex: Vilma Pereira Dantas), CPF ou Comunidade..."
+                                       autocomplete="off">
+                                <button class="btn btn-outline-secondary d-none" type="button" id="btnLimparBusca" onclick="limparCampoBusca()" title="Limpar busca">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button onclick="carregarBeneficiarios(1)" class="btn btn-primary px-4 fw-semibold" id="btnBuscar">
+                                    <i class="fas fa-search me-1"></i> Consultar
+                                </button>
+                            </div>
+                            <div class="form-text small text-muted">
+                                Dica: Digite o nome da pessoa e pressione <strong>Enter</strong> ou clique em <strong>Consultar</strong> para filtrar instantaneamente.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros Avançados: Município, Técnico, Status e Limpar -->
+                    <div class="row g-2 align-items-end pt-2 border-top">
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small">Município</label>
-                            <select id="filtroMunicipio" class="form-select form-select-sm">
-                                <option value="">Todos</option>
+                            <label class="form-label fw-semibold small text-muted mb-1"><i class="fas fa-map-marker-alt me-1 text-danger"></i> Município</label>
+                            <select id="filtroMunicipio" class="form-select form-select-sm" onchange="carregarBeneficiarios(1)">
+                                <option value="">Todos os Municípios</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small">Técnico</label>
-                            <select id="filtroTecnico" class="form-select form-select-sm">
-                                <option value="">Todos</option>
+                            <label class="form-label fw-semibold small text-muted mb-1"><i class="fas fa-user-tie me-1 text-info"></i> Técnico</label>
+                            <select id="filtroTecnico" class="form-select form-select-sm" onchange="carregarBeneficiarios(1)">
+                                <option value="">Todos os Técnicos</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold small">Status</label>
-                            <select id="filtroStatus" class="form-select form-select-sm">
-                                <option value="">Todos</option>
+                            <label class="form-label fw-semibold small text-muted mb-1"><i class="fas fa-tag me-1 text-success"></i> Status</label>
+                            <select id="filtroStatus" class="form-select form-select-sm" onchange="carregarBeneficiarios(1)">
+                                <option value="">Todos os Status</option>
                             </select>
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button onclick="carregarBeneficiarios()" class="btn btn-primary btn-sm w-100" id="btnFiltrar">
-                                <i class="fas fa-filter me-1"></i> Filtrar
+                        <div class="col-md-3 d-flex gap-2">
+                            <button onclick="carregarBeneficiarios(1)" class="btn btn-outline-primary btn-sm flex-fill" id="btnFiltrar">
+                                <i class="fas fa-filter me-1"></i> Aplicar Filtros
+                            </button>
+                            <button onclick="limparTodosFiltros()" class="btn btn-outline-secondary btn-sm" title="Limpar todos os filtros">
+                                <i class="fas fa-undo me-1"></i> Limpar
                             </button>
                         </div>
                     </div>
@@ -90,6 +120,9 @@
                         <span id="benefCount" class="badge bg-primary">0</span>
                     </div>
                     <div>
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="sincronizarBeneficiariosDasPastas()">
+                            <i class="fas fa-sync-alt me-1"></i> Sincronizar com Pastas (490)
+                        </button>
                         <button class="btn btn-sm btn-outline-success me-1" onclick="abrirModalWizardImportacao()">
                             <i class="fas fa-magic me-1"></i> Assistente de Importação (4 Passos)
                         </button>
@@ -150,8 +183,11 @@
                     <small class="text-muted" id="auditUltimaExecucao">Última auditoria: Carregando...</small>
                 </div>
                 <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="abrirModalImportarSigater()">
+                        <i class="fas fa-file-import me-1"></i> Ingestão / Importar Lote SIGATER
+                    </button>
                     <button class="btn btn-outline-danger btn-sm" id="btnConsolidarDuplicados" onclick="consolidarPastasDuplicadasAgora()">
-                        <i class="fas fa-compress-arrows-alt me-1"></i> Corrigir Pastas Duplicadas (Acentos)
+                        <i class="fas fa-compress-arrows-alt me-1"></i> Unificar e Corrigir Pastas (Atestes + Coletum)
                     </button>
                     <button class="btn btn-success btn-sm" id="btnExecutarAuditoriaLocal" onclick="executarVarreduraLocalAgora()">
                         <i class="fas fa-search me-1"></i> Auditar Pastas Agora
@@ -173,7 +209,7 @@
             </div>
 
             <!-- Stat Cards de Auditoria -->
-            <div class="row g-3 mb-4 mx-auto" style="max-width: 1100px;">
+            <div class="row g-3 mb-3 mx-auto" style="max-width: 1100px;">
                 <div class="col-md-3">
                     <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center">
                         <div class="text-secondary small fw-bold mb-1">TOTAL BENEFICIÁRIOS</div>
@@ -204,11 +240,20 @@
                 </div>
             </div>
 
+            <!-- Resumo Rápido por Atividades (Chips Interativos) -->
+            <div class="mx-auto mb-3" style="max-width: 1100px;">
+                <div class="d-flex align-items-center mb-1">
+                    <small class="text-muted fw-bold me-2"><i class="fas fa-filter me-1"></i>Filtrar por Atividade:</small>
+                    <button class="btn btn-link btn-sm p-0 text-decoration-none small" onclick="limparFiltroAtividade()">Limpar filtro</button>
+                </div>
+                <div id="pillsAtividadesAuditoria" class="d-flex flex-wrap gap-2"></div>
+            </div>
+
             <!-- Filtros de Auditoria -->
             <div class="card bg-light border-0 mb-4 mx-auto" style="max-width: 1100px;">
                 <div class="card-body py-2">
                     <div class="row g-2 align-items-center">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <input type="text" class="form-control form-control-sm" id="filtroAuditBusca" placeholder="Buscar por Beneficiário, Município..." onkeyup="filtrarTabelaAuditoria()">
                         </div>
                         <div class="col-md-3">
@@ -217,16 +262,21 @@
                             </select>
                         </div>
                         <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="filtroAuditAtividade" onchange="filtrarTabelaAuditoria()">
+                                <option value="">Todas as Atividades</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <select class="form-select form-select-sm" id="filtroAuditStatus" onchange="filtrarTabelaAuditoria()">
                                 <option value="">Todos os Status</option>
-                                <option value="COMPLETO">Apenas 100% Completas</option>
+                                <option value="COMPLETO">100% Completas</option>
                                 <option value="PENDENTE_ATESTE">Pendente Ateste</option>
                                 <option value="PENDENTE_COLETUM">Pendente Coletum</option>
                                 <option value="VAZIA">Vazias / Sem Arquivos</option>
                             </select>
                         </div>
-                        <div class="col-md-2 text-end">
-                            <span class="badge bg-secondary" id="contagemAuditFiltrados">0 registros</span>
+                        <div class="col-md-1 text-end">
+                            <span class="badge bg-secondary" id="contagemAuditFiltrados">0</span>
                         </div>
                     </div>
                 </div>
@@ -339,6 +389,56 @@
     </div>
 </div>
 
+<!-- Modal Ingestão de Lote SIGATER -->
+<div class="modal fade" id="modalImportarSigater" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-file-import me-2"></i>Ingestão de Atestes do SIGATER
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">
+                    Faça o upload do arquivo <strong>.ZIP</strong> exportado do SIGATER ou selecione múltiplos PDFs.
+                    O sistema irá ler o nome do beneficiário, data e comunidade de cada ateste e distribuí-los automaticamente na pasta local correta!
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Atividade do Lote</label>
+                    <select id="sigaterAtividadePadrao" class="form-select form-select-sm">
+                        <option value="PLANO PRODUTIVO">45 - Elaboração do Plano Produtivo da UPF</option>
+                        <option value="SOCIOECONÔMICO">40 - Levantamento Socioeconômico e Geolocalização</option>
+                        <option value="CARACTERIZAÇÃO">41 - Caracterização da UPF</option>
+                        <option value="VISITA TÉCNICA AVALIATIVA">8.3 - Visita Técnica Avaliativa</option>
+                        <option value="VISITA TÉCNICA">21 - Visita Técnica</option>
+                        <option value="CADASTRO GRUPO FAMILIAR">20 - Cadastro do Grupo Familiar</option>
+                        <option value="OUTROS">Outras Atividades</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">Arquivo ZIP ou PDF</label>
+                    <input type="file" id="sigaterFileInput" class="form-control form-control-sm" accept=".zip,.pdf">
+                    <div class="form-text small">Selecione o arquivo .ZIP com os atestes baixados do SIGATER.</div>
+                </div>
+
+                <div id="sigaterProgresso" class="d-none text-center py-3">
+                    <div class="spinner-border text-primary spinner-border-sm me-2"></div>
+                    <span class="small text-primary fw-semibold">Processando e distribuindo atestes nas pastas locais...</span>
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btnEnviarSigater" onclick="enviarLoteSigater()">
+                    <i class="fas fa-upload me-1"></i> Iniciar Distribuição Automática
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Detalhe -->
 <div class="modal fade" id="modalDetalhe" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -354,6 +454,35 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Visualizador de PDF Integrado -->
+<div class="modal fade" id="modalPdfViewer" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+    <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 92vw;">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white py-2 px-3">
+                <h6 class="modal-title fw-bold text-truncate me-3 d-flex align-items-center" id="pdfViewerTitulo">
+                    <i class="fas fa-file-pdf text-danger me-2"></i> Visualizador de Documento
+                </h6>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="#" id="btnPdfNovaAba" target="_blank" class="btn btn-sm btn-outline-light py-1 px-2" title="Abrir em Nova Aba">
+                        <i class="fas fa-external-link-alt me-1"></i> Nova Aba
+                    </a>
+                    <a href="#" id="btnPdfDownload" class="btn btn-sm btn-light py-1 px-2 fw-semibold" title="Baixar Arquivo">
+                        <i class="fas fa-download me-1"></i> Baixar
+                    </a>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0 bg-secondary bg-opacity-10 position-relative" style="height: 80vh;">
+                <div id="pdfViewerLoading" class="position-absolute top-50 start-50 translate-middle text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-muted small mt-2">Carregando visualização do PDF...</p>
+                </div>
+                <iframe id="pdfViewerFrame" src="" style="width: 100%; height: 100%; border: none;" onload="const l=document.getElementById('pdfViewerLoading'); if(l) l.classList.add('d-none');"></iframe>
             </div>
         </div>
     </div>
@@ -586,11 +715,69 @@ let modalWizardImportacaoInst = null;
 let modalCadastroInst = null;
 let modalNovaAtividadeInst = null;
 
+let debounceTimerBusca = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.ui) console.error("ui_utils.js not loaded!");
     carregarFiltros();
+    configurarBuscaAutomatica();
     carregarBeneficiarios();
 });
+
+function configurarBuscaAutomatica() {
+    const inputBusca = document.getElementById('filtroBusca');
+    const btnLimpar = document.getElementById('btnLimparBusca');
+    if (!inputBusca) return;
+
+    inputBusca.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        if (btnLimpar) {
+            if (val.length > 0) btnLimpar.classList.remove('d-none');
+            else btnLimpar.classList.add('d-none');
+        }
+
+        clearTimeout(debounceTimerBusca);
+        // Busca dinâmica após 350ms sem digitação
+        debounceTimerBusca = setTimeout(() => {
+            carregarBeneficiarios(1);
+        }, 350);
+    });
+
+    inputBusca.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(debounceTimerBusca);
+            carregarBeneficiarios(1);
+        }
+    });
+}
+
+function limparCampoBusca() {
+    const inputBusca = document.getElementById('filtroBusca');
+    const btnLimpar = document.getElementById('btnLimparBusca');
+    if (inputBusca) {
+        inputBusca.value = '';
+        inputBusca.focus();
+    }
+    if (btnLimpar) btnLimpar.classList.add('d-none');
+    carregarBeneficiarios(1);
+}
+
+function limparTodosFiltros() {
+    const inputBusca = document.getElementById('filtroBusca');
+    const btnLimpar = document.getElementById('btnLimparBusca');
+    const selMun = document.getElementById('filtroMunicipio');
+    const selTec = document.getElementById('filtroTecnico');
+    const selSt = document.getElementById('filtroStatus');
+
+    if (inputBusca) inputBusca.value = '';
+    if (btnLimpar) btnLimpar.classList.add('d-none');
+    if (selMun) selMun.value = '';
+    if (selTec) selTec.value = '';
+    if (selSt) selSt.value = '';
+
+    carregarBeneficiarios(1);
+}
 
 async function carregarFiltros() {
     try {
@@ -622,11 +809,13 @@ async function carregarFiltros() {
 async function carregarBeneficiarios(page) {
     if (page) currentPage = page;
 
-    const municipio = document.getElementById('filtroMunicipio').value;
-    const tecnico = document.getElementById('filtroTecnico').value;
-    const status = document.getElementById('filtroStatus').value;
+    const busca = document.getElementById('filtroBusca') ? document.getElementById('filtroBusca').value.trim() : '';
+    const municipio = document.getElementById('filtroMunicipio') ? document.getElementById('filtroMunicipio').value : '';
+    const tecnico = document.getElementById('filtroTecnico') ? document.getElementById('filtroTecnico').value : '';
+    const status = document.getElementById('filtroStatus') ? document.getElementById('filtroStatus').value : '';
 
     let url = `/api/bsf/beneficiarios?page=${currentPage}&page_size=${PAGE_SIZE}`;
+    if (busca) url += `&busca=${encodeURIComponent(busca)}`;
     if (municipio) url += `&municipio=${encodeURIComponent(municipio)}`;
     if (tecnico) url += `&tecnico=${encodeURIComponent(tecnico)}`;
     if (status) url += `&status=${encodeURIComponent(status)}`;
@@ -830,6 +1019,34 @@ async function verDetalhe(id) {
     }
 }
 
+function abrirVisualizadorPdf(url, titulo) {
+    if (!url) return;
+    const modalEl = document.getElementById('modalPdfViewer');
+    const iframe = document.getElementById('pdfViewerFrame');
+    const titleEl = document.getElementById('pdfViewerTitulo');
+    const btnNovaAba = document.getElementById('btnPdfNovaAba');
+    const btnDownload = document.getElementById('btnPdfDownload');
+    const loading = document.getElementById('pdfViewerLoading');
+    
+    if (titleEl) {
+        titleEl.innerHTML = `<i class="fas fa-file-pdf text-danger me-2"></i> ${titulo || 'Visualizador de Documento'}`;
+    }
+    if (btnNovaAba) btnNovaAba.href = url;
+    if (btnDownload) {
+        btnDownload.href = url.includes('?') ? (url + '&download=true') : (url + '?download=true');
+    }
+    
+    if (loading) loading.classList.remove('d-none');
+    if (iframe) {
+        iframe.src = url;
+    }
+    
+    if (typeof bootstrap !== 'undefined' && modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+}
+
 async function carregarArquivos(id) {
     const container = document.getElementById('docsContainer');
     if (!container) {
@@ -837,8 +1054,7 @@ async function carregarArquivos(id) {
         return;
     }
     
-    // BSF Dropdown Injection: Limpa o container do dropdown imediatamente para redesenho
-    container.innerHTML = ''; 
+    container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><p class="text-muted small mt-1">Carregando atividades e arquivos...</p></div>'; 
     
     try {
         const res = await fetch(`/api/bsf/beneficiarios/${id}/atividades`);
@@ -846,61 +1062,119 @@ async function carregarArquivos(id) {
         const atividades = await res.json();
         
         if (!atividades.length) {
-            container.innerHTML = '<p class="text-muted small text-center">Nenhuma atividade registrada.</p>';
+            container.innerHTML = `
+                <div class="alert alert-light border text-center py-3">
+                    <i class="fas fa-folder-open text-muted fa-2x mb-2"></i>
+                    <p class="text-muted small mb-0">Nenhuma atividade registrada para este beneficiário.</p>
+                </div>`;
             return;
         }
 
-        let html = '<div class="list-group list-group-flush">';
-        atividades.forEach(atv => {
+        let html = '<div class="d-flex flex-column gap-3">';
+        atividades.forEach((atv, idx) => {
             const sigaterLinks = atv.link_sigater || [];
             const colletumLinks = atv.link_colletum || [];
             const atesteLinks = atv.link_ateste || [];
             
-            const renderBtn = (tipo, links) => {
-                const count = links.length;
-                let btnHtml = `
-                <div class="btn-group btn-group-sm me-2 mb-2">
-                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ver ${tipo}">
-                        <i class="fas fa-folder-open"></i> ${tipo} ${count > 0 ? `<span class="badge bg-primary ms-1">${count}</span>` : ''}
-                    </button>
-                    <ul class="dropdown-menu">`;
-                    
-                if (count === 0) {
-                    btnHtml += `<li><span class="dropdown-item text-muted small">Nenhum arquivo</span></li>`;
+            let dataFormatada = '-';
+            if (atv.data || atv.data_atividade) {
+                const rawDate = atv.data || atv.data_atividade;
+                const parts = rawDate.split('-');
+                if (parts.length === 3) {
+                    dataFormatada = `${parts[2]}/${parts[1]}/${parts[0]}`;
                 } else {
-                    links.forEach((url, idx) => {
-                        btnHtml += `<li><a class="dropdown-item small" href="${url}" target="_blank"><i class="fas fa-external-link-alt me-1 text-primary"></i> Arquivo ${idx + 1}</a></li>`;
-                    });
+                    dataFormatada = rawDate;
                 }
-                
-                btnHtml += `
-                    </ul>
-                    <label class="btn btn-outline-primary mb-0" title="Upload">
-                        <i class="fas fa-upload"></i>
-                        <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento('${id}', '${atv.id}', '${tipo.toLowerCase()}', this)">
-                    </label>
-                </div>`;
-                return btnHtml;
-            };
+            }
 
-            const dataFormatada = new Date(atv.data + 'T00:00:00').toLocaleDateString('pt-BR');
+            // Status de conformidade da atividade
+            let badgeStatus = '';
+            const temAteste = atesteLinks.length > 0;
+            const temColletum = colletumLinks.length > 0;
+            
+            if (temAteste && temColletum) {
+                badgeStatus = '<span class="badge bg-success-subtle text-success border border-success px-2 py-1"><i class="fas fa-check-circle me-1"></i> Completo</span>';
+            } else if (temAteste && !temColletum) {
+                badgeStatus = '<span class="badge bg-warning-subtle text-warning border border-warning px-2 py-1"><i class="fas fa-exclamation-circle me-1"></i> Falta Coletum</span>';
+            } else if (!temAteste && temColletum) {
+                badgeStatus = '<span class="badge bg-info-subtle text-info border border-info px-2 py-1"><i class="fas fa-exclamation-circle me-1"></i> Falta Ateste</span>';
+            } else {
+                badgeStatus = '<span class="badge bg-secondary px-2 py-1">Sem Documentos</span>';
+            }
+
+            const tipoNome = atv.tipo_atividade || 'Atividade';
+
             html += `
-                <div class="list-group-item px-0 py-3">
-                    <div class="d-flex justify-content-between align-items-center w-100 mb-2">
-                        <span class="fw-bold small text-dark">${atv.tipo_atividade} - ${dataFormatada}</span>
-                        <div>
-                            <button onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}', '${(atv.iniciativas_vinculadas || []).join(',')}')" class="btn btn-warning btn-sm me-1 text-white" title="Editar atividade">
-                                <i class="fas fa-pencil-alt"></i>
+                <div class="card border shadow-sm rounded-3">
+                    <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center flex-wrap gap-2">
+                            <span class="fw-bold text-dark"><i class="fas fa-tasks text-primary me-1"></i> ${tipoNome}</span>
+                            <span class="badge bg-white text-dark border"><i class="far fa-calendar-alt text-muted me-1"></i> ${dataFormatada}</span>
+                            ${badgeStatus}
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            ${!String(atv.id).startsWith('local_') ? `
+                            <button onclick="editarAtividade('${atv.id}', '${atv.tipo_atividade}', '${atv.data}', '${id}', '${(atv.iniciativas_vinculadas || []).join(',')}')" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Editar atividade">
+                                <i class="fas fa-pencil-alt fa-xs"></i>
                             </button>
-                            <button onclick="excluirAtividade('${atv.id}', '${id}')" class="btn btn-danger btn-sm" title="Excluir atividade">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
+                            <button onclick="excluirAtividade('${atv.id}', '${id}')" class="btn btn-sm btn-outline-danger py-0 px-2" title="Excluir atividade">
+                                <i class="fas fa-trash-alt fa-xs"></i>
+                            </button>` : ''}
                         </div>
                     </div>
-                    <div class="d-flex flex-wrap">
-                        ${renderBtn('Sigater', sigaterLinks)}
-                        ${renderBtn('Colletum', colletumLinks)}
-                        ${renderBtn('Ateste', atesteLinks)}
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <!-- Botão Ateste -->
+                            ${temAteste ? `
+                                <button type="button" class="btn btn-sm btn-primary shadow-sm" onclick="abrirVisualizadorPdf('${atesteLinks[0]}', 'Ateste - ${tipoNome} (${dataFormatada})')">
+                                    <i class="fas fa-file-pdf me-1"></i> Ver Ateste (${atesteLinks.length})
+                                </button>
+                            ` : `
+                                <button type="button" class="btn btn-sm btn-outline-secondary disabled" title="Ateste não anexado">
+                                    <i class="fas fa-file-pdf me-1"></i> Ateste Indisponível
+                                </button>
+                            `}
+
+                            <!-- Botão Coletum -->
+                            ${temColletum ? `
+                                <button type="button" class="btn btn-sm btn-success shadow-sm" onclick="abrirVisualizadorPdf('${colletumLinks[0]}', 'Coletum - ${tipoNome} (${dataFormatada})')">
+                                    <i class="fas fa-clipboard-check me-1"></i> Ver Coletum (${colletumLinks.length})
+                                </button>
+                            ` : `
+                                <button type="button" class="btn btn-sm btn-outline-secondary disabled" title="Coletum não anexado">
+                                    <i class="fas fa-clipboard-check me-1"></i> Coletum Indisponível
+                                </button>
+                            `}
+
+                            <!-- Botão SIGATER se houver -->
+                            ${sigaterLinks.length > 0 ? `
+                                <button type="button" class="btn btn-sm btn-info text-white shadow-sm" onclick="abrirVisualizadorPdf('${sigaterLinks[0]}', 'SIGATER - ${tipoNome}')">
+                                    <i class="fas fa-cloud me-1"></i> Ver SIGATER
+                                </button>
+                            ` : ''}
+
+                            <!-- Upload para atividades do banco -->
+                            ${!String(atv.id).startsWith('local_') ? `
+                            <div class="dropdown d-inline-block ms-auto">
+                                <button class="btn btn-sm btn-outline-dark dropdown-toggle py-1" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-upload me-1"></i> Anexar PDF
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                    <li>
+                                        <label class="dropdown-item small" style="cursor: pointer;">
+                                            <i class="fas fa-file-upload text-primary me-2"></i> Anexar Ateste
+                                            <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento('${id}', '${atv.id}', 'ateste', this)">
+                                        </label>
+                                    </li>
+                                    <li>
+                                        <label class="dropdown-item small" style="cursor: pointer;">
+                                            <i class="fas fa-clipboard text-success me-2"></i> Anexar Coletum
+                                            <input type="file" class="d-none" accept=".pdf" onchange="fazerUploadDocumento('${id}', '${atv.id}', 'colletum', this)">
+                                        </label>
+                                    </li>
+                                </ul>
+                            </div>` : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -908,7 +1182,7 @@ async function carregarArquivos(id) {
         html += '</div>';
         container.innerHTML = html;
     } catch (e) {
-        container.innerHTML = '<p class="text-muted small">Erro ao carregar atividades.</p>';
+        container.innerHTML = '<div class="alert alert-danger small py-2"><i class="fas fa-exclamation-triangle me-1"></i> Erro ao carregar atividades do beneficiário.</div>';
     }
 }
 
@@ -1916,6 +2190,16 @@ async function carregarPlanoProdutivo(beneficiarioId) {
         }
         
         container.innerHTML = htmlContent;
+    } catch (e) {
+        console.error("Erro em carregarPlanoProdutivo:", e);
+        container.innerHTML = `
+            <div class="text-danger small text-center py-4">
+                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                <p class="mb-0">Erro ao carregar o plano produtivo individual.</p>
+            </div>`;
+    }
+}
+
 // ==============================================================================
 // MÓDULO DE AUDITORIA LOCAL & CONFORMIDADE DE PASTAS (ATESTE + COLETUM)
 // ==============================================================================
@@ -1977,6 +2261,40 @@ async function carregarAuditoriaLocal() {
             selectTec.value = valAtual;
         }
 
+        // Popula select e chips de atividades
+        const porAtiv = resumo.por_atividade || {};
+        const selectAtiv = document.getElementById('filtroAuditAtividade');
+        if (selectAtiv) {
+            const valAtualAtiv = selectAtiv.value;
+            selectAtiv.innerHTML = '<option value="">Todas as Atividades</option>';
+            Object.keys(porAtiv).sort().forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.innerText = `${cat} (${porAtiv[cat].total})`;
+                selectAtiv.appendChild(opt);
+            });
+            selectAtiv.value = valAtualAtiv;
+        }
+
+        const pillsContainer = document.getElementById('pillsAtividadesAuditoria');
+        if (pillsContainer) {
+            pillsContainer.innerHTML = '';
+            Object.keys(porAtiv).sort().forEach(cat => {
+                const info = porAtiv[cat];
+                const btnPill = document.createElement('button');
+                btnPill.type = 'button';
+                btnPill.className = 'btn btn-outline-secondary btn-sm py-1 px-2 d-flex align-items-center gap-2 shadow-xs';
+                btnPill.style.fontSize = '0.78rem';
+                btnPill.onclick = () => filtrarPorAtividadeChip(cat);
+                btnPill.innerHTML = `
+                    <strong class="text-dark">${cat}</strong>
+                    <span class="badge bg-success-subtle text-success border border-success">${info.completas} ok</span>
+                    <span class="badge bg-warning-subtle text-dark border border-warning">${info.pendentes_ateste} pend. ateste</span>
+                `;
+                pillsContainer.appendChild(btnPill);
+            });
+        }
+
         renderizarTabelaAuditoriaLocal(data.detalhes || []);
     } catch (e) {
         console.error("Erro ao carregar auditoria local:", e);
@@ -1993,28 +2311,135 @@ async function carregarAuditoriaLocal() {
     }
 }
 
+function filtrarPorAtividadeChip(nomeAtividade) {
+    const sel = document.getElementById('filtroAuditAtividade');
+    if (sel) {
+        sel.value = nomeAtividade;
+        filtrarTabelaAuditoria();
+    }
+}
+
+function limparFiltroAtividade() {
+    const sel = document.getElementById('filtroAuditAtividade');
+    if (sel) {
+        sel.value = '';
+        filtrarTabelaAuditoria();
+    }
+}
+
+function abrirModalImportarSigater() {
+    if (typeof bootstrap !== 'undefined') {
+        const modalEl = document.getElementById('modalImportarSigater');
+        if (modalEl) {
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+}
+
+async function enviarLoteSigater() {
+    const fileInput = document.getElementById('sigaterFileInput');
+    const ativSelect = document.getElementById('sigaterAtividadePadrao');
+    const progress = document.getElementById('sigaterProgresso');
+    const btn = document.getElementById('btnEnviarSigater');
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Arquivo Obrigatório',
+                text: 'Por favor, selecione um arquivo .ZIP ou .PDF exportado do SIGATER.'
+            });
+        }
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('atividade_padrao', ativSelect ? ativSelect.value : 'PLANO PRODUTIVO');
+
+    if (progress) progress.classList.remove('d-none');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/bsf/auditoria/importar-lote-sigater', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+            if (typeof bootstrap !== 'undefined') {
+                const modalEl = document.getElementById('modalImportarSigater');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Ingestão Concluída!',
+                    text: data.mensagem || `${data.total_processados} atestes organizados nas pastas com sucesso.`
+                });
+            }
+            fileInput.value = '';
+            await carregarAuditoriaLocal();
+        } else {
+            throw new Error(data.detail || 'Erro ao processar lote do SIGATER');
+        }
+    } catch (e) {
+        console.error("Erro no envio do lote SIGATER:", e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Falha na Ingestão',
+                text: e.message || 'Erro ao processar o arquivo de atestes.'
+            });
+        }
+    } finally {
+        if (progress) progress.classList.add('d-none');
+        if (btn) btn.disabled = false;
+    }
+}
+
 function renderizarTabelaAuditoriaLocal(detalhes) {
     const tbody = document.getElementById('auditLocalBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    const ativSelecionada = (document.getElementById('filtroAuditAtividade')?.value || '').toLowerCase().trim();
+    const statusSelecionado = document.getElementById('filtroAuditStatus')?.value || '';
     let totalLinhas = 0;
 
     detalhes.forEach(benef => {
-        const atividades = benef.atividades || [];
+        let atividades = benef.atividades || [];
+        
+        // Filtro em nível de atividade
+        if (ativSelecionada) {
+            atividades = atividades.filter(a => 
+                (a.categoria && a.categoria.toLowerCase().includes(ativSelecionada)) ||
+                (a.pasta_atividade && a.pasta_atividade.toLowerCase().includes(ativSelecionada))
+            );
+        }
+
+        if (statusSelecionado) {
+            atividades = atividades.filter(a => a.status === statusSelecionado);
+        }
+
         if (atividades.length === 0) {
-            totalLinhas++;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
-                <td><span class="small">${benef.comunidade || '-'}</span></td>
-                <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
-                <td><span class="text-muted small">Sem pastas de atividade</span></td>
-                <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
-                <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
-                <td class="text-center"><span class="badge bg-secondary">VAZIA</span></td>
-            `;
-            tbody.appendChild(tr);
+            if (!ativSelecionada && !statusSelecionado) {
+                totalLinhas++;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
+                    <td><span class="small">${benef.comunidade || '-'}</span></td>
+                    <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
+                    <td><span class="text-muted small">Sem pastas de atividade</span></td>
+                    <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
+                    <td class="text-center"><span class="badge bg-light text-muted border">Não</span></td>
+                    <td class="text-center"><span class="badge bg-secondary">VAZIA</span></td>
+                `;
+                tbody.appendChild(tr);
+            }
         } else {
             atividades.forEach(ativ => {
                 totalLinhas++;
@@ -2039,11 +2464,15 @@ function renderizarTabelaAuditoriaLocal(detalhes) {
                     ? `<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_coletum.length})</span>` 
                     : `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
 
+                const catBadge = ativ.categoria && ativ.categoria !== 'OUTROS'
+                    ? `<span class="badge bg-dark-subtle text-dark border me-1">${ativ.categoria}</span>`
+                    : '';
+
                 tr.innerHTML = `
                     <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
                     <td><span class="small">${benef.comunidade || '-'}</span></td>
                     <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
-                    <td><code class="small text-dark fw-semibold">${ativ.pasta_atividade}</code></td>
+                    <td>${catBadge}<code class="small text-dark fw-semibold">${ativ.pasta_atividade}</code></td>
                     <td class="text-center">${badgeAteste}</td>
                     <td class="text-center">${badgeColetum}</td>
                     <td class="text-center">${badgeStatus}</td>
@@ -2062,6 +2491,7 @@ function filtrarTabelaAuditoria() {
     
     const termo = (document.getElementById('filtroAuditBusca')?.value || '').toLowerCase().trim();
     const tecSelecionado = (document.getElementById('filtroAuditTecnico')?.value || '').toLowerCase().trim();
+    const ativSelecionada = (document.getElementById('filtroAuditAtividade')?.value || '').toLowerCase().trim();
     const statusSelecionado = document.getElementById('filtroAuditStatus')?.value || '';
 
     const filtrados = dadosAuditoriaLocalCache.detalhes.filter(benef => {
@@ -2072,6 +2502,14 @@ function filtrarTabelaAuditoria() {
             (benef.tecnico && benef.tecnico.toLowerCase().includes(termo));
         
         if (!bateTec || !bateTexto) return false;
+
+        if (ativSelecionada) {
+            const temAtiv = (benef.atividades || []).some(a => 
+                (a.categoria && a.categoria.toLowerCase().includes(ativSelecionada)) ||
+                (a.pasta_atividade && a.pasta_atividade.toLowerCase().includes(ativSelecionada))
+            );
+            if (!temAtiv) return false;
+        }
 
         if (statusSelecionado) {
             const temAtivComStatus = (benef.atividades || []).some(a => a.status === statusSelecionado);
@@ -2129,13 +2567,13 @@ async function executarVarreduraLocalAgora() {
 async function consolidarPastasDuplicadasAgora() {
     if (typeof Swal !== 'undefined') {
         const result = await Swal.fire({
-            title: 'Unificar Pastas Duplicadas?',
-            text: 'O sistema irá mesclar com segurança as pastas com pequenas variações de acento (ex: JOSÉ e JOSE), movendo todos os arquivos sem perda e removendo pastas vazias redundantes.',
+            title: 'Unificar Pastas e Documentos?',
+            text: 'O sistema irá unificar com total segurança as pastas duplicadas por acentos e juntar atividades onde o Ateste e o Coletum ficaram em pastas separadas, tornando-as 100% Completas.',
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#198754',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sim, Unificar Agora',
+            confirmButtonText: 'Sim, Unificar Tudo Agora',
             cancelButtonText: 'Cancelar'
         });
         if (!result.isConfirmed) return;
@@ -2171,6 +2609,60 @@ async function consolidarPastasDuplicadasAgora() {
         }
     } finally {
         if (btn) btn.disabled = false;
+    }
+}
+
+async function sincronizarBeneficiariosDasPastas() {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: 'Sincronizar Beneficiários com Pastas Locais?',
+            text: 'O banco de dados será atualizado com os 490 beneficiários oficiais das pastas, vinculando seus respectivos técnicos, comunidades e CPFs identificados.',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#0dcaf0',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sim, Sincronizar Agora',
+            cancelButtonText: 'Cancelar'
+        });
+        if (!result.isConfirmed) return;
+    }
+
+    try {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Sincronizando...',
+                text: 'Atualizando os 490 beneficiários no banco de dados. Aguarde...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+        }
+
+        const res = await fetch('/api/bsf/beneficiarios/sincronizar-das-pastas', { method: 'POST' });
+        const data = await res.json();
+
+        if (res.ok) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sincronização Concluída!',
+                    text: data.mensagem || '490 beneficiários sincronizados com sucesso!',
+                    timer: 3000
+                });
+            }
+            await carregarBeneficiarios(1);
+            await carregarFiltros();
+        } else {
+            throw new Error(data.detail || 'Falha ao sincronizar beneficiários.');
+        }
+    } catch (e) {
+        console.error('Erro na sincronização:', e);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: e.message || 'Erro ao sincronizar com pastas.'
+            });
+        }
     }
 }
 
