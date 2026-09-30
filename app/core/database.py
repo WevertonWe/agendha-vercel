@@ -615,6 +615,25 @@ def init_db():
     )
     """)
 
+    # --- MÓDULO CISTERNA DEIVI ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cisterna_beneficiarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_completo TEXT NOT NULL,
+        cpf TEXT,
+        rg TEXT,
+        nis TEXT,
+        telefone TEXT,
+        municipio TEXT DEFAULT 'GLÓRIA',
+        comunidade TEXT,
+        implementacao TEXT DEFAULT 'CISTERNA DE CONSUMO 16M³',
+        contrato TEXT DEFAULT '040/2024 – SEADES/AGENDHA',
+        status TEXT DEFAULT 'Ativo',
+        observacoes TEXT,
+        data_cadastro TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     # --- MIGRAÇÕES E DADOS PADRÃO ---
     try:
         cursor.execute("ALTER TABLE propostas ADD COLUMN fornecedor_id INTEGER REFERENCES fornecedores(id)")

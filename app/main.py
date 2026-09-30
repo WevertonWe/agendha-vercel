@@ -391,6 +391,14 @@ app.include_router(p12_cotacoes.router)
 app.include_router(p12_documentos.router)
 app.include_router(p12_planejamento.router)
 
+# Módulo: Cisterna Deivi
+from app.modules.cisterna_deivi import views as cisterna_views  # noqa: E402
+from app.modules.cisterna_deivi.routers import (  # noqa: E402
+    beneficiarios as cisterna_beneficiarios
+)
+app.include_router(cisterna_views.router)
+app.include_router(cisterna_beneficiarios.router)
+
 
 
 print("\n[MAPA DE ROTAS ATIVAS NO FASTAPI]")

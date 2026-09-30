@@ -105,10 +105,13 @@
                     {% elif '/p1-2' in request.url.path or context_project == 'p1_2' %}
                         <img src="{{ url_for('static', path='imagens/logo-agendha.webp') }}" alt="Logotipo da Agendha" width="50" height="50" class="me-2" loading="lazy">
                         <span class="mb-0">Agendha - P1+2</span>
+                    {% elif '/cisterna-deivi' in request.url.path or context_project == 'cisterna_deivi' %}
+                        <img src="{{ url_for('static', path='imagens/logo-agendha.webp') }}" alt="Logotipo da Agendha" width="50" height="50" class="me-2" loading="lazy">
+                        <span class="mb-0">Agendha - Cisterna Deivi</span>
                     {% elif context_project == 'agua' %}
                         <img src="{{ url_for('static', path='imagens/logo-agendha.webp') }}" alt="Logotipo da Agendha" width="50" height="50" class="me-2" loading="lazy">
-                        <img src="{{ url_for('static', path='imagens/logo-agua.webp') }}" alt="Logotipo do Projeto Água que Alimenta" width="50" height="50" class="me-2" loading="lazy">
-                        <span class="mb-0">Agendha - Água que Alimenta</span>
+                        <img src="{{ url_for('static', path='imagens/logo-agua.webp') }}" alt="Logotipo do Projeto Chicão - Água que Alimenta" width="50" height="50" class="me-2" loading="lazy">
+                        <span class="mb-0">Agendha - Chicão - Água que Alimenta</span>
                     {% else %}
                         <img src="{{ url_for('static', path='imagens/logo-agendha.webp') }}" alt="Logotipo da Instituição Agendha" width="50" height="50" class="me-2" loading="lazy">
                         <span class="mb-0">Agendha</span>
@@ -117,7 +120,9 @@
 
                 <!-- Botão Voltar (Lógica Jinja2 Segura) -->
                 <div class="ms-3 d-none d-lg-block">
-                    {% if request.url.path == '/p1-2/portal' or request.url.path == '/p1-2' %}
+                    {% if request.url.path.startswith('/cisterna-deivi') %}
+                    <a href="/hub" class="btn btn-outline-light btn-sm" aria-label="Voltar ao Hub"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Hub</a>
+                    {% elif request.url.path == '/p1-2/portal' or request.url.path == '/p1-2' %}
                     <a href="/hub" class="btn btn-outline-light btn-sm" aria-label="Voltar ao Hub"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Hub</a>
                     {% elif '/p1-2' in request.url.path %}
                     <a href="/p1-2/portal" class="btn btn-outline-light btn-sm" aria-label="Voltar ao Portal P1+2"><i class="bi bi-arrow-left" aria-hidden="true"></i> Voltar ao Portal</a>
@@ -189,14 +194,28 @@
                         </li>
                         {% endif %}
 
-                        {# --- MENUS GERAIS (Ocultar se estiver no BSF ou P1+2) --- #}
+                        {# --- MENUS CISTERNA DEIVI --- #}
+                        {% if '/cisterna-deivi' in request.url.path or context_project == 'cisterna_deivi' %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if current_page == 'cisterna_beneficiarios' %}active{% endif %}" href="/cisterna-deivi/beneficiarios">
+                                <i class="bi bi-people-fill me-1"></i> Beneficiários
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/hub">
+                                <i class="bi bi-grid-fill me-1"></i> Hub
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# --- MENUS GERAIS (Ocultar se estiver no BSF, P1+2 ou Cisterna Deivi) --- #}
                         <li class="nav-item" id="hub-link-item" style="display: none;">
                             <a class="nav-link" href="/hub" title="Voltar ao Painel de Gestão">
                                 <i class="bi bi-house-door-fill"></i> Hub
                             </a>
                         </li>
 
-                        {% if 'bahia-sem-fome' not in request.url.path and '/p1-2' not in request.url.path and context_project != 'p1_2' %}
+                        {% if 'bahia-sem-fome' not in request.url.path and '/p1-2' not in request.url.path and context_project != 'p1_2' and '/cisterna-deivi' not in request.url.path and context_project != 'cisterna_deivi' %}
                         <li class="nav-item">
                             <a class="nav-link {% if current_page == 'portal' %}active{% endif %}"
                                 href="/portal">Portal</a>

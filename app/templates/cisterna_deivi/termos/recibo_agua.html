@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Recibo Água e Cura - {{ beneficiario.nome_completo }}{% endblock %}
+
+{% block styles %}
+<style>
+    .termo-container {
+        max-width: 800px;
+        margin: 30px auto;
+        background: #ffffff;
+        padding: 50px 60px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        font-family: 'Times New Roman', Times, serif;
+        color: #111827;
+        line-height: 1.8;
+    }
+
+    .termo-header-logos {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+    }
+
+    .termo-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 25px;
+        color: #1f2937;
+    }
+
+    .termo-info-table {
+        width: 100%;
+        margin-bottom: 25px;
+        font-size: 1.05rem;
+    }
+
+    .termo-info-table td {
+        padding: 6px 0;
+        vertical-align: top;
+    }
+
+    .termo-info-label {
+        font-weight: 700;
+        width: 180px;
+        color: #374151;
+    }
+
+    .termo-body {
+        font-size: 1.1rem;
+        text-align: justify;
+        text-indent: 40px;
+        margin-bottom: 40px;
+    }
+
+    .termo-data {
+        text-align: right;
+        font-size: 1.05rem;
+        margin-bottom: 60px;
+    }
+
+    .termo-assinatura-box {
+        text-align: center;
+        max-width: 450px;
+        margin: 0 auto;
+    }
+
+    .termo-linha-assinatura {
+        border-top: 1px solid #111827;
+        margin-bottom: 8px;
+    }
+
+    .floating-actions {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 1050;
+        display: flex;
+        gap: 12px;
+    }
+
+    @media print {
+        .navbar, .floating-actions, footer, .dashboard-header, #hub-link-item {
+            display: none !important;
+        }
+        body {
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .termo-container {
+            box-shadow: none !important;
+            margin: 0 auto !important;
+            padding: 20px 30px !important;
+            max-width: 100% !important;
+            border-radius: 0 !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Barra Flutuante de Ações -->
+    <div class="floating-actions no-print">
+        <a href="/cisterna-deivi/beneficiarios" class="btn btn-secondary shadow-lg rounded-pill px-4 py-2">
+            <i class="bi bi-arrow-left me-1"></i> Voltar
+        </a>
+        <button onclick="window.print()" class="btn btn-primary shadow-lg rounded-pill px-4 py-2">
+            <i class="bi bi-printer-fill me-1"></i> Imprimir / PDF
+        </button>
+    </div>
+
+    <div class="termo-container">
+        <!-- Cabeçalho com Logos -->
+        <div class="termo-header-logos">
+            <div>
+                <img src="{{ url_for('static', path='imagens/logo-agendha.webp') }}" alt="Logo AGENDHA" height="60">
+            </div>
+            <div class="text-end">
+                <span class="badge bg-light text-dark border px-3 py-2 fs-6">SEADES / AGENDHA</span>
+            </div>
+        </div>
+
+        <div class="termo-title">
+            RECIBO DE CONTRIBUIÇÃO À FAMÍLIA
+        </div>
+
+        <table class="termo-info-table">
+            <tr>
+                <td class="termo-info-label">Implementação:</td>
+                <td><strong>{{ beneficiario.implementacao or 'CISTERNA DE CONSUMO 16M³' }}</strong></td>
+            </tr>
+            <tr>
+                <td class="termo-info-label">Beneficiário:</td>
+                <td><strong>{{ beneficiario.nome_completo }}</strong></td>
+            </tr>
+            <tr>
+                <td class="termo-info-label">CPF:</td>
+                <td>{{ beneficiario.cpf or '____________________' }}</td>
+            </tr>
+            <tr>
+                <td class="termo-info-label">Município:</td>
+                <td>{{ beneficiario.municipio or 'GLÓRIA' }} - BA</td>
+            </tr>
+            <tr>
+                <td class="termo-info-label">Comunidade:</td>
+                <td>{{ beneficiario.comunidade or '____________________' }}</td>
+            </tr>
+            <tr>
+                <td class="termo-info-label">Contrato:</td>
+                <td>{{ beneficiario.contrato or '040/2024 – SEADES/AGENDHA' }}</td>
+            </tr>
+        </table>
+
+        <div class="termo-body">
+            Recebi da <strong>ASSESSORIA E GESTÃO EM ESTUDOS DA NATUREZA DESENVOLVIMENTO HUMANO E AGROECOLOGIA</strong>, inscrito no CNPJ sob o nº <strong>05.900.819/0001-29</strong>, situado na Rua Califórnia, quadra C, nº 12, no Bairro Amaury Alves de Menezes, CEP: 48605146 - Paulo Afonso/BA, a importância de <strong>R$ 200,00 (Duzentos Reais)</strong> correspondente a contribuição destinada à água para construção e cura da cisterna de consumo. Pelo que passo o presente, dando plena e geral quitação.
+        </div>
+
+        <div class="termo-data">
+            Paulo Afonso - BA, <strong>{{ data_formatada.dia }}</strong> de <strong>{{ data_formatada.mes }}</strong> de <strong>{{ data_formatada.ano }}</strong>.
+        </div>
+
+        <div class="termo-assinatura-box">
+            <div class="termo-linha-assinatura"></div>
+            <div><strong>Nome:</strong> {{ beneficiario.nome_completo }}</div>
+            <div><strong>CPF nº:</strong> {{ beneficiario.cpf or '____________________' }}</div>
+            <div class="text-muted small mt-1">Assinatura do(a) Beneficiário(a)</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

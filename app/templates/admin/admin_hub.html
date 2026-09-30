@@ -97,6 +97,9 @@
     .theme-p12 .stat-icon { background-color: rgba(13, 110, 253, 0.12); color: #0d6efd; }
     .theme-p12 .stat-value { color: #0d6efd; }
 
+    .theme-cisterna .stat-icon { background-color: rgba(13, 148, 136, 0.12); color: #0d9488; }
+    .theme-cisterna .stat-value { color: #0d9488; }
+
 
     .section-title {
         font-size: 0.85rem;
@@ -181,7 +184,7 @@
                 <div>
                     <div class="stat-icon"><i class="bi bi-droplet-fill"></i></div>
                     <div class="stat-value mt-3" id="val-aqa"><span class="loading-skeleton loading-text"></span></div>
-                    <div class="stat-label fw-bold">Água que Alimenta</div>
+                    <div class="stat-label fw-bold">Chicão - Água que Alimenta</div>
                     <small class="text-muted mt-3 d-block">Beneficiários totais</small>
                 </div>
             </a>
@@ -227,6 +230,22 @@
             {% endif %}
         </div>
 
+        <!-- Cisterna Deivi (Teal) -->
+        <div class="col-md-6 col-lg-3">
+            <a href="/cisterna-deivi" class="stat-card p-4 theme-cisterna shadow-sm" style="border-radius: 16px;">
+                <i class="bi bi-box-arrow-up-right position-absolute top-0 end-0 m-3" style="font-size: 1rem; opacity: 0.6;"></i>
+                <div>
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="stat-icon"><i class="bi bi-water"></i></div>
+                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3">Novo</span>
+                    </div>
+                    <div class="stat-value mt-3" id="val-cisterna"><span class="loading-skeleton loading-text"></span></div>
+                    <div class="stat-label fw-bold">Cisterna Deivi</div>
+                    <small class="text-muted mt-3 d-block">Beneficiários e Termos</small>
+                </div>
+            </a>
+        </div>
+
         <!-- Ofícios (Amarelo) -->
         <div class="col-md-6 col-lg-3">
             <a href="/oficios" class="stat-card p-4 theme-oficios shadow-sm" style="border-radius: 16px;">
@@ -248,6 +267,17 @@
     </div>
     
     <div class="row g-4 mb-5">
+        <!-- Cisterna Deivi -->
+        <div class="col-lg-3 col-md-4">
+            <a href="/cisterna-deivi" class="stat-card p-4 shadow-sm h-100 hover-lift">
+                <div class="text-center">
+                    <div class="stat-icon mx-auto bg-light" style="color: #0d9488;"><i class="bi bi-water"></i></div>
+                    <h6 class="fw-bold text-dark mt-2">Cisterna Deivi</h6>
+                    <small class="text-muted">SEADES - Beneficiários e Termos</small>
+                </div>
+            </a>
+        </div>
+
         <!-- ATER BIOMAS CA 13 -->
         <div class="col-lg-3 col-md-4">
             <a href="/projetos/ater-biomas-ca-13" class="stat-card p-4 shadow-sm h-100 hover-lift">
@@ -368,6 +398,19 @@
                 
                 // Ofícios
                 document.getElementById('val-oficios').textContent = data.oficios.total;
+
+                // Cisterna Deivi
+                try {
+                    const reqCisterna = await fetch('/api/cisterna-deivi/beneficiarios?limit=1', { headers });
+                    if (reqCisterna.ok) {
+                        const dataCisterna = await reqCisterna.json();
+                        const elCisterna = document.getElementById('val-cisterna');
+                        if (elCisterna) elCisterna.textContent = formatNumber.format(dataCisterna.total || 0);
+                    }
+                } catch(eCisterna) {
+                    const elCisterna = document.getElementById('val-cisterna');
+                    if (elCisterna) elCisterna.textContent = '0';
+                }
                 
             } else {
                 console.error("Erro ao carregar dashboard api");

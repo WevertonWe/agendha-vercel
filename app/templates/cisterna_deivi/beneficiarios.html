@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+{% block title %}Beneficiários - Cisterna Deivi{% endblock %}
+
+{% block styles %}
+<style>
+    .page-header-cisterna {
+        background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(13, 148, 136, 0.15);
+    }
+
+    .stat-card-cisterna {
+        border-radius: 14px;
+        background: #ffffff;
+        border: 1px solid rgba(13, 148, 136, 0.12);
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .stat-card-cisterna:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 16px rgba(13, 148, 136, 0.1);
+    }
+
+    .table-cisterna th {
+        background-color: #f0fdfa;
+        color: #115e59;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+        border-bottom: 2px solid #ccfbf1;
+    }
+
+    .btn-termos-dropdown {
+        background-color: #f0fdfa;
+        color: #0f766e;
+        border: 1px solid #99f6e4;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .btn-termos-dropdown:hover {
+        background-color: #ccfbf1;
+        color: #115e59;
+    }
+
+    /* Solução para o dropdown nunca ser cortado ou gerar barra de rolagem na tabela */
+    .card-tabela-cisterna {
+        overflow: visible !important;
+    }
+    .table-responsive-cisterna {
+        overflow: visible !important;
+        min-height: 220px;
+    }
+    @media (max-width: 991px) {
+        .table-responsive-cisterna {
+            overflow-x: auto !important;
+            padding-bottom: 140px;
+        }
+    }
+    .dropdown-menu-termos {
+        z-index: 1060 !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(13, 148, 136, 0.2) !important;
+        min-width: 280px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Topo do Projeto -->
+<div class="page-header-cisterna">
+    <div class="container d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="badge bg-white text-dark rounded-pill px-3 py-1 fw-bold">SEADES / AGENDHA</span>
+                <span class="badge bg-warning text-dark rounded-pill px-3 py-1 fw-bold">Contrato 040/2024</span>
+            </div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-water me-2"></i>Cisterna Deivi - Beneficiários</h2>
+            <p class="mb-0 opacity-75 small">Gestão de famílias atendidas e emissão automática de termos e recibos com assinatura institucional</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/hub" class="btn btn-outline-light rounded-pill px-3">
+                <i class="bi bi-arrow-left me-1"></i> Hub
+            </a>
+            <button class="btn btn-light text-teal fw-bold rounded-pill px-4 shadow-sm" style="color: #0f766e;" onclick="abrirModalCadastro()">
+                <i class="bi bi-person-plus-fill me-1"></i> Novo Beneficiário
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="container pb-5">
+    <!-- Cards de Métricas -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="stat-card-cisterna d-flex align-items-center gap-3">
+                <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background: #ccfbf1; color: #0f766e; width: 54px; height: 54px;">
+                    <i class="bi bi-people-fill fs-4"></i>
+                </div>
+                <div>
+                    <h3 class="fw-bold mb-0 text-dark" id="stat-total">0</h3>
+                    <small class="text-muted">Famílias Beneficiárias</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card-cisterna d-flex align-items-center gap-3">
+                <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background: #e0f2fe; color: #0284c7; width: 54px; height: 54px;">
+                    <i class="bi bi-geo-alt-fill fs-4"></i>
+                </div>
+                <div>
+                    <h3 class="fw-bold mb-0 text-dark" id="stat-municipios">0</h3>
+                    <small class="text-muted">Municípios Atendidos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card-cisterna d-flex align-items-center gap-3">
+                <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background: #fef3c7; color: #d97706; width: 54px; height: 54px;">
+                    <i class="bi bi-file-earmark-check-fill fs-4"></i>
+                </div>
+                <div>
+                    <h3 class="fw-bold mb-0 text-dark">3 Modelos</h3>
+                    <small class="text-muted">Recibos & Termos Automáticos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros e Busca -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="filtro-busca" class="form-control bg-light border-0" placeholder="Buscar por Nome, CPF ou Comunidade..." onkeyup="debounceBusca()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select id="filtro-municipio" class="form-select bg-light border-0" onchange="carregarBeneficiarios(1)">
+                    <option value="TODOS">Todos os Municípios</option>
+                </select>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="limparFiltros()">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpar Filtros
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Beneficiários -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white card-tabela-cisterna">
+        <div class="table-responsive table-responsive-cisterna">
+            <table class="table table-hover align-middle mb-0 table-cisterna">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Beneficiário(a)</th>
+                        <th>CPF</th>
+                        <th>Município</th>
+                        <th>Comunidade</th>
+                        <th class="text-center">Gerar Termos</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-beneficiarios">
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <div class="spinner-border spinner-border-sm text-teal me-2" role="status"></div>
+                            Carregando beneficiários...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        <div class="d-flex justify-content-between align-items-center p-3 border-top">
+            <small class="text-muted" id="info-paginacao">Mostrando 0 de 0 registros</small>
+            <div class="btn-group" id="botoes-paginacao"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cadastro / Edição de Beneficiário -->
+<div class="modal fade" id="modalBeneficiario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-light border-0 py-3 px-4">
+                <h5 class="modal-title fw-bold text-dark" id="modalTitulo">Novo Beneficiário - Cisterna Deivi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formBeneficiario" onsubmit="salvarBeneficiario(event)">
+                    <input type="hidden" id="ben-id">
+
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Nome Completo <span class="text-danger">*</span></label>
+                            <input type="text" id="ben-nome" class="form-control text-uppercase" placeholder="Ex: IVANILDA COELHO DA CRUZ" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">CPF</label>
+                            <input type="text" id="ben-cpf" class="form-control" placeholder="000.000.000-00">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Município</label>
+                            <input type="text" id="ben-municipio" class="form-control text-uppercase" value="GLÓRIA" placeholder="Ex: GLÓRIA">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Comunidade</label>
+                            <input type="text" id="ben-comunidade" class="form-control text-uppercase" placeholder="Ex: KANTARURÉ">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Implementação</label>
+                            <input type="text" id="ben-implementacao" class="form-control" value="CISTERNA DE CONSUMO 16M³">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Contrato</label>
+                            <input type="text" id="ben-contrato" class="form-control" value="040/2024 – SEADES/AGENDHA">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Telefone (opcional)</label>
+                            <input type="text" id="ben-telefone" class="form-control" placeholder="(00) 00000-0000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">RG (opcional)</label>
+                            <input type="text" id="ben-rg" class="form-control" placeholder="Número do RG">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Observações (opcional)</label>
+                            <textarea id="ben-obs" class="form-control" rows="2" placeholder="Informações adicionais da família..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 text-end">
+                        <button type="button" class="btn btn-light rounded-pill px-4 me-2" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-teal text-white rounded-pill px-4" style="background-color: #0f766e;">
+                            <i class="bi bi-check-lg me-1"></i> Salvar Beneficiário
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Seleção de Termos -->
+<div class="modal fade" id="modalTermosBeneficiario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header border-0 py-3 px-4" style="background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); color: white;">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>Emitir Documentos & Termos</h5>
+                    <small class="opacity-75" id="modal-termos-nome">Beneficiário</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="d-flex flex-column gap-3">
+                    <!-- Termo 1 -->
+                    <div class="card border p-3 rounded-3 shadow-none">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-cash-stack text-success me-2"></i>Recibo Cisterna & Cozinheira</h6>
+                                <span class="badge bg-success bg-opacity-10 text-success fw-bold">R$ 1.180,00</span>
+                                <small class="text-muted d-block mt-1">Custos de construção 16m³ e pagamento cozinheira</small>
+                            </div>
+                            <a id="btn-modal-termo-1" href="#" target="_blank" class="btn btn-outline-success btn-sm rounded-pill px-3">
+                                <i class="bi bi-printer me-1"></i> Abrir / PDF
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Termo 2 -->
+                    <div class="card border p-3 rounded-3 shadow-none">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-droplet-fill text-primary me-2"></i>Recibo Água & Cura</h6>
+                                <span class="badge bg-primary bg-opacity-10 text-primary fw-bold">R$ 200,00</span>
+                                <small class="text-muted d-block mt-1">Água para construção e cura da cisterna</small>
+                            </div>
+                            <a id="btn-modal-termo-2" href="#" target="_blank" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                <i class="bi bi-printer me-1"></i> Abrir / PDF
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Termo 3 -->
+                    <div class="card border p-3 rounded-3 shadow-none" style="border-color: #99f6e4 !important; background: #f0fdfa;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-pen-fill text-warning me-2"></i>Termo de Concessão & Compromisso</h6>
+                                <span class="badge bg-warning bg-opacity-20 text-dark fw-bold">Assinatura Oficial Luciene Marilac</span>
+                                <small class="text-muted d-block mt-1">Com assinatura digitalizada da Coordenação Geral</small>
+                            </div>
+                            <a id="btn-modal-termo-3" href="#" target="_blank" class="btn text-white btn-sm rounded-pill px-3" style="background-color: #0f766e;">
+                                <i class="bi bi-printer me-1"></i> Abrir / PDF
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 px-4 pb-3">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let paginaAtual = 1;
+    let timerBusca = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        carregarBeneficiarios(1);
+    });
+
+    function debounceBusca() {
+        clearTimeout(timerBusca);
+        timerBusca = setTimeout(() => {
+            carregarBeneficiarios(1);
+        }, 350);
+    }
+
+    function limparFiltros() {
+        document.getElementById('filtro-busca').value = '';
+        document.getElementById('filtro-municipio').value = 'TODOS';
+        carregarBeneficiarios(1);
+    }
+
+    async function carregarBeneficiarios(pagina = 1) {
+        paginaAtual = pagina;
+        const tbody = document.getElementById('lista-beneficiarios');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-5 text-muted">
+                    <div class="spinner-border spinner-border-sm text-teal me-2" role="status"></div>
+                    Carregando beneficiários...
+                </td>
+            </tr>
+        `;
+
+        const busca = encodeURIComponent(document.getElementById('filtro-busca').value.trim());
+        const municipio = encodeURIComponent(document.getElementById('filtro-municipio').value);
+
+        try {
+            const res = await fetch(`/api/cisterna-deivi/beneficiarios?page=${pagina}&limit=25&search=${busca}&municipio=${municipio}`);
+            if (!res.ok) throw new Error("Erro ao carregar dados.");
+            const data = await res.json();
+
+            // Atualiza métricas
+            document.getElementById('stat-total').textContent = data.total || 0;
+            document.getElementById('stat-municipios').textContent = (data.municipios && data.municipios.length) || 0;
+
+            // Popula select de municípios se estiver vazio
+            const selMun = document.getElementById('filtro-municipio');
+            if (selMun.options.length <= 1 && data.municipios) {
+                data.municipios.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    selMun.appendChild(opt);
+                });
+            }
+
+            renderizarTabela(data.itens || []);
+            renderizarPaginacao(data.total, data.page, data.limit, data.total_pages);
+
+        } catch (err) {
+            console.error("Erro ao listar:", err);
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Erro ao carregar beneficiários. Tente recarregar a página.
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    function renderizarTabela(itens) {
+        const tbody = document.getElementById('lista-beneficiarios');
+        if (!itens || itens.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
+                        Nenhum beneficiário encontrado. Clique em <strong>+ Novo Beneficiário</strong> para cadastrar.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = itens.map(b => `
+            <tr>
+                <td class="ps-4">
+                    <div class="fw-bold text-dark">${b.nome_completo || '-'}</div>
+                    <small class="text-muted">${b.implementacao || 'Cisterna 16m³'}</small>
+                </td>
+                <td>
+                    <span class="badge bg-light text-secondary border font-monospace px-2 py-1">${b.cpf || 'Não informado'}</span>
+                </td>
+                <td>${b.municipio || 'GLÓRIA'}</td>
+                <td>${b.comunidade || '<span class="text-muted small">Não informada</span>'}</td>
+                <td class="text-center">
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-sm btn-termos-dropdown dropdown-toggle rounded-pill px-3" 
+                                type="button" 
+                                data-bs-toggle="dropdown" 
+                                data-bs-boundary="viewport"
+                                data-bs-popper-config='{"strategy":"fixed"}'
+                                aria-expanded="false">
+                            <i class="bi bi-file-earmark-text me-1"></i> Emitir Termo
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-termos shadow border-0">
+                            <li><h6 class="dropdown-header">Recibos de Pagamento</h6></li>
+                            <li>
+                                <a class="dropdown-item py-2" href="/cisterna-deivi/termos/recibo-construcao/${b.id}" target="_blank">
+                                    <i class="bi bi-cash-stack text-success me-2"></i> Recibo Cisterna & Cozinheira (R$ 1.180)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item py-2" href="/cisterna-deivi/termos/recibo-agua/${b.id}" target="_blank">
+                                    <i class="bi bi-droplet-fill text-primary me-2"></i> Recibo Água & Cura (R$ 200)
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Termo Institucional</h6></li>
+                            <li>
+                                <a class="dropdown-item py-2 fw-bold text-teal" style="color: #0f766e;" href="/cisterna-deivi/termos/termo-coordenacao/${b.id}" target="_blank">
+                                    <i class="bi bi-pen-fill text-warning me-2"></i> Termo c/ Assinatura Luciene Marilac
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="dropdown-item py-2 text-primary small" onclick="abrirModalTermos(${b.id}, '${b.nome_completo.replace(/'/g, "\\'")}')">
+                                    <i class="bi bi-window-stack me-2"></i> Abrir em Janela / Modal
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </td>
+                <td class="text-end pe-4">
+                    <button class="btn btn-sm btn-outline-primary border-0 rounded-circle" onclick="editarBeneficiario(${b.id})" title="Editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger border-0 rounded-circle" onclick="confirmarRemoverBeneficiario(${b.id}, '${b.nome_completo.replace(/'/g, "\\'")}')" title="Excluir">
+                        <i class="bi bi-trash-fill"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderizarPaginacao(total, page, limit, totalPages) {
+        document.getElementById('info-paginacao').textContent = `Total de ${total} registros | Página ${page} de ${totalPages}`;
+        const container = document.getElementById('botoes-paginacao');
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        html += `<button class="btn btn-sm btn-outline-secondary ${page <= 1 ? 'disabled' : ''}" onclick="carregarBeneficiarios(${page - 1})">Anterior</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+                html += `<button class="btn btn-sm ${i === page ? 'btn-teal text-white' : 'btn-outline-secondary'}" style="${i === page ? 'background-color: #0f766e;' : ''}" onclick="carregarBeneficiarios(${i})">${i}</button>`;
+            }
+        }
+        html += `<button class="btn btn-sm btn-outline-secondary ${page >= totalPages ? 'disabled' : ''}" onclick="carregarBeneficiarios(${page + 1})">Próxima</button>`;
+        container.innerHTML = html;
+    }
+
+    function abrirModalCadastro() {
+        document.getElementById('formBeneficiario').reset();
+        document.getElementById('ben-id').value = '';
+        document.getElementById('modalTitulo').textContent = 'Novo Beneficiário - Cisterna Deivi';
+        document.getElementById('ben-municipio').value = 'GLÓRIA';
+        document.getElementById('ben-implementacao').value = 'CISTERNA DE CONSUMO 16M³';
+        document.getElementById('ben-contrato').value = '040/2024 – SEADES/AGENDHA';
+        
+        if (typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(document.getElementById('modalBeneficiario'));
+            modal.show();
+        }
+    }
+
+    async function editarBeneficiario(id) {
+        try {
+            const res = await fetch(`/api/cisterna-deivi/beneficiarios/${id}`);
+            if (!res.ok) throw new Error("Beneficiário não encontrado.");
+            const b = await res.json();
+
+            document.getElementById('ben-id').value = b.id;
+            document.getElementById('ben-nome').value = b.nome_completo || '';
+            document.getElementById('ben-cpf').value = b.cpf || '';
+            document.getElementById('ben-municipio').value = b.municipio || 'GLÓRIA';
+            document.getElementById('ben-comunidade').value = b.comunidade || '';
+            document.getElementById('ben-implementacao').value = b.implementacao || 'CISTERNA DE CONSUMO 16M³';
+            document.getElementById('ben-contrato').value = b.contrato || '040/2024 – SEADES/AGENDHA';
+            document.getElementById('ben-telefone').value = b.telefone || '';
+            document.getElementById('ben-rg').value = b.rg || '';
+            document.getElementById('ben-obs').value = b.observacoes || '';
+
+            document.getElementById('modalTitulo').textContent = 'Editar Beneficiário';
+
+            if (typeof bootstrap !== 'undefined') {
+                const modal = new bootstrap.Modal(document.getElementById('modalBeneficiario'));
+                modal.show();
+            }
+        } catch (err) {
+            console.error(err);
+            if (typeof ui !== 'undefined') {
+                ui.feedbackErro('Não foi possível carregar os dados do beneficiário.');
+            }
+        }
+    }
+
+    async function salvarBeneficiario(event) {
+        event.preventDefault();
+        const id = document.getElementById('ben-id').value;
+
+        const payload = {
+            nome_completo: document.getElementById('ben-nome').value.trim(),
+            cpf: document.getElementById('ben-cpf').value.trim() || null,
+            municipio: document.getElementById('ben-municipio').value.trim() || 'GLÓRIA',
+            comunidade: document.getElementById('ben-comunidade').value.trim() || null,
+            implementacao: document.getElementById('ben-implementacao').value.trim(),
+            contrato: document.getElementById('ben-contrato').value.trim(),
+            telefone: document.getElementById('ben-telefone').value.trim() || null,
+            rg: document.getElementById('ben-rg').value.trim() || null,
+            observacoes: document.getElementById('ben-obs').value.trim() || null
+        };
+
+        const url = id ? `/api/cisterna-deivi/beneficiarios/${id}` : '/api/cisterna-deivi/beneficiarios';
+        const method = id ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const erro = await res.json();
+                throw new Error(erro.detail || 'Erro ao salvar beneficiário.');
+            }
+
+            if (typeof bootstrap !== 'undefined') {
+                const modalEl = document.getElementById('modalBeneficiario');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+
+            if (typeof ui !== 'undefined') {
+                ui.feedbackSucesso(id ? 'Beneficiário atualizado com sucesso!' : 'Beneficiário cadastrado com sucesso!');
+            }
+            carregarBeneficiarios(paginaAtual);
+
+        } catch (err) {
+            console.error(err);
+            if (typeof ui !== 'undefined') {
+                ui.feedbackErro(err.message || 'Erro ao salvar beneficiário.');
+            }
+        }
+    }
+
+    function confirmarRemoverBeneficiario(id, nome) {
+        const acaoExcluir = async () => {
+            try {
+                const res = await fetch(`/api/cisterna-deivi/beneficiarios/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error("Erro ao excluir beneficiário.");
+                if (typeof ui !== 'undefined') {
+                    ui.feedbackSucesso(`Beneficiário ${nome} excluído com sucesso!`);
+                }
+                carregarBeneficiarios(paginaAtual);
+            } catch (err) {
+                console.error(err);
+                if (typeof ui !== 'undefined') {
+                    ui.feedbackErro('Erro ao excluir beneficiário.');
+                }
+            }
+        };
+
+        if (typeof ui !== 'undefined' && typeof ui.confirmarExclusao === 'function') {
+            ui.confirmarExclusao(`Deseja realmente excluir ${nome}?`, acaoExcluir);
+        } else if (confirm(`Deseja realmente excluir ${nome}?`)) {
+            acaoExcluir();
+        }
+    }
+
+    function abrirModalTermos(id, nome) {
+        document.getElementById('modal-termos-nome').textContent = nome;
+        document.getElementById('btn-modal-termo-1').href = `/cisterna-deivi/termos/recibo-construcao/${id}`;
+        document.getElementById('btn-modal-termo-2').href = `/cisterna-deivi/termos/recibo-agua/${id}`;
+        document.getElementById('btn-modal-termo-3').href = `/cisterna-deivi/termos/termo-coordenacao/${id}`;
+
+        if (typeof bootstrap !== 'undefined') {
+            const modalEl = document.getElementById('modalTermosBeneficiario');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    }
+</script>
+{% endblock %}
