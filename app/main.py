@@ -189,36 +189,64 @@ app = FastAPI(
 )
 
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-@app.get("/api/force-create")
-async def force_create():
-    import os
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Middleware de Headers de Segurança HTTP (OWASP) ---
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+# --- Healthcheck & Observabilidade DevOps ---
+@app.get("/healthz")
+@app.get("/api/healthz")
+async def health_check():
+    """
+    Endpoint de monitoramento ultra-leve (DevOps Healthcheck).
+    Valida disponibilidade do servidor, Supabase e credenciais sem consumir cotas de IA.
+    """
+    import time
+    from datetime import datetime, timezone
     
-    if not supabase_url or not supabase_key:
-        return {"status": "Erro", "detalhe": "SUPABASE_URL ou SUPABASE_KEY ausentes"}
+    supabase_configured = bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_KEY"))
+    gemini_configured = bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
+    
+    db_ok = False
+    if supabase_configured:
+        try:
+            from app.core.database import get_supabase
+            sb = get_supabase()
+            r = sb.table("projetos").select("id").limit(1).execute()
+            db_ok = True
+        except Exception:
+            db_ok = False
 
-    try:
-        from supabase import create_client
-        supabase = create_client(supabase_url, supabase_key)
-        
-        res = supabase.table('users').insert({
-            "username": "vitoria_teste",
-            "password_hash": "hash_fake",
-            "full_name": "Usuário Criado pelo Site",
-            "is_active": True
-        }).execute()
-        return {"status": "Tentativa concluída", "resultado": res.data}
-    except Exception as e:
-        return {"status": "Erro na execução", "detalhe": str(e)}
-
-# --- Middleware de Log de Acesso ---
-# --- Middleware de Log de Navegação (AuditLogs) ---
-# @app.middleware("http")
-# async def log_navigation(request: Request, call_next):
-#     return await call_next(request)
+    return {
+        "status": "healthy" if (supabase_configured and db_ok) else "degraded",
+        "service": "Agendha Platform",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "region": os.getenv("VERCEL_REGION", "local-gru1"),
+        "environment": "production" if os.getenv("VERCEL") else "development",
+        "components": {
+            "supabase": "connected" if db_ok else "unreachable",
+            "gemini_ai": "configured" if gemini_configured else "missing_key",
+            "serverless_timeout_max": "60s"
+        }
+    }
 
 # --- Exception Handlers Globais ---
 @app.exception_handler(500)
@@ -332,6 +360,7 @@ from app.modules.bahia_sem_fome import views as bsf_views  # noqa: E402
 from app.modules.bahia_sem_fome.routers import classificador as bsf_classificador
 
 from app.modules.bahia_sem_fome.routers import auditoria as bsf_auditoria  # noqa: E402
+from app.modules.bahia_sem_fome.routers import sigater_hub as bsf_sigater_hub  # noqa: E402
 
 app.include_router(bsf_renomeador.router)
 app.include_router(bsf_atestes.router)
@@ -340,6 +369,7 @@ app.include_router(bsf_scanner.router)
 app.include_router(bsf_views.router)
 app.include_router(bsf_classificador.router)
 app.include_router(bsf_auditoria.router)
+app.include_router(bsf_sigater_hub.router)
 
 # Módulo: Projeto P1+2
 from app.modules.p1_plus_2 import views as p12_views  # noqa: E402

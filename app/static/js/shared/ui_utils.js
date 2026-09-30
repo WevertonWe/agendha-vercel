@@ -1,6 +1,6 @@
 /**
  * UI Utilities - Wrapper para SweetAlert2 e funções comuns de Interface.
- * Deve ser incluído no base.html após o SweetAlert2.
+ * Blindagem P1 contra ReferenceError em ambientes de conectividade intermitente.
  */
 
 const ui = {
@@ -41,18 +41,26 @@ const ui = {
                         ui.feedbackErro(`Falha ao excluir: ${errorMsg}`);
                     }
                 } catch (e) {
-                    console.error(e);
+                    console.error('Erro na requisição de exclusão:', e);
                     ui.feedbackErro('Erro de conexão com o servidor.');
                 }
             };
         }
 
         const modalEl = document.getElementById('modalExcluirPadrao');
-        if (!modalEl) return;
+        if (!modalEl || typeof bootstrap === 'undefined') {
+            // Fallback seguro caso o modal ou Bootstrap não estejam presentes
+            if (confirm(`${titulo}\n\n${msg}`)) {
+                if (callback) callback();
+            }
+            return;
+        }
 
         // Atualizar Textos
-        modalEl.querySelector('.modal-title').textContent = titulo;
-        modalEl.querySelector('.modal-body p').innerHTML = msg;
+        const titleEl = modalEl.querySelector('.modal-title');
+        if (titleEl) titleEl.textContent = titulo;
+        const msgEl = modalEl.querySelector('.modal-body p');
+        if (msgEl) msgEl.innerHTML = msg;
 
         const btnConfirmar = document.getElementById('btnConfirmarExclusao');
         if (btnConfirmar) {
@@ -62,39 +70,49 @@ const ui = {
 
             novoBtn.addEventListener('click', async function(e) {
                 e.preventDefault();
-                const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-                modalInstance.hide();
+                if (typeof bootstrap !== 'undefined') {
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                }
                 if (callback) await callback();
             });
         }
 
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modalInstance.show();
+        if (typeof bootstrap !== 'undefined') {
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            if (modalInstance) modalInstance.show();
+        }
     },
 
     /**
      * Exibe um modal de confirmação para ações genéricas.
-     * Wrapper para confirmarGeneric para manter compatibilidade simples.
      */
     confirmar: function(titulo, texto, callback, confirmText = 'Sim') {
         ui.confirmarGeneric(callback, titulo, texto, confirmText);
     },
 
     /**
-     * Exibe um modal de confirmação genérico.
+     * Exibe um modal de confirmação genérico com proteção P1.
      */
     confirmarGeneric: function(callback, titulo = "Confirmação", htmlMsg = "Tem certeza?", confirmText = "Confirmar") {
         const modalEl = document.getElementById('modalConfirmacaoGenerico');
-        if (!modalEl) return;
+        if (!modalEl || typeof bootstrap === 'undefined') {
+            if (confirm(`${titulo}\n\n${htmlMsg}`)) {
+                if (callback) callback();
+            }
+            return;
+        }
 
         // Atualizar Textos/Header
         const header = document.getElementById('modalConfirmacaoGenericoHeader');
         if (header) {
-             header.className = 'modal-header text-white bg-primary'; // Reset para padrão azul
+             header.className = 'modal-header text-white bg-primary';
         }
         
-        document.getElementById('modalConfirmacaoGenericoTitle').textContent = titulo;
-        document.getElementById('modalConfirmacaoGenericoBody').innerHTML = htmlMsg;
+        const titleEl = document.getElementById('modalConfirmacaoGenericoTitle');
+        if (titleEl) titleEl.textContent = titulo;
+        const bodyEl = document.getElementById('modalConfirmacaoGenericoBody');
+        if (bodyEl) bodyEl.innerHTML = htmlMsg;
         
         const btnConfirmar = document.getElementById('btnConfirmarGenerico');
         if (btnConfirmar) {
@@ -106,65 +124,157 @@ const ui = {
 
             novoBtn.addEventListener('click', async function(e) {
                 e.preventDefault();
-                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                if (typeof bootstrap !== 'undefined') {
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    if (modalInstance) modalInstance.hide();
+                }
                 if (callback) await callback();
             });
         }
 
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        if (typeof bootstrap !== 'undefined') {
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            if (modalInstance) modalInstance.show();
+        }
     },
 
     /**
      * Exibe um Toast ou Popup de sucesso.
-     * @param {string} mensagem - Mensagem a ser exibida.
-     * @param {function} callback - Função opcional a ser executada após fechar.
      */
     feedbackSucesso: (mensagem, callback) => {
-        Swal.fire({
-            icon: 'success',
-            title: 'Sucesso!',
-            text: mensagem,
-            timer: 2000,
-            showConfirmButton: false
-        }).then(() => {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Sucesso!',
+                text: mensagem,
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                if (callback) callback();
+            });
+        } else {
+            console.log('[SUCESSO]', mensagem);
             if (callback) callback();
-        });
+        }
     },
 
     /**
-     * Exibe um Popup de erro.
-     * @param {string} mensagem - Mensagem a ser exibida.
+     * Formata erros de validação do Pydantic/FastAPI ou respostas de exceção em texto amigável.
+     * @param {string|object|Array} erro - Erro bruto retornado pelo backend.
+     * @returns {string} Mensagem legível em português.
      */
-    feedbackErro: (mensagem) => {
-        Swal.fire({
-            icon: 'error',
-            title: 'Ops...',
-            text: mensagem
-        });
+    formatarErro: function(erro) {
+        if (!erro) return "Ocorreu um erro inesperado.";
+        if (typeof erro === 'string') return erro;
+
+        if (erro.detail) {
+            if (typeof erro.detail === 'string') {
+                return erro.detail;
+            }
+            if (Array.isArray(erro.detail)) {
+                // Erros de validação estruturados do Pydantic (HTTP 422)
+                const mensagens = erro.detail.map(item => {
+                    const campo = Array.isArray(item.loc) ? item.loc.filter(x => x !== 'body').join(' > ') : '';
+                    const msg = item.msg || 'valor inválido';
+                    return campo ? `• <strong>${campo}</strong>: ${msg}` : `• ${msg}`;
+                });
+                return mensagens.join('<br>');
+            }
+            if (typeof erro.detail === 'object') {
+                try { return JSON.stringify(erro.detail); } catch (e) { return "Erro de validação."; }
+            }
+        }
+
+        if (erro.message) return erro.message;
+        try { return JSON.stringify(erro); } catch (e) { return "Erro na operação."; }
+    },
+
+    /**
+     * Exibe um Popup de erro (com auto-formatação para erros Pydantic).
+     */
+    feedbackErro: function(mensagem) {
+        const msgFormatada = ui.formatarErro(mensagem);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Ops...',
+                html: msgFormatada
+            });
+        } else {
+            console.error('[ERRO]', msgFormatada);
+        }
     },
 
     /**
      * Exibe um Popup de informação.
-     * @param {string} mensagem - Mensagem a ser exibida.
      */
     feedbackInfo: (mensagem) => {
-        Swal.fire({
-            icon: 'info',
-            title: 'Informação',
-            text: mensagem
-        });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Informação',
+                text: mensagem
+            });
+        } else {
+            console.info('[INFO]', mensagem);
+        }
     },
 
     /**
      * Exibe um Popup de aviso/alerta.
-     * @param {string} mensagem - Mensagem a ser exibida.
      */
     feedbackAviso: (mensagem) => {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Atenção',
-            text: mensagem
-        });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Atenção',
+                text: mensagem
+            });
+        } else {
+            console.warn('[AVISO]', mensagem);
+        }
+    },
+
+    /**
+     * Alterna botão para estado de carregamento com spinner (Micro-interação UX).
+     */
+    setLoadingButton: (btnEl, loadingText = 'Processando...') => {
+        if (!btnEl) return;
+        btnEl.setAttribute('data-original-html', btnEl.innerHTML);
+        btnEl.disabled = true;
+        btnEl.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+    },
+
+    /**
+     * Restaura botão ao estado original.
+     */
+    resetLoadingButton: (btnEl) => {
+        if (!btnEl) return;
+        const original = btnEl.getAttribute('data-original-html');
+        if (original) {
+            btnEl.innerHTML = original;
+            btnEl.removeAttribute('data-original-html');
+        }
+        btnEl.disabled = false;
+    },
+
+    /**
+     * Renderiza um Empty State visual rico e amigável.
+     */
+    renderEmptyState: (containerEl, titulo = 'Nenhum registro encontrado', subtitulo = '', iconClass = 'fa-search', actionHtml = '') => {
+        if (!containerEl) return;
+        containerEl.innerHTML = `
+            <div class="text-center py-5 px-3">
+                <div class="mb-3">
+                    <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center text-muted shadow-sm" style="width: 72px; height: 72px;">
+                        <i class="fas ${iconClass} fa-2x opacity-50"></i>
+                    </div>
+                </div>
+                <h6 class="fw-bold text-dark mb-1">${titulo}</h6>
+                ${subtitulo ? `<p class="text-muted small mb-3" style="max-width: 400px; margin: 0 auto;">${subtitulo}</p>` : ''}
+                ${actionHtml ? `<div class="mt-3">${actionHtml}</div>` : ''}
+            </div>
+        `;
     }
 };
 

@@ -274,6 +274,92 @@ def run_all_tests():
             shutil.rmtree(temp_dir, ignore_errors=True)
     test("Organização e Roteamento Automático de Atestes SIGATER no Disco", test_sigater_organizacao_disco)
 
+    # 11. Testes de Exportação de Lote de Atestes em ZIP
+    def test_exportacao_zip_suite():
+        import unittest
+        from tests.test_export_zip import TestExportacaoAtestesZip
+        suite = unittest.TestLoader().loadTestsFromTestCase(TestExportacaoAtestesZip)
+        runner = unittest.TextTestRunner(verbosity=0)
+        res = runner.run(suite)
+        assert res.wasSuccessful(), f"Falhas no teste de exportação ZIP: {res.errors} {res.failures}"
+    test("Geração e Filtragem de Documentos em Lote ZIP (Exportação)", test_exportacao_zip_suite)
+
+    # 12. Testes de Gerenciamento de Lançados e Códigos SIGATER Hub
+    def test_sigater_hub_lancamentos_e_codigos():
+        from app.modules.bahia_sem_fome.services.sigater_hub_service import (
+            salvar_pendencias_no_banco,
+            listar_pendencias_do_banco,
+            atualizar_codigo_sigater_registro,
+            alterar_status_pendencia,
+            remover_pendencia
+        )
+        
+        # 1. Salva 1 Lançado com Código SIGATER, 1 Pendente e 1 Apenas no SIGATER (SEM_COLETUM)
+        res = salvar_pendencias_no_banco(
+            mes_contrato=99,
+            mes_ano_referencia="09/2026",
+            atividade_nome="TESTE ATIVIDADE SIGATER",
+            lancados=[{
+                "beneficiario": "MARIA DAS DORES TESTE",
+                "cpf": "123.456.789-00",
+                "tecnico": "Técnico Teste",
+                "comunidade": "Comunidade Teste",
+                "municipio": "Glória",
+                "data": "15/09/2026",
+                "codigo_sigater": "884422"
+            }],
+            pendentes=[{
+                "beneficiario": "JOAO DA SILVA TESTE",
+                "cpf": "987.654.321-99",
+                "tecnico": "Técnico Teste",
+                "comunidade": "Comunidade Teste",
+                "municipio": "Glória",
+                "data": "16/09/2026"
+            }],
+            apenas_sigater=[{
+                "beneficiario": "NIEDJA TESTE DIVERGENCIA",
+                "cpf": "062.960.200-11",
+                "tecnico": "SIGATER (Sem Coletum)",
+                "codigo_sigater": "463753",
+                "link_sigater": "https://sigater.ba.gov.br/read/463753"
+            }]
+        )
+        assert res["sucesso"] is True
+        assert res["total_processados"] >= 3
+        
+        # 2. Lista e verifica campos, código SIGATER e status SEM_COLETUM
+        registros = listar_pendencias_do_banco(mes_contrato=99, atividade_nome="TESTE ATIVIDADE SIGATER")
+        assert len(registros) >= 3
+        
+        lancado = next((r for r in registros if r["beneficiario_nome"] == "MARIA DAS DORES TESTE"), None)
+        assert lancado is not None
+        assert lancado["status"] == "LANCADO"
+        assert lancado["codigo_sigater"] == "884422"
+        
+        pendente = next((r for r in registros if r["beneficiario_nome"] == "JOAO DA SILVA TESTE"), None)
+        assert pendente is not None
+        assert pendente["status"] == "PENDENTE"
+
+        sem_coletum = next((r for r in registros if r["beneficiario_nome"] == "NIEDJA TESTE DIVERGENCIA"), None)
+        assert sem_coletum is not None
+        assert sem_coletum["status"] == "SEM_COLETUM"
+        assert sem_coletum["codigo_sigater"] == "463753"
+        
+        # 3. Atualiza Código SIGATER do pendente e valida mudança para LANCADO
+        ok_cod = atualizar_codigo_sigater_registro(pendente["id"], "991122", "LANCADO")
+        assert ok_cod is True
+        
+        reg_atualizados = listar_pendencias_do_banco(mes_contrato=99, atividade_nome="TESTE ATIVIDADE SIGATER")
+        pendente_agora_lancado = next((r for r in reg_atualizados if r["id"] == pendente["id"]), None)
+        assert pendente_agora_lancado["codigo_sigater"] == "991122"
+        assert pendente_agora_lancado["status"] == "LANCADO"
+        
+        # 4. Limpeza dos registros de teste
+        remover_pendencia(lancado["id"])
+        remover_pendencia(pendente["id"])
+        remover_pendencia(sem_coletum["id"])
+    test("Gerenciamento de Lançados, Códigos SIGATER, Pendentes e Divergências", test_sigater_hub_lancamentos_e_codigos)
+
     print("=" * 70)
     print(f"📊 RESUMO DOS TESTES: {sucessos} Passaram, {falhas} Falharam.")
     print("=" * 70)

@@ -6,6 +6,10 @@ def create_ponto(ponto: PontoCreate) -> Optional[PontoResponse]:
     try:
         supabase = get_supabase()
         dados = ponto.dict(exclude_unset=True)
+        if 'imagem' in dados:
+            if not dados.get('foto_url'):
+                dados['foto_url'] = dados['imagem']
+            dados.pop('imagem', None)
         res = supabase.table('mapa_pontos').insert(dados).execute()
         
         if not res.data:
@@ -75,6 +79,10 @@ def update_ponto(ponto_id: int, ponto: PontoCreate) -> Optional[PontoResponse]:
     try:
         supabase = get_supabase()
         dados = ponto.dict(exclude_unset=True)
+        if 'imagem' in dados:
+            if not dados.get('foto_url'):
+                dados['foto_url'] = dados['imagem']
+            dados.pop('imagem', None)
         res = supabase.table('mapa_pontos').update(dados).eq('id', ponto_id).execute()
         
         if not res.data:

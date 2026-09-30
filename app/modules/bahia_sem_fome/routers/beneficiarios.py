@@ -11,15 +11,29 @@ import difflib
 import io
 import csv
 import os
+import zipfile
 import unicodedata
+import asyncio
+import time
 
 from fastapi import APIRouter, HTTPException, Query, File, UploadFile, Form
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.core.database import get_supabase
 from app.services.utils import limpar_cpf
 from app.services.scanner_service import get_base_storage_path
+
+# --- In-Memory Caching de Performance (TTL 5 min) ---
+_CACHE_FILTROS = {"data": None, "ts": 0}
+_CACHE_TIPOS_ATIVIDADE = {}
+_TTL_SEGUNDOS = 300
+
+def invalidar_cache_filtros():
+    _CACHE_FILTROS["ts"] = 0
+
+def invalidar_cache_tipos():
+    _CACHE_TIPOS_ATIVIDADE.clear()
 
 class BeneficiarioBSFCreate(BaseModel):
     nome_completo: str
@@ -53,14 +67,22 @@ logger = logging.getLogger(__name__)
 
 @router.get("/tipos-atividade")
 async def listar_tipos_atividade(somente_ativos: bool = True):
-    """Retorna a lista de tipos de atividade (ativos ou todos)."""
+    """Retorna a lista de tipos de atividade (ativos ou todos) com cache em memória (TTL 5 min)."""
+    now = time.time()
+    cache_key = f"tipos_{somente_ativos}"
+    if _CACHE_TIPOS_ATIVIDADE.get(cache_key) and (now - _CACHE_TIPOS_ATIVIDADE.get(f"{cache_key}_ts", 0) < _TTL_SEGUNDOS):
+        return _CACHE_TIPOS_ATIVIDADE[cache_key]
+        
     try:
         supabase = get_supabase()
         query = supabase.table("bsf_tipos_atividade").select("*")
         if somente_ativos:
             query = query.eq("ativo", True)
         res = query.order("nome", desc=False).execute()
-        return res.data or []
+        data = res.data or []
+        _CACHE_TIPOS_ATIVIDADE[cache_key] = data
+        _CACHE_TIPOS_ATIVIDADE[f"{cache_key}_ts"] = now
+        return data
     except Exception as e:
         logger.error(f"Erro ao listar tipos de atividade BSF: {e}")
         raise HTTPException(status_code=500, detail="Erro ao carregar categorias de atividades.")
@@ -86,6 +108,7 @@ async def criar_tipo_atividade(dados: TipoAtividadeCreate):
             
         payload = {"nome": nome_limpo, "ativo": True}
         res = supabase.table("bsf_tipos_atividade").insert(payload).execute()
+        invalidar_cache_tipos()
         return res.data[0]
     except HTTPException as he:
         raise he
@@ -113,6 +136,7 @@ async def atualizar_tipo_atividade(id: int, dados: TipoAtividadeUpdate):
         res = supabase.table("bsf_tipos_atividade").update(payload).eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Tipo de atividade não encontrado.")
+        invalidar_cache_tipos()
         return res.data[0]
     except HTTPException as he:
         raise he
@@ -128,6 +152,7 @@ async def deletar_tipo_atividade(id: int):
         res = supabase.table("bsf_tipos_atividade").update({"ativo": False}).eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Tipo de atividade não encontrado.")
+        invalidar_cache_tipos()
         return {"status": "success", "message": "Categoria desativada com sucesso."}
     except HTTPException as he:
         raise he
@@ -266,30 +291,38 @@ async def listar_beneficiarios(
 
 @router.get("/filtros")
 async def obter_filtros():
-    """Retorna valores únicos de técnico e município para popular os selects de filtro."""
+    """Retorna valores únicos de técnico e município com cache em memória (TTL 5 min)."""
+    now = time.time()
+    if _CACHE_FILTROS["data"] and (now - _CACHE_FILTROS["ts"] < _TTL_SEGUNDOS):
+        return _CACHE_FILTROS["data"]
+
     try:
         supabase = get_supabase()
         
-        # Fetch unique tecnicos
-        res_tec = supabase.table("beneficiarios").select("nome_tecnico").eq("projeto", "Bahia Sem Fome").not_.is_("nome_tecnico", "null").execute()
-        tecnicos_raw = [r["nome_tecnico"] for r in (res_tec.data or []) if r.get("nome_tecnico")]
-        tecnicos = sorted(set(t.strip() for t in tecnicos_raw if t.strip()))
-        
-        # Fetch unique municipios
-        res_mun = supabase.table("beneficiarios").select("municipio").eq("projeto", "Bahia Sem Fome").not_.is_("municipio", "null").execute()
-        municipios_raw = [r["municipio"] for r in (res_mun.data or []) if r.get("municipio")]
-        municipios = sorted(set(m.strip() for m in municipios_raw if m.strip()))
-        
-        # Fetch unique statuses
-        res_st = supabase.table("beneficiarios").select("status").eq("projeto", "Bahia Sem Fome").not_.is_("status", "null").execute()
-        statuses_raw = [r["status"] for r in (res_st.data or []) if r.get("status")]
-        statuses = sorted(set(s.strip() for s in statuses_raw if s.strip()))
-        
-        return {
-            "tecnicos": tecnicos,
-            "municipios": municipios,
-            "statuses": statuses,
-        }
+        def _fetch_filtros():
+            # Executa queries no Supabase
+            res_tec = supabase.table("beneficiarios").select("nome_tecnico").eq("projeto", "Bahia Sem Fome").not_.is_("nome_tecnico", "null").execute()
+            tecnicos_raw = [r["nome_tecnico"] for r in (res_tec.data or []) if r.get("nome_tecnico")]
+            tecnicos = sorted(set(t.strip() for t in tecnicos_raw if t.strip()))
+            
+            res_mun = supabase.table("beneficiarios").select("municipio").eq("projeto", "Bahia Sem Fome").not_.is_("municipio", "null").execute()
+            municipios_raw = [r["municipio"] for r in (res_mun.data or []) if r.get("municipio")]
+            municipios = sorted(set(m.strip() for m in municipios_raw if m.strip()))
+            
+            res_st = supabase.table("beneficiarios").select("status").eq("projeto", "Bahia Sem Fome").not_.is_("status", "null").execute()
+            statuses_raw = [r["status"] for r in (res_st.data or []) if r.get("status")]
+            statuses = sorted(set(s.strip() for s in statuses_raw if s.strip()))
+            
+            return {
+                "tecnicos": tecnicos,
+                "municipios": municipios,
+                "statuses": statuses,
+            }
+
+        resultado = await asyncio.to_thread(_fetch_filtros)
+        _CACHE_FILTROS["data"] = resultado
+        _CACHE_FILTROS["ts"] = now
+        return resultado
         
     except Exception as e:
         logger.error(f"Erro ao obter filtros BSF: {e}")
@@ -339,6 +372,119 @@ async def obter_documento_local(
     except Exception as e:
         logger.error(f"Erro ao servir documento local '{caminho}': {e}")
         raise HTTPException(status_code=500, detail="Erro interno ao abrir o documento.")
+
+
+@router.get("/exportar-atestes-zip")
+async def exportar_atestes_zip(
+    mes: Optional[int] = Query(None, ge=1, le=12, description="Filtrar por mês (1 a 12)"),
+    ano: Optional[int] = Query(None, ge=2020, le=2035, description="Filtrar por ano"),
+    tecnico: Optional[str] = Query(None, description="Filtrar por nome do técnico"),
+    tipo: Optional[str] = Query("todos", description="Tipo de documento: ateste, coletum, sigater ou todos")
+):
+    """
+    Localiza todos os arquivos de atestes/relatórios filtrados por mês, ano e técnico,
+    compacta em um arquivo ZIP em memória e envia para download direto.
+    """
+    def _gerar_zip():
+        base_dir = get_base_storage_path().resolve()
+        if not base_dir.exists():
+            return None, 0
+            
+        zip_buffer = io.BytesIO()
+        arquivos_incluidos = 0
+        tipo_filtro = (tipo or "todos").lower().strip()
+        
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root_dir, _, files in os.walk(str(base_dir)):
+                for f_name in files:
+                    if not f_name.lower().endswith(('.pdf', '.docx', '.jpg', '.png')):
+                        continue
+                        
+                    f_upper = f_name.upper()
+                    
+                    # Filtro de tipo de documento
+                    if tipo_filtro == "ateste" and "ATEST" not in f_upper:
+                        continue
+                    elif tipo_filtro == "coletum" and "COLLETUM" not in f_upper and "COLETUM" not in f_upper:
+                        continue
+                    elif tipo_filtro == "sigater" and "SIGATER" not in f_upper:
+                        continue
+                        
+                    file_path = Path(root_dir) / f_name
+                    rel_path = file_path.relative_to(base_dir)
+                    partes_caminho = [p.upper() for p in rel_path.parts]
+                    
+                    # Filtro de Técnico
+                    if tecnico:
+                        tec_norm = _normalizar_para_busca(tecnico)
+                        if not any(tec_norm in _normalizar_para_busca(p) for p in partes_caminho):
+                            continue
+                            
+                    # Filtro de Data (Mês e Ano na pasta da atividade ou no nome do arquivo)
+                    caminho_completo_str = str(rel_path)
+                    
+                    m_data = re.search(r'(\d{2})[.\-\/](\d{2})[.\-\/](\d{4})', caminho_completo_str)
+                    m_data_iso = re.search(r'(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})', caminho_completo_str)
+                    
+                    f_mes = None
+                    f_ano = None
+                    if m_data:
+                        _, mes_str, ano_str = m_data.groups()
+                        f_mes = int(mes_str)
+                        f_ano = int(ano_str)
+                    elif m_data_iso:
+                        ano_str, mes_str, _ = m_data_iso.groups()
+                        f_mes = int(mes_str)
+                        f_ano = int(ano_str)
+                        
+                    if mes is not None:
+                        if f_mes != mes:
+                            continue
+                    if ano is not None:
+                        if f_ano != ano:
+                            continue
+                            
+                    zf.write(str(file_path), arcname=str(rel_path))
+                    arquivos_incluidos += 1
+                    
+        zip_buffer.seek(0)
+        return zip_buffer, arquivos_incluidos
+
+    try:
+        zip_buffer, total_arquivos = await asyncio.to_thread(_gerar_zip)
+        
+        if not zip_buffer or total_arquivos == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Nenhum ateste/documento encontrado para os filtros selecionados (Mês: {mes or 'Todos'}, Técnico: {tecnico or 'Todos'}, Tipo: {tipo or 'Todos'})."
+            )
+            
+        nome_arquivo = "atestes_bsf"
+        if mes:
+            nome_arquivo += f"_mes_{mes:02d}"
+        if ano:
+            nome_arquivo += f"_{ano}"
+        if tecnico:
+            nome_limpo_tec = re.sub(r'[^a-zA-Z0-9]', '_', tecnico.strip())[:15]
+            nome_arquivo += f"_{nome_limpo_tec}"
+        nome_arquivo += ".zip"
+        
+        headers = {
+            "Content-Disposition": f'attachment; filename="{nome_arquivo}"',
+            "X-Total-Files": str(total_arquivos)
+        }
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers=headers
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao exportar lote de atestes em ZIP: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao gerar arquivo ZIP de atestes.")
 
 
 @router.get("/{beneficiario_id}")
@@ -529,10 +675,11 @@ async def listar_atividades_beneficiario(beneficiario_id: int):
         res_db = supabase.table("bsf_atividades").select("*").eq("beneficiario_id", beneficiario_id).order("data_atividade", desc=True).execute()
         atividades_db = res_db.data or []
         
-        # 3. Buscar atividades das pastas físicas locais
+        # 3. Buscar atividades das pastas físicas locais (não-bloqueante via thread pool)
         atividades_locais = []
         if ben and ben.get("nome_completo"):
-            atividades_locais = escanear_atividades_locais_beneficiario(
+            atividades_locais = await asyncio.to_thread(
+                escanear_atividades_locais_beneficiario,
                 beneficiario_id=beneficiario_id,
                 nome_beneficiario=ben["nome_completo"],
                 nome_tecnico=ben.get("nome_tecnico"),

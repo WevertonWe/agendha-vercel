@@ -29,15 +29,14 @@ class RenameInfo(BaseModel):
     comunidade: str = Field(description="Nome da localidade/comunidade indicada no campo 'COMUNIDADE' ou 'LOCAL', em maiúsculas e sem acentos, ou vazio se não encontrada")
 
 MODELOS_PERMITIDOS = [
-    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
+    "gemini-2.5-flash-lite",
     "gemini-3.5-flash",
-    "gemini-3.6-flash"
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview"
 ]
 
 _current_model_index = 0
@@ -313,34 +312,34 @@ async def renomear_individual(file: UploadFile = File(...), mode: str = "ateste"
 
 @router.post("/renomeador-lote")
 async def renomear_lote(files: List[UploadFile] = File(...), mode: str = "ateste"):
-    """Recebe múltiplos PDFs, renomeia-os via IA e retorna um ZIP organizado em estrutura de pastas por Técnico/Comunidade/Beneficiário."""
+    """Recebe múltiplos PDFs, renomeia-os via IA com concorrência otimizada e retorna um ZIP estruturado."""
     if not files:
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado.")
 
     zip_buffer = io.BytesIO()
-    
+    semaphore = asyncio.Semaphore(4)
+
+    async def _processar_arquivo(file: UploadFile):
+        async with semaphore:
+            content = await file.read()
+            new_filename, data = await extrair_e_analisar(content, file.filename, mode)
+            if not new_filename or new_filename.strip() == "":
+                new_filename = file.filename
+            
+            if data:
+                tecnico = data.get("tecnico") or "SEM_TECNICO"
+                comunidade = data.get("comunidade") or "SEM_COMUNIDADE"
+                nome = data.get("nome") or "DESCONHECIDO"
+                zip_path = f"{tecnico}/{comunidade}/{nome}/{new_filename}"
+            else:
+                zip_path = new_filename
+            return zip_path, content
+
     try:
+        resultados = await asyncio.gather(*[_processar_arquivo(f) for f in files])
+        
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-            for file in files:
-                content = await file.read()
-                
-                # Processamento assíncrono para cada arquivo
-                new_filename, data = await extrair_e_analisar(content, file.filename, mode)
-                
-                # Se o nome falhar ou for vazio, usa o original
-                if not new_filename or new_filename.strip() == "":
-                    new_filename = file.filename
-                
-                # Estrutura hierárquica de pastas dentro do ZIP: TECNICO / COMUNIDADE / BENEFICIARIO / ARQUIVO.pdf
-                if data:
-                    tecnico = data.get("tecnico") or "SEM_TECNICO"
-                    comunidade = data.get("comunidade") or "SEM_COMUNIDADE"
-                    nome = data.get("nome") or "DESCONHECIDO"
-                    zip_path = f"{tecnico}/{comunidade}/{nome}/{new_filename}"
-                else:
-                    zip_path = new_filename
-                
-                # Adiciona ao ZIP na estrutura de pastas
+            for zip_path, content in resultados:
                 zip_file.writestr(zip_path, content)
 
         zip_buffer.seek(0)
@@ -354,7 +353,7 @@ async def renomear_lote(files: List[UploadFile] = File(...), mode: str = "ateste
         )
 
     except Exception as e:
-        logger.error(f"Erro na geração do ZIP: {e}")
+        logger.error(f"Erro na geração do ZIP concorrente: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar pacote ZIP: {str(e)}")
 
 class AtesteItem(BaseModel):

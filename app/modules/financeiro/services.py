@@ -51,32 +51,56 @@ def get_projeto_completo(projeto_id: int) -> Dict[str, Any]:
     if not res_proj.data:
         return None
     projeto = res_proj.data[0]
-    projeto['metas'] = []
-
+    
     # 2. Get Metas
     res_metas = supabase.table('financeiro_metas').select('*').eq('projeto_id', projeto_id).execute()
-    for meta in res_metas.data:
-        meta['etapas'] = []
+    metas = res_metas.data or []
+    if not metas:
+        projeto['metas'] = []
+        return projeto
         
-        # 3. Get Etapas
-        res_etapas = supabase.table('financeiro_etapas').select('*').eq('meta_id', meta['id']).execute()
-        for etapa in res_etapas.data:
-            etapa['rubricas'] = []
-            
-            # 4. Get Rubricas
-            res_rubricas = supabase.table('financeiro_rubricas').select('*').eq('etapa_id', etapa['id']).execute()
-            for rubrica in res_rubricas.data:
-                # 5. Calculate Executed Value
-                res_exec = supabase.table('financeiro_lancamentos').select('valor_total_executado').eq('rubrica_id', rubrica['id']).execute()
-                valor_executado = sum(float(row.get('valor_total_executado', 0)) for row in res_exec.data) if res_exec.data else 0.0
-                
-                rubrica['valor_executado'] = valor_executado
-                rubrica['saldo'] = (rubrica.get('valor_total_programado') or 0) - valor_executado
-                etapa['rubricas'].append(rubrica)
-            
-            meta['etapas'].append(etapa)
-        projeto['metas'].append(meta)
+    meta_ids = [m['id'] for m in metas]
+    
+    # 3. Get Etapas in batch
+    res_etapas = supabase.table('financeiro_etapas').select('*').in_('meta_id', meta_ids).execute()
+    etapas = res_etapas.data or []
+    etapa_ids = [e['id'] for e in etapas]
+    
+    # 4. Get Rubricas in batch
+    rubricas = []
+    if etapa_ids:
+        res_rubricas = supabase.table('financeiro_rubricas').select('*').in_('etapa_id', etapa_ids).execute()
+        rubricas = res_rubricas.data or []
         
+    rubrica_ids = [r['id'] for r in rubricas]
+    
+    # 5. Get Lancamentos in batch (group executed values by rubrica_id)
+    exec_map = {}
+    if rubrica_ids:
+        res_exec = supabase.table('financeiro_lancamentos').select('rubrica_id, valor_total_executado').in_('rubrica_id', rubrica_ids).execute()
+        for row in (res_exec.data or []):
+            rid = row.get('rubrica_id')
+            val = float(row.get('valor_total_executado') or 0.0)
+            exec_map[rid] = exec_map.get(rid, 0.0) + val
+            
+    # Assemble in-memory tree
+    rubricas_by_etapa = {}
+    for rubrica in rubricas:
+        rid = rubrica['id']
+        val_exec = exec_map.get(rid, 0.0)
+        rubrica['valor_executado'] = val_exec
+        rubrica['saldo'] = (rubrica.get('valor_total_programado') or 0.0) - val_exec
+        rubricas_by_etapa.setdefault(rubrica['etapa_id'], []).append(rubrica)
+        
+    etapas_by_meta = {}
+    for etapa in etapas:
+        etapa['rubricas'] = rubricas_by_etapa.get(etapa['id'], [])
+        etapas_by_meta.setdefault(etapa['meta_id'], []).append(etapa)
+        
+    for meta in metas:
+        meta['etapas'] = etapas_by_meta.get(meta['id'], [])
+        
+    projeto['metas'] = metas
     return projeto
 
 def list_entidades(limit: int = 5) -> List[Dict[str, Any]]:
@@ -197,36 +221,59 @@ def get_lancamento(lancamento_id: int) -> Dict[str, Any]:
 def get_dashboard_data() -> List[Dict[str, Any]]:
     supabase = get_supabase()
     res_proj = supabase.table('financeiro_projetos').select('*').order('id', desc=True).execute()
+    projetos = res_proj.data or []
+    if not projetos:
+        return []
+        
+    proj_ids = [p['id'] for p in projetos]
     
-    dashboard_data = []
-    for row in res_proj.data:
-        projeto = row
-        projeto_id = projeto['id']
-        
-        res_metas = supabase.table('financeiro_metas').select('id').eq('projeto_id', projeto_id).execute()
-        meta_ids = [m['id'] for m in res_metas.data]
-        
-        total_orcado = 0.0
-        if meta_ids:
-            res_etapas = supabase.table('financeiro_etapas').select('id').in_('meta_id', meta_ids).execute()
-            etapa_ids = [e['id'] for e in res_etapas.data]
-            if etapa_ids:
-                res_rubricas = supabase.table('financeiro_rubricas').select('valor_total_programado').in_('etapa_id', etapa_ids).execute()
-                total_orcado = sum(float(r.get('valor_total_programado', 0)) for r in res_rubricas.data) if res_rubricas.data else 0.0
+    # 1. Fetch all metas in 1 batch query
+    res_metas = supabase.table('financeiro_metas').select('id, projeto_id').in_('projeto_id', proj_ids).execute()
+    metas = res_metas.data or []
+    meta_to_proj = {m['id']: m['projeto_id'] for m in metas}
+    meta_ids = list(meta_to_proj.keys())
+    
+    # 2. Fetch all etapas in 1 batch query
+    etapa_to_proj = {}
+    etapa_ids = []
+    if meta_ids:
+        res_etapas = supabase.table('financeiro_etapas').select('id, meta_id').in_('meta_id', meta_ids).execute()
+        for e in (res_etapas.data or []):
+            proj_id = meta_to_proj.get(e['meta_id'])
+            if proj_id:
+                etapa_to_proj[e['id']] = proj_id
+                etapa_ids.append(e['id'])
                 
-        res_exec = supabase.table('financeiro_lancamentos').select('valor_total_executado').eq('projeto_id', projeto_id).execute()
-        total_executado = sum(float(lan.get('valor_total_executado', 0)) for lan in res_exec.data) if res_exec.data else 0.0
-        
-        saldo = total_orcado - total_executado
-        percentual_concluido = 0.0
-        if total_orcado > 0:
-            percentual_concluido = (total_executado / total_orcado) * 100
+    # 3. Fetch all rubricas in 1 batch query & accumulate orçado per project
+    orcado_by_proj = {pid: 0.0 for pid in proj_ids}
+    if etapa_ids:
+        res_rubricas = supabase.table('financeiro_rubricas').select('etapa_id, valor_total_programado').in_('etapa_id', etapa_ids).execute()
+        for r in (res_rubricas.data or []):
+            proj_id = etapa_to_proj.get(r['etapa_id'])
+            if proj_id:
+                orcado_by_proj[proj_id] += float(r.get('valor_total_programado') or 0.0)
+                
+    # 4. Fetch all lancamentos in 1 batch query & accumulate executado per project
+    exec_by_proj = {pid: 0.0 for pid in proj_ids}
+    res_exec = supabase.table('financeiro_lancamentos').select('projeto_id, valor_total_executado').in_('projeto_id', proj_ids).execute()
+    for lan in (res_exec.data or []):
+        pid = lan.get('projeto_id')
+        if pid in exec_by_proj:
+            exec_by_proj[pid] += float(lan.get('valor_total_executado') or 0.0)
             
+    # 5. Assemble final response
+    dashboard_data = []
+    for projeto in projetos:
+        pid = projeto['id']
+        total_orcado = orcado_by_proj.get(pid, 0.0)
+        total_executado = exec_by_proj.get(pid, 0.0)
+        saldo = total_orcado - total_executado
+        percentual_concluido = (total_executado / total_orcado * 100) if total_orcado > 0 else 0.0
+        
         projeto['total_orcado'] = total_orcado
         projeto['total_executado'] = total_executado
         projeto['saldo'] = saldo
         projeto['percentual_concluido'] = round(percentual_concluido, 2)
-        
         dashboard_data.append(projeto)
         
     return dashboard_data

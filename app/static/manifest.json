@@ -1,0 +1,35 @@
+{
+  "name": "Agendha - Sistema de Gestão Integrada",
+  "short_name": "Agendha",
+  "description": "Plataforma Inteligente de Gestão de Projetos Sociais, Beneficiários e Auditoria Documental",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d6efd",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/static/imagens/logo-agendha.webp",
+      "sizes": "192x192 512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/imagens/logo-agendha.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": [
+    "productivity",
+    "business",
+    "management"
+  ]
+}

@@ -69,7 +69,7 @@ def log_acao(
             modulo="ocr",
             user_id=current_user,
             ia_tokens=230,
-            ia_modelo="gemini-2.0-flash",
+        ia_modelo="gemini-2.5-flash",
             duracao_ms=1850,
             detalhes={"prompt_tokens": 150, "completion_tokens": 80}
         )
@@ -139,7 +139,7 @@ def log_ia(
     log_ia(
         modulo="ocr",
         user_id=current_user,
-        modelo="gemini-2.0-flash",
+        modelo="gemini-2.5-flash",
         prompt_tokens=150,
         completion_tokens=80,
         duracao_ms=1850

@@ -5,6 +5,7 @@ deduplicação de diretórios com acentos e cruzamento inteligente com a API Col
 """
 
 import logging
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from fastapi.responses import JSONResponse
@@ -97,11 +98,14 @@ async def obter_relatorio_auditoria(
 @router.post("/executar-local")
 async def disparar_auditoria_local(auto_consolidar: bool = False):
     """
-    Dispara imediatamente a varredura e auditoria no disco local.
+    Dispara imediatamente a varredura e auditoria no disco local em thread separada.
     Pode opcionalmente consolidar automaticamente pastas duplicadas por acentos.
     """
     try:
-        resultado = executar_auditoria_completa_pastas_locais(auto_consolidar_acentos=auto_consolidar)
+        resultado = await asyncio.to_thread(
+            executar_auditoria_completa_pastas_locais,
+            auto_consolidar_acentos=auto_consolidar
+        )
         return {
             "status": "sucesso",
             "mensagem": "Auditoria local executada com sucesso.",
@@ -113,6 +117,50 @@ async def disparar_auditoria_local(auto_consolidar: bool = False):
         raise HTTPException(status_code=500, detail=f"Falha na varredura: {str(e)}")
 
 
+def _executar_consolidacao_pastas():
+    base_path = get_base_storage_path()
+    if not base_path.exists():
+        raise HTTPException(status_code=404, detail="Diretório base de técnicos não localizado.")
+
+    pastas_consolidadas_total = 0
+    arquivos_movidos_total = 0
+
+    # Varre cada técnico e comunidade
+    for tec_dir in base_path.iterdir():
+        if tec_dir.is_dir():
+            doc_ativ = tec_dir / "documentos-atividades"
+            alvo = doc_ativ if doc_ativ.exists() else tec_dir
+
+            # 1. Consolida comunidades do técnico
+            res_com = consolidar_pastas_duplicadas_segura(alvo)
+            pastas_consolidadas_total += len(res_com.get("pastas_removidas", []))
+            arquivos_movidos_total += res_com.get("arquivos_movidos", 0)
+
+            # 2. Consolida beneficiários dentro de cada comunidade
+            for com_dir in alvo.iterdir():
+                if com_dir.is_dir():
+                    res_ben = consolidar_pastas_duplicadas_segura(com_dir)
+                    pastas_consolidadas_total += len(res_ben.get("pastas_removidas", []))
+                    arquivos_movidos_total += res_ben.get("arquivos_movidos", 0)
+
+    # 3. Consolida atividades complementares divididas (Ateste em uma pasta e Coletum em outra)
+    res_ativ = consolidar_todas_atividades_divididas(base_path)
+    pastas_consolidadas_total += res_ativ.get("total_pastas_removidas", 0)
+    arquivos_movidos_total += res_ativ.get("total_arquivos_movidos", 0)
+    total_atividades_unificadas = res_ativ.get("total_atividades_mescladas", 0)
+
+    # Re-executa auditoria para atualizar snapshot em memória
+    executar_auditoria_completa_pastas_locais()
+
+    return {
+        "status": "sucesso",
+        "mensagem": f"Consolidação concluída com sucesso! {total_atividades_unificadas} atividades unificadas (Ateste + Coletum), {pastas_consolidadas_total} pastas duplicadas removidas e {arquivos_movidos_total} arquivos remanejados.",
+        "pastas_removidas": pastas_consolidadas_total,
+        "arquivos_movidos": arquivos_movidos_total,
+        "atividades_unificadas": total_atividades_unificadas
+    }
+
+
 @router.post("/consolidar-duplicados")
 async def consolidar_pastas_duplicadas():
     """
@@ -120,47 +168,8 @@ async def consolidar_pastas_duplicadas():
     Preserva todos os arquivos e remove pastas vazias redundantes.
     """
     try:
-        base_path = get_base_storage_path()
-        if not base_path.exists():
-            raise HTTPException(status_code=404, detail="Diretório base de técnicos não localizado.")
-
-        pastas_consolidadas_total = 0
-        arquivos_movidos_total = 0
-
-        # Varre cada técnico e comunidade
-        for tec_dir in base_path.iterdir():
-            if tec_dir.is_dir():
-                doc_ativ = tec_dir / "documentos-atividades"
-                alvo = doc_ativ if doc_ativ.exists() else tec_dir
-
-                # 1. Consolida comunidades do técnico
-                res_com = consolidar_pastas_duplicadas_segura(alvo)
-                pastas_consolidadas_total += len(res_com.get("pastas_removidas", []))
-                arquivos_movidos_total += res_com.get("arquivos_movidos", 0)
-
-                # 2. Consolida beneficiários dentro de cada comunidade
-                for com_dir in alvo.iterdir():
-                    if com_dir.is_dir():
-                        res_ben = consolidar_pastas_duplicadas_segura(com_dir)
-                        pastas_consolidadas_total += len(res_ben.get("pastas_removidas", []))
-                        arquivos_movidos_total += res_ben.get("arquivos_movidos", 0)
-
-        # 3. Consolida atividades complementares divididas (Ateste em uma pasta e Coletum em outra)
-        res_ativ = consolidar_todas_atividades_divididas(base_path)
-        pastas_consolidadas_total += res_ativ.get("total_pastas_removidas", 0)
-        arquivos_movidos_total += res_ativ.get("total_arquivos_movidos", 0)
-        total_atividades_unificadas = res_ativ.get("total_atividades_mescladas", 0)
-
-        # Re-executa auditoria para atualizar snapshot em memória
-        executar_auditoria_completa_pastas_locais()
-
-        return {
-            "status": "sucesso",
-            "mensagem": f"Consolidação concluída com sucesso! {total_atividades_unificadas} atividades unificadas (Ateste + Coletum), {pastas_consolidadas_total} pastas duplicadas removidas e {arquivos_movidos_total} arquivos remanejados.",
-            "pastas_removidas": pastas_consolidadas_total,
-            "arquivos_movidos": arquivos_movidos_total,
-            "atividades_unificadas": total_atividades_unificadas
-        }
+        resultado = await asyncio.to_thread(_executar_consolidacao_pastas)
+        return resultado
     except HTTPException:
         raise
     except Exception as e:
@@ -182,6 +191,40 @@ async def obter_discrepancias_coletum():
         raise HTTPException(status_code=500, detail=f"Erro ao cruzar dados com o Coletum: {str(e)}")
 
 
+def _processar_e_organizar_sigater(content: bytes, filename: str, atividade_padrao: str):
+    from app.modules.bahia_sem_fome.services.sigater_service import (
+        processar_pacote_zip_sigater,
+        organizar_ateste_no_disco_local,
+        extrair_metadados_ateste_pdf
+    )
+    nome = filename.lower()
+    if nome.endswith('.zip'):
+        res = processar_pacote_zip_sigater(content, atividade_padrao=atividade_padrao)
+    elif nome.endswith('.pdf'):
+        meta = extrair_metadados_ateste_pdf(content, filename)
+        res_item = organizar_ateste_no_disco_local(
+            pdf_bytes=content,
+            nome_beneficiario=meta["beneficiario"],
+            comunidade=meta["comunidade"],
+            tecnico=meta["tecnico"],
+            data_atividade=meta["data"],
+            atividade_nome=meta["atividade"] or atividade_padrao
+        )
+        res = {
+            "sucesso": True,
+            "total_processados": 1,
+            "total_erros": 0,
+            "processados": [res_item],
+            "erros": []
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Formato não suportado. Envie um arquivo .ZIP ou .PDF.")
+
+    # Re-executa a auditoria para atualizar os cards imediatamente
+    executar_auditoria_completa_pastas_locais()
+    return res
+
+
 @router.post("/importar-lote-sigater")
 async def importar_lote_sigater(
     file: UploadFile = File(...),
@@ -189,41 +232,11 @@ async def importar_lote_sigater(
 ):
     """
     Recebe um arquivo ZIP ou PDF único do SIGATER, extrai os dados de cada ateste
-    e distribui automaticamente nas pastas dos beneficiários correspondentes.
+    e distribui automaticamente nas pastas dos beneficiários correspondentes em background thread.
     """
-    from app.modules.bahia_sem_fome.services.sigater_service import (
-        processar_pacote_zip_sigater,
-        organizar_ateste_no_disco_local,
-        extrair_metadados_ateste_pdf
-    )
     try:
         content = await file.read()
-        nome = file.filename.lower()
-
-        if nome.endswith('.zip'):
-            res = processar_pacote_zip_sigater(content, atividade_padrao=atividade_padrao)
-        elif nome.endswith('.pdf'):
-            meta = extrair_metadados_ateste_pdf(content, file.filename)
-            res_item = organizar_ateste_no_disco_local(
-                pdf_bytes=content,
-                nome_beneficiario=meta["beneficiario"],
-                comunidade=meta["comunidade"],
-                tecnico=meta["tecnico"],
-                data_atividade=meta["data"],
-                atividade_nome=meta["atividade"] or atividade_padrao
-            )
-            res = {
-                "sucesso": True,
-                "total_processados": 1,
-                "total_erros": 0,
-                "processados": [res_item],
-                "erros": []
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Formato não suportado. Envie um arquivo .ZIP ou .PDF.")
-
-        # Re-executa a auditoria para atualizar os cards imediatamente
-        executar_auditoria_completa_pastas_locais()
+        res = await asyncio.to_thread(_processar_e_organizar_sigater, content, file.filename, atividade_padrao)
 
         return {
             "status": "sucesso",

@@ -17,41 +17,48 @@ try:
     PYWIN32_DISPONIVEL = True
 except ImportError:
     PYWIN32_DISPONIVEL = False
-    logging.warning(
-        "Biblioteca 'pywin32' não encontrada. O fallback será para o LibreOffice.")
+    logging.debug("Biblioteca 'pywin32' não disponível no ambiente (usando fallback multiplataforma).")
 
 PDF_CONVERTER_ENGINE: Optional[str] = None
+LIBREOFFICE_EXECUTABLE: Optional[str] = None
 
 def verificar_motores_pdf():
     """
     Verifica quais motores de conversão de PDF estão disponíveis
     no arranque e define a flag global 'PDF_CONVERTER_ENGINE'.
     """
-    global PDF_CONVERTER_ENGINE
+    global PDF_CONVERTER_ENGINE, LIBREOFFICE_EXECUTABLE
 
-    # 1. Tentar o Excel (preferencial)
+    # 1. Tentar o Excel (preferencial em Windows Desktop)
     if PYWIN32_DISPONIVEL:
         try:
-            # Tenta "ligar" o Excel. Se falhar, o Excel não está instalado.
-            pythoncom.CoInitialize()  # Prepara o COM para este thread
+            pythoncom.CoInitialize()
             excel = win32com.client.Dispatch("Excel.Application")
             excel.Quit()
             PDF_CONVERTER_ENGINE = "excel"
             logging.info("Detetado motor de PDF: MS Excel (via pywin32)")
-            return  # Encontrámos o melhor, não é preciso procurar mais
+            return
         except Exception as e:
-            logging.warning(
-                f"pywin32 está instalado, mas o MS Excel não pôde ser iniciado: {e}")
+            logging.debug(f"pywin32 instalado, mas MS Excel não pôde ser iniciado: {e}")
 
-    # 2. Tentar o LibreOffice (fallback)
-    if os.path.exists(settings.LIBREOFFICE_PATH):
+    # 2. Tentar o LibreOffice (fallback multiplataforma)
+    lo_path = getattr(settings, 'LIBREOFFICE_PATH', '')
+    if lo_path and os.path.exists(lo_path):
         PDF_CONVERTER_ENGINE = "libreoffice"
-        logging.info(
-            f"Detetado motor de PDF: LibreOffice (em {settings.LIBREOFFICE_PATH})")
+        LIBREOFFICE_EXECUTABLE = lo_path
+        logging.info(f"Detetado motor de PDF: LibreOffice (em {lo_path})")
+    elif shutil.which("libreoffice"):
+        PDF_CONVERTER_ENGINE = "libreoffice"
+        LIBREOFFICE_EXECUTABLE = shutil.which("libreoffice")
+        logging.info(f"Detetado motor de PDF: LibreOffice (via PATH: {LIBREOFFICE_EXECUTABLE})")
+    elif shutil.which("soffice"):
+        PDF_CONVERTER_ENGINE = "libreoffice"
+        LIBREOFFICE_EXECUTABLE = shutil.which("soffice")
+        logging.info(f"Detetado motor de PDF: LibreOffice (via soffice PATH: {LIBREOFFICE_EXECUTABLE})")
     else:
-        logging.error(
-            "Nenhum motor de conversão PDF (Excel ou LibreOffice) foi encontrado.")
+        logging.info("Nenhum motor de conversão desktop (Excel/LibreOffice) ativo. Fallback para processamento serverless.")
         PDF_CONVERTER_ENGINE = None
+        LIBREOFFICE_EXECUTABLE = None
 
 
 async def converter_excel_para_pdf(excel_path: str, output_dir: str) -> str:
@@ -106,7 +113,8 @@ async def converter_excel_para_pdf(excel_path: str, output_dir: str) -> str:
         os.makedirs(temp_profile_dir, exist_ok=True)
 
         try:
-            quoted_libreoffice_path = f'"{settings.LIBREOFFICE_PATH}"'
+            executable = LIBREOFFICE_EXECUTABLE or settings.LIBREOFFICE_PATH
+            quoted_libreoffice_path = f'"{executable}"'
             # CORREÇÃO: Usa o 'sistema_temp_dir'
             quoted_outdir = f'"{sistema_temp_dir}"'
             quoted_excel_path = f'"{excel_path}"'

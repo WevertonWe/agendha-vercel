@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Agendha System"
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "admin"
-    SECRET_KEY: str = "sua_chave_secreta"
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     GOOGLE_APPLICATION_CREDENTIALS_JSON: str | None = None
@@ -71,6 +71,10 @@ class Settings(BaseSettings):
 
     def __init__(self, **data):
         super().__init__(**data)
+        import secrets
+        if not self.SECRET_KEY or self.SECRET_KEY == "sua_chave_secreta":
+            env_key = os.getenv("SECRET_KEY")
+            self.SECRET_KEY = env_key if (env_key and env_key != "sua_chave_secreta") else secrets.token_hex(32)
         self._setup_external_tools()
     
     def _setup_external_tools(self):

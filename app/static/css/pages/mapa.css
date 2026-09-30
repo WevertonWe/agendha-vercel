@@ -475,3 +475,157 @@ header {
 .cursor-crosshair {
     cursor: crosshair !important;
 }
+
+/* --- Hover Lift & GIS Styles --- */
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+}
+
+.muni-tooltip {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #d35400;
+    color: #a04000;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: 2px 6px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* --- Wizard Step-by-Step Modal Styles --- */
+.wizard-modal .modal-content {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.wizard-stepper-wrapper {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.wizard-stepper {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.wizard-stepper::-webkit-scrollbar {
+    display: none;
+}
+
+.wizard-pill {
+    flex: 1 1 0;
+    min-width: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 6px !important;
+    border-radius: 10px !important;
+    border: 1px solid #dee2e6 !important;
+    background: #ffffff !important;
+    color: #6c757d !important;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.wizard-pill .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #495057;
+    font-size: 0.75rem;
+    font-weight: bold;
+    margin-bottom: 2px;
+    transition: all 0.2s ease;
+}
+
+.wizard-pill.active {
+    background: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.25);
+}
+
+.wizard-pill.active .step-num {
+    background: #ffffff;
+    color: #0d6efd;
+}
+
+.wizard-pill.step-completed {
+    background: #f0fdf4 !important;
+    border-color: #86efac !important;
+    color: #15803d !important;
+}
+
+.wizard-pill.step-completed .step-num {
+    background: #22c55e;
+    color: #ffffff;
+}
+
+@media (max-width: 576px) {
+    .wizard-pill {
+        padding: 6px 2px !important;
+        font-size: 0.72rem;
+    }
+    .wizard-pill .step-label {
+        font-size: 0.7rem;
+    }
+    .wizard-pill .step-num {
+        width: 18px;
+        height: 18px;
+        font-size: 0.65rem;
+    }
+}
+
+.upload-dropzone {
+    border: 2px dashed rgba(13, 110, 253, 0.3) !important;
+    background: #f8faff;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.upload-dropzone:hover {
+    border-color: #0d6efd !important;
+    background: #f0f4ff;
+}
+
+.wizard-step-pane {
+    animation: fadeInStep 0.22s ease-in-out;
+}
+
+@keyframes fadeInStep {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    #modalNovoPonto .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+    #modalNovoPonto .modal-body {
+        max-height: calc(85vh - 120px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}

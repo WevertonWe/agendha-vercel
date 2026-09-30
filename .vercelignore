@@ -1,10 +1,31 @@
+# Bancos locais e scripts temporários
 *.db
+*.sqlite
+*.sqlite3
 *.sql
+*.csv
+
+# Ambientes e dependências locais
+venv/
+.venv/
+node_modules/
+.env
+.env.*
+
+# Caches e temporários
 __pycache__/
+*.pyc
 .pytest_cache/
 .ruff_cache/
+temp/
+scratch/
+.agent/
+.git/
+.github/
+
+# Arquivos de upload/mídia locais
 app/uploads/*
 docs/
-node_modules/
-venv/
-.env
+*.zip
+*.tar.gz
+*.log

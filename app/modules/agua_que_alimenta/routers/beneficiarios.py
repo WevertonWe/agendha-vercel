@@ -954,8 +954,19 @@ async def gerar_analise_ia(data: RelatorioRequest):
 
         client = ai_vision.get_gemini_client()
         if client:
-            response = await asyncio.to_thread(client.models.generate_content, model="gemini-2.0-flash", contents=[prompt])
-            return {"analise": response.text}
+            modelos_analise = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite"]
+            resposta_texto = None
+            for mod in modelos_analise:
+                try:
+                    response = await asyncio.to_thread(client.models.generate_content, model=mod, contents=[prompt])
+                    resposta_texto = response.text
+                    break
+                except Exception as mod_err:
+                    logging.warning(f"Falha no modelo {mod}: {mod_err}")
+            
+            if resposta_texto:
+                return {"analise": resposta_texto}
+            return JSONResponse(content={"error": "Falha ao processar análise nos modelos Gemini."}, status_code=500)
         else:
             return JSONResponse(content={"error": "API Gemini não configurada."}, status_code=500)
 

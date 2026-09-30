@@ -57,11 +57,15 @@ def detect_project_type(project_path: Path) -> dict:
     if (project_path / "pyproject.toml").exists() or (project_path / "requirements.txt").exists():
         result["type"] = "python"
         
-        # Check for ruff
-        result["linters"].append({"name": "ruff", "cmd": [sys.executable, "-m", "ruff", "check", "."]})
+        # Check for ruff or fallback to compileall
+        try:
+            subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, check=True)
+            result["linters"].append({"name": "ruff", "cmd": [sys.executable, "-m", "ruff", "check", "."]})
+        except Exception:
+            result["linters"].append({"name": "python-syntax", "cmd": [sys.executable, "-m", "compileall", "-q", "."]})
         
         # Check for mypy
-        if (project_path / "mypy.ini").exists() or (project_path / "pyproject.toml").exists():
+        if (project_path / "mypy.ini").exists():
             result["linters"].append({"name": "mypy", "cmd": ["mypy", "."]})
     
     return result

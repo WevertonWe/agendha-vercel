@@ -39,26 +39,70 @@ Priorizamos ferramentas consagradas de mercado, assegurando estabilidade, veloci
 
 * **Backend Engine:** Python, FastAPI
 * **Data Validation & Protection:** Pydantic (Strict Schema Typings na modelagem da resposta da IA)
-* **AI Cognitive Engine:** Integrações precisas da Google Gemini API
-* **Database & Routing:** SQL relacional atrelado a injeção estrita de dependências.
-* **Frontend Design:** Jinja2 SSR Templates, Vanilla JS e Bootstrap 5 com Master UI Calibrations (Glassmorphism & Teal/Emerald Accents).
-
-### 🔒 Arquitetura "Zero-Trust"
-A segurança em nossas aplicações é absoluta (nível *Cloud-native*). Para preservar a pureza estrutural do repositório público:
-- **Ausência de Hardcoding:** Fim absoluto e irrevogável para strings secretas engastadas na raíz. Nada de `google_credentials.json` exportados no build.
-- **Environment & Dependency Variables:** Configurações globais e Bearer Tokens dinâmicos (sob prefixos polimórficos de autorização, ex. `AUTH_BEARER_PREFIX`) governados exclusivamente pelo `pydantic-settings`.
-- **Heurística Intencional:** Padrões restritivos anti-vulnerabilidade com varreduras customizadas de AST. Nenhuma intervenção perigosa contamina o pipeline Master sem devida sinalização (`# nosec` intencional nas engrenagens críticas de runtime ORM).
+* **AI Cognitive Engine:** Google Gemini API (`google-genai` com modelos 2.5-flash / 3.5-flash)
+* **Database & Persistence:** Supabase PostgreSQL com extensões `pg_trgm` e `unaccent`
+* **Frontend Design:** Jinja2 SSR Templates, Vanilla JS e Bootstrap 5 com UI Utils & Glassmorphism.
 
 ---
 
-## 🛡️ Quality Assurance & Compliance
+## 🚀 Como Iniciar o Projeto (Quick Start)
 
-A confiança e entrega de valor transparece na solidez da esteira CI/CD simulada do Agendha. Nenhuma PR é digna de Merge sem triunfar em nosso implacável Master Checklist (`checklist.py`), garantindo:
+### 1. Clonar o Repositório e Criar Ambiente Virtual
+```bash
+git clone https://github.com/WevertonWe/agendha-vercel.git
+cd agendha-vercel
 
-- ✅ **Security Scan:** Zero vulnerabilidades críticas expostas. (Sem senhas no código e nem injeção SQL deliberada).
-- ✅ **UX Accessibility Audit:** Engenharia Front-end forjada para fluir pelas leis de *Hick* e *Miller*. Design Taxonômico livre de distúrbios de carga cognitiva (inputs bem envelopados por `<label>`) e contraste de paleta livre do estigmatizado Roxo/Purple.
-- ✅ **SEO (Search Engine Optimization):** Meta Tags otimizadas transversalmente. Suporte impecável ao formante *Open Graph Protocol* (`og:image`, `og:title`) oferecendo rich link-previews espetaculares para WhatsApp, Meta e LinkedIn.
-- ✅ **Schema Validation & Testing:** Motor completo validando estruturas de dados sob pressões intensas de unitários rigorosos (`test_runner`).
+# Criar e ativar o ambiente virtual
+python -m venv venv
+
+# Windows:
+venv\Scripts\activate
+
+# Linux/Mac:
+source venv/bin/activate
+```
+
+### 2. Instalar Dependências
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configurar Variáveis de Ambiente
+Copie o arquivo `.env.example` para `.env` e preencha com suas credenciais:
+```bash
+cp .env.example .env
+```
+
+### 4. Executar o Servidor de Desenvolvimento
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+Acesse a aplicação em [http://localhost:8000](http://localhost:8000) e a documentação interativa Swagger em [http://localhost:8000/docs](http://localhost:8000/docs).
+
+---
+
+## 🧪 Executando os Testes Automatizados
+
+A suíte de testes de unidade, conformidade documental e deduplicação pode ser executada com:
+
+```bash
+# Executar suíte completa
+python tests/run_tests.py
+
+# Testes individuais de auditoria e null safety
+python tests/test_bsf_auditoria_deduplicacao.py
+python tests/test_bsf_null_safety.py
+```
+
+---
+
+## 🛡️ Quality Assurance & CI/CD
+
+O projeto conta com esteira de Integração Contínua via **GitHub Actions** (`.github/workflows/ci.yml`), garantindo:
+- ✅ **Security Hardening:** OWASP headers, CORS restritivo, parameterized queries e zero secrets no código.
+- ✅ **Performance:** Consultas batch no módulo financeiro e cache TTL em memória para filtros e metadados.
+- ✅ **Resiliência:** Fallbacks transparentes em processamento de arquivos e cascade fallback nos modelos Gemini.
+- ✅ **Documentação Arquitetural:** Consulte [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para detalhes de fluxo de dados.
 
 ---
 

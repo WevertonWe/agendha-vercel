@@ -10,18 +10,18 @@ from pydantic import BaseModel, Field
 
 # --- Schema Pydantic para Estruturação da IA ---
 class BeneficiarioExtraido(BaseModel):
-    nome_completo: str | None = Field(description="Nome completo do beneficiário")
-    sexo: str | None = Field(description="Sexo (Ex: Masculino, Feminino)")
-    data_nascimento: str | None = Field(description="Data de Nascimento formato DD/MM/AAAA")
-    cpf: str | None = Field(description="CPF com pontuação")
-    escolaridade: str | None = Field(description="Escolaridade")
-    comunidade: str | None = Field(description="Comunidade onde reside")
-    municipio: str | None = Field(description="Município da residência")
-    estado_uf: str | None = Field(description="Estado UF (Sigla 2 letras)")
-    nis: str | None = Field(description="Número NIS (se houver)")
+    nome_completo: str = Field(default="", description="Nome completo do beneficiário")
+    sexo: str = Field(default="", description="Sexo (Ex: Masculino, Feminino)")
+    data_nascimento: str = Field(default="", description="Data de Nascimento formato DD/MM/AAAA")
+    cpf: str = Field(default="", description="CPF com pontuação")
+    escolaridade: str = Field(default="", description="Escolaridade")
+    comunidade: str = Field(default="", description="Comunidade onde reside")
+    municipio: str = Field(default="", description="Município da residência")
+    estado_uf: str = Field(default="", description="Estado UF (Sigla 2 letras)")
+    nis: str = Field(default="", description="Número NIS (se houver)")
 
 class AtividadeExtraida(BaseModel):
-    nome_atividade: str = Field(description="O nome da atividade marcada com o X")
+    nome_atividade: str = Field(default="", description="O nome da atividade marcada com o X")
 
 # --- Configuração Inicial ---
 load_dotenv()
@@ -56,17 +56,16 @@ async def processar_imagem_gemini(caminho_arquivo: str) -> str:
     if not client:
         return json.dumps({"erro": "Configuração da API inválida"})
 
-    # Lista de Modelos: Emergência/Resiliência (Prioridade 2025)
+    # Lista de Modelos: Alta Precisão e Resiliência (Modelos Ativos 2.5 e 3.x)
     modelos_para_tentar = [
         "gemini-2.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
         "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
         "gemini-3.6-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro"
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.1-pro-preview"
     ]
     ultimo_erro = ""
 
@@ -135,14 +134,13 @@ async def identificar_tipo_atividade_gemini(file_bytes: bytes, filename: str) ->
 
     modelos_para_tentar = [
         "gemini-2.5-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
         "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
         "gemini-3.6-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-pro"
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.1-pro-preview"
     ]
     ultimo_erro = ""
     

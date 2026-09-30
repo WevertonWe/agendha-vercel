@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
 var map = null;
 var clusterGroup = null;
 var osm, satelite, topo, baseMaps, drawnItems;
+var itaparicaLayer = null;
 
 // --- Other Global Containers ---
 let layers = {};
@@ -33,6 +34,26 @@ let pointsLookup = {};
 // Contexto Injetado via data-attribute no HTML
 const containerEl = document.querySelector('.map-full-container');
 const CONTEXTO_ATUAL = containerEl ? containerEl.dataset.contexto : 'geral';
+
+// --- GIS & Modal Helpers ---
+window.openModalExportar = () => {
+    const modalEl = document.getElementById('modalExportar');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        new bootstrap.Modal(modalEl).show();
+    }
+};
+
+window.downloadExport = (formato) => {
+    window.location.href = `/api/mapa/exportar?formato=${formato}&contexto=${CONTEXTO_ATUAL}`;
+};
+
+window.zoomTerritorioItaparica = () => {
+    if (itaparicaLayer && map) {
+        map.fitBounds(itaparicaLayer.getBounds(), { padding: [30, 30] });
+    } else if (map) {
+        map.flyTo([-9.400, -38.600], 9);
+    }
+};
 
 window.openPointOffcanvas = (p) => {
     const titleEl = document.getElementById('offcanvasPointTitle');
@@ -203,6 +224,54 @@ async function initMap() {
     // 6. Load Data
     await loadCategories();
     await loadPontos();
+    await loadTerritorioItaparica();
+}
+
+// --- Camada Vetorial Oficial: Território Itaparica (IBGE) ---
+async function loadTerritorioItaparica() {
+    try {
+        const res = await fetch('/api/mapa/camada-itaparica');
+        if (!res.ok) return;
+        const geojson = await res.json();
+
+        if (itaparicaLayer && map) {
+            map.removeLayer(itaparicaLayer);
+        }
+
+        itaparicaLayer = L.geoJSON(geojson, {
+            style: {
+                color: '#d35400',
+                weight: 2,
+                dashArray: '6, 6',
+                fillColor: '#f39c12',
+                fillOpacity: 0.06
+            },
+            onEachFeature: (feature, layer) => {
+                const props = feature.properties || {};
+                const popupContent = `
+                    <div class="p-2">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-geo-alt-fill text-danger fs-5 me-2"></i>
+                            <h6 class="fw-bold text-primary mb-0">${props.nome || 'Município'}</h6>
+                        </div>
+                        <small class="text-muted d-block mb-1">Território de Identidade Itaparica (Bahia)</small>
+                        <small class="badge bg-secondary">Código IBGE: ${props.codigo_ibge || 'N/A'}</small>
+                    </div>
+                `;
+                layer.bindPopup(popupContent);
+                layer.bindTooltip(props.nome || '', { permanent: false, direction: 'center', className: 'muni-tooltip fw-bold' });
+            }
+        });
+
+        itaparicaLayer.addTo(map);
+
+        if (categoryDummyLayers) {
+            categoryDummyLayers['Território Itaparica'] = itaparicaLayer;
+            updateLayerList();
+        }
+    } catch (e) {
+        console.warn("Aviso ao carregar camada do Território Itaparica:", e);
+    }
 }
 
 // --- Search Logic (New) ---
@@ -272,10 +341,31 @@ function setupSearch() {
 async function loadCategories() {
     try {
         const res = await fetch('/api/mapa/categorias');
-        if (!res.ok) throw new Error("Erro ao carregar categorias");
-        const categorias = await res.json();
+        let categorias = [];
+        if (res.ok) {
+            categorias = await res.json();
+        }
 
-        // Populate Selector Options Only
+        // Tecnologias Sociais e Estruturas de Convivência com o Semiárido
+        const padraoSemiárido = [
+            { nome: 'Cisterna de Placa (16.000L - 1ª Água)', cor: '#0055a5' },
+            { nome: 'Cisterna Calçadão (52.000L - 2ª Água)', cor: '#e67e22' },
+            { nome: 'Cisterna de Enxurrada (52.000L)', cor: '#16a085' },
+            { nome: 'Barreiro Trincheira', cor: '#d35400' },
+            { nome: 'Barraginha', cor: '#27ae60' },
+            { nome: 'Poço Tubular / Artesiano', cor: '#2980b9' },
+            { nome: 'Quintal Produtivo / Agroecológico', cor: '#2ecc71' },
+            { nome: 'Beneficiário', cor: '#28a745' }
+        ];
+
+        const nomesExistentes = new Set(categorias.map(c => (c.nome || '').toLowerCase()));
+        padraoSemiárido.forEach(padrao => {
+            if (!nomesExistentes.has(padrao.nome.toLowerCase())) {
+                categorias.push(padrao);
+            }
+        });
+
+        // Populate Selector Options
         const select = document.getElementById('tipo');
         if (select) {
             select.innerHTML = '';
@@ -295,7 +385,7 @@ async function loadCategories() {
 
 // --- Icon Logic ---
 function getIconForCategory(tipo, customColor) {
-    const tipoLower = tipo.toLowerCase();
+    const tipoLower = (tipo || '').toLowerCase();
 
     // Ícone de Boneco (Beneficiário)
     if (tipoLower.includes('benefic')) {
@@ -308,27 +398,21 @@ function getIconForCategory(tipo, customColor) {
         });
     }
 
-    const colors = {
-        'Cisterna': '#003366',
-        'Barreiro': '#D2691E',
-        'Calçadão': '#808080',
-        'Área de Roça': '#90EE90',
-        'Default': '#3388ff'
-    };
+    let defaultColor = '#0055a5';
+    if (tipoLower.includes('calçad') || tipoLower.includes('calcad')) defaultColor = '#e67e22';
+    else if (tipoLower.includes('enxurr')) defaultColor = '#16a085';
+    else if (tipoLower.includes('barreir')) defaultColor = '#d35400';
+    else if (tipoLower.includes('barrag')) defaultColor = '#27ae60';
+    else if (tipoLower.includes('poço') || tipoLower.includes('poco')) defaultColor = '#2980b9';
+    else if (tipoLower.includes('quintal')) defaultColor = '#2ecc71';
+    else if (tipoLower.includes('cistern')) defaultColor = '#0055a5';
 
-    const icons = {
-        'Cisterna': '<path d="M12 2L12 22M2 12L22 12" stroke="white" stroke-width="2"/> <path d="M12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22Z" fill="{color}" /> <path d="M12 6C12 6 16 10 16 14C16 16.2 14.2 18 12 18C9.8 18 8 16.2 8 14C8 10 12 6 12 6Z" fill="white"/>',
-        'Barreiro': '<rect x="4" y="8" width="16" height="10" rx="2" fill="{color}" /> <path d="M6 8L6 6C6 4.9 6.9 4 8 4H16C17.1 4 18 4.9 18 6L18 8" stroke="{color}" stroke-width="2" fill="none"/>',
-        'Default': '<path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="{color}" /> <circle cx="12" cy="9" r="2.5" fill="white"/>'
-    };
-
-    const color = customColor || colors[tipo] || colors['Default'];
-    let svgContent = icons[tipo] || icons['Default'];
-    svgContent = svgContent.replaceAll('{color}', color);
+    const color = customColor || defaultColor;
 
     const fullSvg = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" style="filter: drop-shadow(0px 3px 3px rgba(0,0,0,0.3));">
-            ${svgContent}
+            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}" stroke="#ffffff" stroke-width="1.2"/>
+            <path d="M12 6C12 6 15 9.5 15 11.5C15 13.16 13.66 14.5 12 14.5C10.34 14.5 9 13.16 9 11.5C9 9.5 12 6 12 6Z" fill="#ffffff"/>
         </svg>
     `;
 
@@ -541,24 +625,34 @@ async function loadPontos() {
 
 function createPopupContent(p, finalColor) {
     let statusBadge = '';
-    if (p.status_beneficiario) {
-        const st = p.status_beneficiario.toUpperCase();
+    const stRaw = p.status_obra || p.status_beneficiario || '';
+    if (stRaw) {
+        const st = stRaw.toUpperCase();
         let badgeClass = 'bg-secondary';
-        if (st.includes('IMPORTADO')) badgeClass = 'bg-primary';
-        if (st.includes('CADASTRADO') || st.includes('OK')) badgeClass = 'bg-success';
-        if (st.includes('CONSTRU')) badgeClass = 'bg-warning text-dark';
-        statusBadge = `<span class="badge ${badgeClass} ms-auto me-2">${p.status_beneficiario}</span>`;
+        if (st.includes('CONCLU') || st.includes('OK') || st.includes('USO')) badgeClass = 'bg-success';
+        else if (st.includes('CONSTRU') || st.includes('OBRA')) badgeClass = 'bg-warning text-dark';
+        else if (st.includes('ESCAVA')) badgeClass = 'bg-info text-dark';
+        else if (st.includes('DIAGN') || st.includes('SELEC')) badgeClass = 'bg-primary';
+        else if (st.includes('REFORM')) badgeClass = 'bg-danger';
+        statusBadge = `<span class="badge ${badgeClass} ms-auto me-2">${stRaw}</span>`;
     }
+
     let bsfIcon = p.verificacao_bsf ? `<i class="bi bi-patch-check-fill text-warning fs-5" title="Verificado BSF"></i>` : '';
-    const imgSrc = p.foto || p.imagem || null;
-    const thumbHtml = imgSrc ? `<img src="${imgSrc}" class="popup-thumb" onclick="window.open('${imgSrc}','_blank')">` : '<div class="popup-thumb d-flex align-items-center justify-content-center text-muted"><small>Sem Imagem</small></div>';
+    const imgSrc = p.foto_url || p.foto || p.imagem || null;
+    const thumbHtml = imgSrc ? `<img src="${imgSrc}" class="popup-thumb" onclick="window.open('${imgSrc}','_blank')" title="Clique para ampliar">` : '<div class="popup-thumb d-flex align-items-center justify-content-center text-muted"><small>Sem Foto</small></div>';
 
     const addressDest = p.full_address || `${p.latitude},${p.longitude}`;
     const responsavel = p.responsavel || "N/A";
-
-    // Escape ID for safety if string, but it's usually int.
-    // Ensure p.id is present.
     const safeId = p.id || '';
+
+    let localizacao = '';
+    if (p.municipio || p.comunidade) {
+        localizacao = `<div class="popup-meta"><i class="bi bi-geo-alt-fill text-danger me-1"></i> <strong>${p.comunidade ? p.comunidade + ', ' : ''}${p.municipio || ''}</strong></div>`;
+    }
+    const benefHtml = p.beneficiario ? `<div class="popup-meta"><i class="bi bi-person-fill text-primary me-1"></i> Beneficiário: <strong>${p.beneficiario}</strong></div>` : '';
+    const areaHtml = p.area_telhado ? `<div class="popup-meta"><i class="bi bi-rulers text-secondary me-1"></i> Captação: <strong>${p.area_telhado} m²</strong></div>` : '';
+    const editalHtml = p.edital ? `<div class="popup-meta"><i class="bi bi-file-earmark-text text-secondary me-1"></i> Projeto: <strong>${p.edital}</strong></div>` : '';
+    const dataHtml = p.data_coleta ? `<div class="popup-meta text-muted small mt-1"><i class="bi bi-calendar-event me-1"></i> Coleta: ${p.data_coleta}</div>` : '';
 
     return `
         <div class="popup-card-header" style="background: ${finalColor || '#666'}">
@@ -568,9 +662,14 @@ function createPopupContent(p, finalColor) {
         <div class="popup-card-body">
             <h6 class="mb-2 fw-bold text-dark">${p.nome}</h6>
             ${thumbHtml}
-            <div class="popup-meta"><i class="bi bi-person-circle me-1"></i> ${responsavel}</div>
+            ${localizacao}
+            ${benefHtml}
+            ${areaHtml}
+            ${editalHtml}
+            <div class="popup-meta"><i class="bi bi-person-circle me-1"></i> Resp: ${responsavel}</div>
             ${p.cpf ? `<div class="popup-meta"><i class="bi bi-credit-card me-1"></i> ${p.cpf}</div>` : ''}
             ${p.descricao ? `<div class="popup-meta mt-2 fst-italic">"${p.descricao}"</div>` : ''}
+            ${dataHtml}
         </div>
         <div class="popup-card-footer">
              <button onclick="editarPonto(${safeId})" class="btn btn-sm btn-outline-primary border-0 rounded-circle shadow-sm" title="Editar"><i class="bi bi-pencil-fill"></i></button>
@@ -590,35 +689,177 @@ function rebuildDesktopControl() {
         categoryDummyLayers[cat] = lg;
         if (!map.hasLayer(lg)) map.addLayer(lg);
     });
-    // Don't add Native Control
 }
 
 window.openModalManual = () => {
-    // Context Cleanup: Close Action Hub
     const offcanvasEl = document.getElementById('offcanvasActionHub');
-    if (offcanvasEl) {
-        // Force hide by removing show class/backdrop if instance check is hard, 
-        // or use bootstrap API if available.
+    if (offcanvasEl && typeof bootstrap !== 'undefined') {
         const bsOffcanvas = bootstrap.Offcanvas.getInstance(offcanvasEl);
         if (bsOffcanvas) bsOffcanvas.hide();
     }
 
-    document.getElementById('formNovoPonto').reset();
+    const form = document.getElementById('formNovoPonto');
+    if (form) form.reset();
+
     document.getElementById('hidden_id').value = "";
     document.getElementById('hidden_poligono').value = "";
+    document.getElementById('fotoUrlHidden').value = "";
+    if (document.getElementById('dataColetaHidden')) document.getElementById('dataColetaHidden').value = "";
+    if (document.getElementById('municipio')) document.getElementById('municipio').value = "";
+    if (document.getElementById('comunidade')) document.getElementById('comunidade').value = "";
+    if (document.getElementById('beneficiario')) document.getElementById('beneficiario').value = "";
+    if (document.getElementById('status_obra')) document.getElementById('status_obra').value = "Concluída / Em Uso";
+    if (document.getElementById('area_telhado')) document.getElementById('area_telhado').value = "";
+    if (document.getElementById('edital')) document.getElementById('edital').value = "";
+    if (document.getElementById('area_calc')) document.getElementById('area_calc').value = "N/A (ponto único)";
 
-    // Clear Alerts
+    // Clear photo previews and alerts
+    if (typeof window.removerFotoPonto === 'function') {
+        window.removerFotoPonto(false);
+    }
+
     const alertContainer = document.getElementById('gpsAlertContainer');
     if (alertContainer) alertContainer.innerHTML = '';
+    const exifAlert = document.getElementById('exifGpsAlert');
+    if (exifAlert) exifAlert.classList.add('d-none');
+    const noExifAlert = document.getElementById('noExifGpsAlert');
+    if (noExifAlert) noExifAlert.classList.add('d-none');
 
-    // Auto-trigger GPS
-    getCurrentLocation();
+    // Inicializa na Etapa 1 sem forçar geolocalização automática
+    setWizardStep(1);
 
-    // Use specific ID
     const modalEl = document.getElementById('modalNovoPonto');
     if (modalEl && typeof bootstrap !== 'undefined') {
-        const modal = new bootstrap.Modal(modalEl);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
+    }
+};
+
+// --- Wizard Step-by-Step Controller ---
+window.setWizardStep = (stepNumber) => {
+    // 1. Validação ao avançar além do Passo 1
+    if (stepNumber > 1) {
+        const lat = document.getElementById('lat')?.value;
+        const lng = document.getElementById('lng')?.value;
+        if (!lat || !lng) {
+            if (typeof ui !== 'undefined') {
+                ui.feedbackErro('Informe a localização (Foto com GPS, GPS do celular ou clique no mapa) antes de avançar.');
+            }
+            stepNumber = 1;
+        }
+    }
+
+    // 2. Alterna visibilidade dos painéis de etapas
+    for (let i = 1; i <= 4; i++) {
+        const pane = document.getElementById(`wizardStep${i}`);
+        const pill = document.getElementById(`wizardPill${i}`);
+
+        if (pane) {
+            if (i === stepNumber) {
+                pane.classList.remove('d-none');
+            } else {
+                pane.classList.add('d-none');
+            }
+        }
+
+        if (pill) {
+            pill.classList.remove('active', 'step-completed');
+            if (i === stepNumber) {
+                pill.classList.add('active');
+            } else if (i < stepNumber) {
+                pill.classList.add('step-completed');
+            }
+        }
+    }
+
+    // 3. Atualiza indicador textual no cabeçalho
+    const stepLabels = [
+        "Passo 1 de 4: Foto & Localização",
+        "Passo 2 de 4: Tecnologia Social",
+        "Passo 3 de 4: Beneficiário & Território",
+        "Passo 4 de 4: Projeto & Revisão"
+    ];
+    const indicator = document.getElementById('wizardStepIndicator');
+    if (indicator && stepLabels[stepNumber - 1]) {
+        indicator.textContent = stepLabels[stepNumber - 1];
+    }
+
+    // 4. Se for o passo 4, atualiza o card de resumo
+    if (stepNumber === 4) {
+        updateWizardSummary();
+    }
+};
+
+window.autoSugerirNomePonto = (force = false) => {
+    const nomeInput = document.getElementById('nome');
+    if (!nomeInput) return;
+    if (!force && nomeInput.value.trim() !== '') return;
+
+    const tipoSelect = document.getElementById('tipo');
+    const benefInput = document.getElementById('beneficiario');
+    const comInput = document.getElementById('comunidade');
+
+    const tipoRaw = tipoSelect ? tipoSelect.value : 'Ponto';
+    const tipoCurto = tipoRaw.split('(')[0].trim();
+    const benef = benefInput ? benefInput.value.trim() : '';
+    const com = comInput ? comInput.value.trim() : '';
+
+    let sugestao = tipoCurto;
+    if (benef) {
+        sugestao += ` - ${benef}`;
+    } else if (com) {
+        sugestao += ` - ${com}`;
+    }
+
+    nomeInput.value = sugestao;
+};
+
+function updateWizardSummary() {
+    const nome = document.getElementById('nome')?.value || 'Não informado';
+    const tipo = document.getElementById('tipo')?.value || 'Não informado';
+    const status = document.getElementById('status_obra')?.value || 'Concluída / Em Uso';
+    const benef = document.getElementById('beneficiario')?.value || 'Não informado';
+    const muni = document.getElementById('municipio')?.value || '';
+    const com = document.getElementById('comunidade')?.value || '';
+    const lat = document.getElementById('lat')?.value || '';
+    const lng = document.getElementById('lng')?.value || '';
+    const fotoUrl = document.getElementById('fotoUrlHidden')?.value || '';
+
+    const sumNome = document.getElementById('sumNome');
+    if (sumNome) sumNome.textContent = nome;
+
+    const sumTipo = document.getElementById('sumTipo');
+    if (sumTipo) sumTipo.textContent = tipo;
+
+    const sumStatus = document.getElementById('sumStatus');
+    if (sumStatus) sumStatus.textContent = status;
+
+    const sumBenef = document.getElementById('sumBeneficiario');
+    if (sumBenef) sumBenef.textContent = benef;
+
+    const sumLocal = document.getElementById('sumLocal');
+    if (sumLocal) {
+        const localParts = [com, muni].filter(Boolean);
+        sumLocal.textContent = localParts.length > 0 ? localParts.join(', ') : 'Território Itaparica';
+    }
+
+    const sumCoords = document.getElementById('sumCoords');
+    if (sumCoords) {
+        sumCoords.textContent = (lat && lng) ? `${lat}, ${lng}` : 'Nenhuma coordenada';
+    }
+
+    const sumFotoPreview = document.getElementById('sumFotoPreview');
+    const sumSemFoto = document.getElementById('sumSemFoto');
+    if (sumFotoPreview && sumSemFoto) {
+        if (fotoUrl) {
+            sumFotoPreview.src = fotoUrl;
+            sumFotoPreview.classList.remove('d-none');
+            sumSemFoto.classList.add('d-none');
+        } else {
+            sumFotoPreview.src = '';
+            sumFotoPreview.classList.add('d-none');
+            sumSemFoto.classList.remove('d-none');
+        }
     }
 }
 
@@ -741,8 +982,11 @@ function setupDrawControl() {
             document.getElementById('lng').value = center.lng;
         }
 
+        setWizardStep(1);
         const modalEl = document.getElementById('modalNovoPonto');
-        if (modalEl) new bootstrap.Modal(modalEl).show();
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
     });
 }
 
@@ -750,6 +994,12 @@ function setupImageUpload() {
     const fotoInput = document.getElementById('fotoInput');
     const fotoHidden = document.getElementById('fotoUrlHidden');
     const uploadStatus = document.getElementById('uploadStatus');
+    const previewContainer = document.getElementById('fotoPreviewContainer');
+    const previewImg = document.getElementById('fotoPreviewImg');
+    const exifAlert = document.getElementById('exifGpsAlert');
+    const noExifAlert = document.getElementById('noExifGpsAlert');
+    const dataBadge = document.getElementById('dataColetaBadge');
+    const dataHidden = document.getElementById('dataColetaHidden');
 
     if (!fotoInput) return;
 
@@ -760,10 +1010,14 @@ function setupImageUpload() {
         const formData = new FormData();
         formData.append('file', file);
 
-        try {
+        if (uploadStatus) {
             uploadStatus.classList.remove('d-none');
-            uploadStatus.innerHTML = '<div class="spinner-border spinner-border-sm text-secondary"></div>';
+            uploadStatus.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+        }
+        if (exifAlert) exifAlert.classList.add('d-none');
+        if (noExifAlert) noExifAlert.classList.add('d-none');
 
+        try {
             const res = await fetch('/api/mapa/upload', {
                 method: 'POST',
                 body: formData
@@ -772,18 +1026,90 @@ function setupImageUpload() {
             if (!res.ok) throw new Error("Erro no upload");
 
             const data = await res.json();
-            fotoHidden.value = data.url;
-            uploadStatus.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
-            uploadStatus.classList.remove('d-none');
+            if (fotoHidden) fotoHidden.value = data.url;
+
+            if (uploadStatus) {
+                uploadStatus.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
+                uploadStatus.classList.remove('d-none');
+            }
+
+            // Preview Thumbnail
+            if (previewContainer && previewImg) {
+                previewImg.src = data.url;
+                previewContainer.classList.remove('d-none');
+            }
+
+            // EXIF GPS Detection (Timestamp Camera / Smartphone)
+            if (data.has_gps && data.latitude && data.longitude) {
+                const latInput = document.getElementById('lat');
+                const lngInput = document.getElementById('lng');
+                if (latInput) {
+                    latInput.value = Number(data.latitude).toFixed(6);
+                    latInput.classList.add('border-success', 'bg-success-subtle');
+                    setTimeout(() => latInput.classList.remove('border-success', 'bg-success-subtle'), 3500);
+                }
+                if (lngInput) {
+                    lngInput.value = Number(data.longitude).toFixed(6);
+                    lngInput.classList.add('border-success', 'bg-success-subtle');
+                    setTimeout(() => lngInput.classList.remove('border-success', 'bg-success-subtle'), 3500);
+                }
+
+                if (data.data_coleta) {
+                    if (dataHidden) dataHidden.value = data.data_coleta;
+                    if (dataBadge) {
+                        dataBadge.textContent = 'Data da Foto: ' + data.data_coleta;
+                        dataBadge.classList.remove('d-none');
+                    }
+                }
+
+                if (exifAlert) exifAlert.classList.remove('d-none');
+                if (noExifAlert) noExifAlert.classList.add('d-none');
+
+                const alertContainer = document.getElementById('gpsAlertContainer');
+                if (alertContainer) alertContainer.innerHTML = '';
+
+                if (typeof ui !== 'undefined') {
+                    ui.feedbackSucesso('Localização e data extraídas da foto com sucesso!');
+                }
+
+                if (map) {
+                    map.flyTo([data.latitude, data.longitude], 17, { duration: 1.5 });
+                }
+            } else {
+                if (noExifAlert) noExifAlert.classList.remove('d-none');
+                if (exifAlert) exifAlert.classList.add('d-none');
+            }
 
         } catch (e) {
-            console.error(e);
+            console.error("Upload error:", e);
             if (typeof ui !== 'undefined') ui.feedbackErro('Falha ao fazer upload da imagem.');
-            uploadStatus.classList.add('d-none');
+            if (uploadStatus) uploadStatus.classList.add('d-none');
             this.value = '';
         }
     });
 }
+
+window.removerFotoPonto = (clearFile = true) => {
+    const fotoInput = document.getElementById('fotoInput');
+    const fotoHidden = document.getElementById('fotoUrlHidden');
+    const previewContainer = document.getElementById('fotoPreviewContainer');
+    const previewImg = document.getElementById('fotoPreviewImg');
+    const exifAlert = document.getElementById('exifGpsAlert');
+    const noExifAlert = document.getElementById('noExifGpsAlert');
+    const dataBadge = document.getElementById('dataColetaBadge');
+    const dataHidden = document.getElementById('dataColetaHidden');
+    const uploadStatus = document.getElementById('uploadStatus');
+
+    if (clearFile && fotoInput) fotoInput.value = '';
+    if (fotoHidden) fotoHidden.value = '';
+    if (dataHidden) dataHidden.value = '';
+    if (previewContainer) previewContainer.classList.add('d-none');
+    if (previewImg) previewImg.src = '';
+    if (exifAlert) exifAlert.classList.add('d-none');
+    if (noExifAlert) noExifAlert.classList.add('d-none');
+    if (dataBadge) dataBadge.classList.add('d-none');
+    if (uploadStatus) uploadStatus.classList.add('d-none');
+};
 
 // --- CRUD Actions ---
 window.salvarPonto = async (event) => {
@@ -794,21 +1120,60 @@ window.salvarPonto = async (event) => {
     const lng = document.getElementById('lng').value;
     const nome = document.getElementById('nome').value;
     const tipo = document.getElementById('tipo').value;
+    const municipio = document.getElementById('municipio') ? document.getElementById('municipio').value : null;
+    const comunidade = document.getElementById('comunidade') ? document.getElementById('comunidade').value : null;
+    const beneficiario = document.getElementById('beneficiario') ? document.getElementById('beneficiario').value : null;
+    const status_obra = document.getElementById('status_obra') ? document.getElementById('status_obra').value : null;
+    const area_telhado = document.getElementById('area_telhado') && document.getElementById('area_telhado').value ? parseFloat(document.getElementById('area_telhado').value) : null;
+    const edital = document.getElementById('edital') ? document.getElementById('edital').value : null;
+    const data_coleta = document.getElementById('dataColetaHidden') ? document.getElementById('dataColetaHidden').value : null;
+    const foto_url = document.getElementById('fotoUrlHidden') ? document.getElementById('fotoUrlHidden').value : null;
     const descricao = document.getElementById('descricao').value;
     const poligono = document.getElementById('hidden_poligono').value;
     const cor = document.getElementById('cor').value;
-    const imagem = document.getElementById('fotoUrlHidden').value;
+
+    // Validações Essenciais
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+        if (typeof ui !== 'undefined') {
+            ui.feedbackErro('As coordenadas (Latitude e Longitude) são obrigatórias.');
+        }
+        setWizardStep(1);
+        return;
+    }
+
+    if (!nome || nome.trim() === '') {
+        if (typeof ui !== 'undefined') {
+            ui.feedbackErro('Por favor, informe a identificação / nome do ponto.');
+        }
+        setWizardStep(3);
+        return;
+    }
+
+    const btnSalvar = document.getElementById('btnSalvar');
+    const oldBtnHtml = btnSalvar ? btnSalvar.innerHTML : '';
+    if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+    }
 
     const payload = {
         latitude: parseFloat(lat),
         longitude: parseFloat(lng),
         nome: nome,
         tipo: tipo,
+        municipio: municipio,
+        comunidade: comunidade,
+        beneficiario: beneficiario,
+        status_obra: status_obra,
+        area_telhado: area_telhado,
+        edital: edital,
+        data_coleta: data_coleta,
+        foto_url: foto_url,
+        imagem: foto_url,
         descricao: descricao,
         poligono: poligono || null,
         cor: cor,
-        contexto: CONTEXTO_ATUAL,
-        imagem: imagem
+        contexto: CONTEXTO_ATUAL
     };
 
     const url = id ? `/api/mapa/pontos/${id}` : '/api/mapa/pontos';
@@ -825,14 +1190,22 @@ window.salvarPonto = async (event) => {
 
         await initMap();
         const modalEl = document.getElementById('modalNovoPonto');
-        bootstrap.Modal.getInstance(modalEl).hide();
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            const inst = bootstrap.Modal.getInstance(modalEl);
+            if (inst) inst.hide();
+        }
         if (typeof ui !== 'undefined') ui.feedbackSucesso('Ponto salvo com sucesso!');
 
     } catch (e) {
         console.error(e);
         if (typeof ui !== 'undefined') ui.feedbackErro('Erro ao salvar ponto. Verifique os dados.');
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = oldBtnHtml;
+        }
     }
-}
+};
 
 window.deletePonto = async (id) => {
     if (typeof ui === 'undefined') return;
@@ -859,13 +1232,41 @@ window.editarPonto = async (id) => {
         const ponto = await res.json();
 
         document.getElementById('hidden_id').value = ponto.id;
-        document.getElementById('nome').value = ponto.nome;
-        document.getElementById('tipo').value = ponto.tipo;
-        document.getElementById('descricao').value = ponto.descricao || '';
+        document.getElementById('nome').value = ponto.nome || '';
+        document.getElementById('tipo').value = ponto.tipo || '';
+        if (document.getElementById('municipio')) document.getElementById('municipio').value = ponto.municipio || '';
+        if (document.getElementById('comunidade')) document.getElementById('comunidade').value = ponto.comunidade || '';
+        if (document.getElementById('beneficiario')) document.getElementById('beneficiario').value = ponto.beneficiario || '';
+        if (document.getElementById('status_obra')) document.getElementById('status_obra').value = ponto.status_obra || ponto.status_beneficiario || 'Concluída / Em Uso';
+        if (document.getElementById('area_telhado')) document.getElementById('area_telhado').value = ponto.area_telhado || '';
+        if (document.getElementById('edital')) document.getElementById('edital').value = ponto.edital || '';
+        if (document.getElementById('descricao')) document.getElementById('descricao').value = ponto.descricao || '';
         document.getElementById('lat').value = ponto.latitude;
         document.getElementById('lng').value = ponto.longitude;
         document.getElementById('cor').value = ponto.cor || categoriesMap[ponto.tipo]?.cor || '#3388ff';
         document.getElementById('hidden_poligono').value = ponto.poligono || '';
+
+        // Foto preview
+        const fotoUrl = ponto.foto_url || ponto.foto || ponto.imagem || '';
+        document.getElementById('fotoUrlHidden').value = fotoUrl;
+        const previewContainer = document.getElementById('fotoPreviewContainer');
+        const previewImg = document.getElementById('fotoPreviewImg');
+        if (fotoUrl && previewContainer && previewImg) {
+            previewImg.src = fotoUrl;
+            previewContainer.classList.remove('d-none');
+        } else if (previewContainer) {
+            previewContainer.classList.add('d-none');
+        }
+
+        // Data de coleta
+        if (ponto.data_coleta) {
+            if (document.getElementById('dataColetaHidden')) document.getElementById('dataColetaHidden').value = ponto.data_coleta;
+            const dataBadge = document.getElementById('dataColetaBadge');
+            if (dataBadge) {
+                dataBadge.textContent = 'Data: ' + ponto.data_coleta;
+                dataBadge.classList.remove('d-none');
+            }
+        }
 
         // Area Calc Display
         if (ponto.poligono && typeof turf !== 'undefined') {
@@ -873,11 +1274,20 @@ window.editarPonto = async (id) => {
                 const area = turf.area(JSON.parse(ponto.poligono));
                 document.getElementById('area_calc').value = (area > 10000) ? (area / 10000).toFixed(2) + " ha" : area.toFixed(2) + " m²";
             } catch (e) { document.getElementById('area_calc').value = "N/A"; }
-        } else { document.getElementById('area_calc').value = ""; }
+        } else {
+            const areaInput = document.getElementById('area_calc');
+            if (areaInput) areaInput.value = "N/A (ponto único)";
+        }
+
+        // Initialize wizard at Step 1
+        setWizardStep(1);
 
         const modalEl = document.getElementById('modalNovoPonto');
-        if (modalEl) new bootstrap.Modal(modalEl).show();
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
     } catch (e) {
+        console.error(e);
         if (typeof ui !== 'undefined') ui.feedbackErro('Erro ao carregar dados do ponto.');
     }
 };
@@ -887,24 +1297,35 @@ function openBottomSheet(p) {
     const body = document.getElementById('bottomSheetBody');
     if (!sheet || !body) return;
 
-    const imgSrc = p.foto || p.imagem || null;
+    const imgSrc = p.foto_url || p.foto || p.imagem || null;
     const thumbHtml = imgSrc
-        ? `<img src="${imgSrc}" class="w-100 rounded mb-3" style="height: 200px; object-fit: cover;" onclick="window.open('${imgSrc}','_blank')">`
+        ? `<img src="${imgSrc}" class="w-100 rounded mb-3 shadow-sm" style="max-height: 220px; object-fit: cover;" onclick="window.open('${imgSrc}','_blank')">`
         : '';
 
     let statusBadge = '';
-    if (p.status_beneficiario) {
-        statusBadge = `<span class="badge bg-secondary mb-2">${p.status_beneficiario}</span>`;
+    const stRaw = p.status_obra || p.status_beneficiario || '';
+    if (stRaw) {
+        statusBadge = `<span class="badge bg-primary mb-2">${stRaw}</span>`;
     }
 
+    let localizacao = '';
+    if (p.municipio || p.comunidade) {
+        localizacao = `<p class="mb-1 text-danger fw-semibold"><i class="bi bi-geo-alt-fill me-1"></i>${p.comunidade ? p.comunidade + ', ' : ''}${p.municipio || ''}</p>`;
+    }
+    const benefHtml = p.beneficiario ? `<p class="mb-1 text-muted"><i class="bi bi-person-fill me-1"></i>Beneficiário: <strong>${p.beneficiario}</strong></p>` : '';
+    const areaHtml = p.area_telhado ? `<p class="mb-1 text-muted"><i class="bi bi-rulers me-1"></i>Captação: <strong>${p.area_telhado} m²</strong></p>` : '';
+
     body.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
              <h5 class="fw-bold mb-0">${p.nome}</h5>
              ${statusBadge}
         </div>
+        ${localizacao}
         ${thumbHtml}
+        ${benefHtml}
+        ${areaHtml}
         <p class="text-muted"><i class="bi bi-tag-fill me-2"></i>${p.tipo}</p>
-        <p class="mb-4">${p.descricao || 'Sem descrição.'}</p>
+        <p class="mb-4 text-secondary">${p.descricao || 'Sem descrição.'}</p>
         
         <div class="d-grid gap-2">
             <a href="https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}" target="_blank" class="btn btn-success">
@@ -1021,30 +1442,44 @@ function updateStatsChart() {
 }
 
 window.captureOnMap = () => {
-    // Logic to enable crosshair cursor and wait for click
     if (!map) return;
 
     // Close modal momentarily
     const modalEl = document.getElementById('modalNovoPonto');
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    modal.hide();
+    let modal = null;
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
 
-    Swal.fire({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        icon: 'info',
-        title: 'Clique no mapa para marcar'
-    });
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3500,
+            icon: 'info',
+            title: 'Toque no mapa para marcar a localização'
+        });
+    }
 
     const container = document.getElementById('map');
-    container.classList.add('cursor-crosshair');
+    if (container) container.classList.add('cursor-crosshair');
 
     map.once('click', function (e) {
-        document.getElementById('lat').value = e.latlng.lat.toFixed(6);
-        document.getElementById('lng').value = e.latlng.lng.toFixed(6);
-        container.classList.remove('cursor-crosshair');
-        modal.show();
+        const latInput = document.getElementById('lat');
+        const lngInput = document.getElementById('lng');
+        if (latInput) latInput.value = e.latlng.lat.toFixed(6);
+        if (lngInput) lngInput.value = e.latlng.lng.toFixed(6);
+        if (container) container.classList.remove('cursor-crosshair');
+
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+            m.show();
+            setWizardStep(1);
+        }
+        if (typeof ui !== 'undefined') {
+            ui.feedbackSucesso('Localização capturada do mapa!');
+        }
     });
-}
+};

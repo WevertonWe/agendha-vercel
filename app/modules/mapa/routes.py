@@ -10,10 +10,12 @@ try:
 except ImportError:
     pd = None
 import io
+import json
 
 from app.config import settings
 from .models import PontoCreate, PontoResponse, CategoriaCreate, CategoriaResponse
 from . import services
+from . import gis_utils
 
 router = APIRouter(prefix="/api/mapa", tags=["Mapa"])
 view_router = APIRouter(include_in_schema=False)
@@ -226,10 +228,19 @@ async def upload_foto_ponto(file: UploadFile = File(...), user: str = Depends(re
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 4. Return URL
-        # /static/uploads/mapa/filename
+        # 4. Extrair EXIF GPS (Timestamp Camera / Câmera de Smartphone)
+        gps_info = gis_utils.extract_exif_gps(file_path)
+
+        # 5. Return URL & GPS Metadata
         url = f"/static/uploads/mapa/{unique_name}"
-        return {"url": url}
+        return {
+            "url": url,
+            "has_gps": gps_info.get("has_gps", False),
+            "latitude": gps_info.get("latitude"),
+            "longitude": gps_info.get("longitude"),
+            "altitude": gps_info.get("altitude"),
+            "data_coleta": gps_info.get("data_coleta")
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar imagem: {str(e)}")
@@ -473,7 +484,115 @@ async def export_template(user: str = Depends(require_auth)):
     
     return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
 
-# --- Views (Old) ---
+
+@router.get("/exportar")
+async def exportar_dados_gis(
+    formato: str = "shapefile",
+    contexto: str = "geral",
+    user: str = Depends(require_auth)
+):
+    """
+    Exportação profissional de dados para QGIS, Prefeituras e Apps de Campo:
+    - shapefile (.zip com .shp, .shx, .dbf, .prj SIRGAS 2000, .cpg)
+    - geojson (.geojson FeatureCollection)
+    - kml (.kml para Google Earth e Avenza Maps)
+    - excel (.xlsx)
+    """
+    pontos_objs = services.get_all_pontos(contexto=contexto)
+    pontos = [p.dict() for p in pontos_objs]
+
+    if not pontos:
+        raise HTTPException(status_code=404, detail="Nenhum ponto registrado para exportação.")
+
+    formato_lower = formato.lower().strip()
+
+    if formato_lower in ["shapefile", "shp", "zip"]:
+        try:
+            zip_bytes = gis_utils.export_to_shapefile(pontos)
+            buf = io.BytesIO(zip_bytes)
+            headers = {
+                'Content-Disposition': 'attachment; filename="pontos_agendha_shapefile_sirgas2000.zip"'
+            }
+            return StreamingResponse(buf, media_type="application/zip", headers=headers)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao gerar Shapefile: {str(e)}")
+
+    elif formato_lower in ["geojson", "json"]:
+        try:
+            geo_data = gis_utils.export_to_geojson(pontos)
+            geo_str = json.dumps(geo_data, ensure_ascii=False, indent=2)
+            buf = io.BytesIO(geo_str.encode('utf-8'))
+            headers = {
+                'Content-Disposition': 'attachment; filename="pontos_agendha_tecnologias_agua.geojson"'
+            }
+            return StreamingResponse(buf, media_type="application/geo+json", headers=headers)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao gerar GeoJSON: {str(e)}")
+
+    elif formato_lower in ["kml", "kmz"]:
+        try:
+            kml_content = gis_utils.export_to_kml(pontos)
+            buf = io.BytesIO(kml_content.encode('utf-8'))
+            headers = {
+                'Content-Disposition': 'attachment; filename="pontos_agendha_google_earth.kml"'
+            }
+            return StreamingResponse(buf, media_type="application/vnd.google-earth.kml+xml", headers=headers)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao gerar KML: {str(e)}")
+
+    elif formato_lower in ["excel", "xlsx"]:
+        if pd is None:
+            raise HTTPException(status_code=500, detail="Pandas não está disponível.")
+        
+        data_rows = []
+        for p in pontos:
+            data_rows.append({
+                "ID": p.get("id"),
+                "Nome": p.get("nome"),
+                "Tipo / Tecnologia": p.get("tipo"),
+                "Município": p.get("municipio") or "",
+                "Comunidade": p.get("comunidade") or "",
+                "Status da Obra": p.get("status_obra") or p.get("status_beneficiario") or "",
+                "Beneficiário": p.get("beneficiario") or "",
+                "Área de Captação (m²)": p.get("area_telhado") or 0,
+                "Edital / Projeto": p.get("edital") or "",
+                "Responsável": p.get("responsavel") or "",
+                "Data da Coleta": p.get("data_coleta") or "",
+                "Latitude": p.get("latitude"),
+                "Longitude": p.get("longitude"),
+                "Foto URL": p.get("foto_url") or "",
+                "Observações": p.get("descricao") or ""
+            })
+        df = pd.DataFrame(data_rows)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Pontos Agendha')
+            worksheet = writer.sheets['Pontos Agendha']
+            for idx, col in enumerate(df.columns):
+                max_len = max(df[col].astype(str).map(len).max(), len(col)) + 3
+                worksheet.column_dimensions[chr(65 + (idx % 26))].width = min(max_len, 40)
+        output.seek(0)
+        headers = {
+            'Content-Disposition': 'attachment; filename="relatorio_pontos_agendha.xlsx"'
+        }
+        return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Formato '{formato}' inválido. Use shapefile, geojson, kml ou excel.")
+
+
+@router.get("/camada-itaparica")
+async def get_camada_itaparica():
+    """
+    Retorna a malha vetorial oficial IBGE do Território Itaparica (Bahia)
+    em formato GeoJSON.
+    """
+    geojson_path = os.path.join("app", "static", "data", "territorio_itaparica.geojson")
+    if not os.path.exists(geojson_path):
+        raise HTTPException(status_code=404, detail="Camada do Território Itaparica não encontrada.")
+    with open(geojson_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return JSONResponse(content=data)
 
 
 # --- Category Management ---

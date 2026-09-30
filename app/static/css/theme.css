@@ -49,11 +49,35 @@ body {
     position: relative;
 }
 
-.card-custom:hover {
-    transform: translateY(-4px);
+.card-custom:hover,
+.hover-lift:hover {
+    transform: translateY(-5px);
     box-shadow:
         0 10px 15px -3px rgba(0, 0, 0, 0.08),
         0 25px 30px -5px rgba(0, 0, 0, 0.05);
+}
+
+.hover-lift {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+}
+
+/* Stat Card (Glassmorphism & Dashboard KPI) */
+.stat-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--card-radius, 16px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    padding: 1.5rem;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+    overflow: hidden;
+    position: relative;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 14px 38px 0 rgba(31, 38, 135, 0.12);
 }
 
 /* Decoration line for special cards */
@@ -400,4 +424,76 @@ body {
 
 .card-kpi.border-danger {
     border-left-color: #d63031 !important;
+}
+
+/* =========================================================
+   MOBILE & TOUCH ERGONOMICS (44px Minimum Touch Targets)
+   Optimizado para Smartphones e Tablets em Trabalho de Campo
+   ========================================================= */
+
+@media (max-width: 768px) {
+    /* 1. Touch Targets Ergonômicos (Mínimo 44px) */
+    .btn-sm.rounded-circle,
+    button.rounded-circle {
+        min-width: 44px !important;
+        min-height: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 2px !important;
+    }
+
+    .btn-sm.rounded-circle i,
+    button.rounded-circle i {
+        font-size: 1rem !important;
+    }
+
+    /* 2. Paginação Mobile Touch */
+    .pagination .page-link {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+    }
+
+    /* 3. Inputs de Formulário - Evitar Zoom Automático no iOS */
+    .form-control,
+    .form-select {
+        font-size: 16px !important; /* Previne auto-zoom no Safari iOS */
+        min-height: 44px;
+    }
+
+    .form-control-sm,
+    .form-select-sm {
+        min-height: 40px;
+        font-size: 15px !important;
+    }
+
+    /* 4. Modais com Viewport Dinâmico (Safe Area & dvh) */
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100vw - 1rem);
+    }
+
+    .modal-content {
+        max-height: calc(100dvh - 20px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 5. Tabelas Responsivas com Rolagem Suave Touch */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+    }
+
+    /* 6. Tabs de Navegação Mobile */
+    .nav-pills .nav-link {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
 }

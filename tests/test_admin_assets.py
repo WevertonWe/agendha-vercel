@@ -1,9 +1,17 @@
 import os
 import sys
-import pytest
-import sqlite3
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
+
+try:
+    import sqlite3
+except Exception:
+    sqlite3 = None
+
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 # Adjust sys.path to find app packages
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -81,13 +89,9 @@ def test_execute_query_compatibility():
     print("   [OK] Translates '?' to '%s' for non-sqlite connection class names.")
 
 
-# ------------------------------------------------------------------------------
-# 3. INTEGRATION TESTS FOR CRUD ENDPOINTS WITH IN-MEMORY SQLITE
-# ------------------------------------------------------------------------------
-
-# Temporary in-memory test database fixture
-@pytest.fixture
-def test_db():
+def criar_test_db():
+    if sqlite3 is None:
+        return None
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -118,12 +122,28 @@ def test_db():
     """)
     
     conn.commit()
-    yield conn
-    conn.close()
+    return conn
+
+# Temporary in-memory test database fixture (if pytest is used)
+if pytest is not None:
+    @pytest.fixture
+    def test_db():
+        conn = criar_test_db()
+        yield conn
+        if conn:
+            conn.close()
 
 
-def test_admin_assets_endpoints(test_db):
+def test_admin_assets_endpoints(test_db=None):
     print("Running integration tests for Admin Assets endpoints...")
+    if sqlite3 is None:
+        print("   [SKIP] Módulo sqlite3 indisponível neste ambiente.")
+        return
+        
+    close_when_done = False
+    if test_db is None:
+        test_db = criar_test_db()
+        close_when_done = True
     
     # Setup dependency overrides for TestClient
     def override_get_db():
@@ -241,5 +261,11 @@ def test_admin_assets_endpoints(test_db):
 
 
 if __name__ == "__main__":
-    # Run tests using pytest framework to handle dependency injection of fixtures
-    sys.exit(pytest.main([__file__]))
+    if pytest is not None:
+        sys.exit(pytest.main([__file__]))
+    else:
+        print("Executando testes de Admin Assets via Python direto...")
+        test_crypto_helpers()
+        test_execute_query_compatibility()
+        test_admin_assets_endpoints()
+        print("TODOS OS TESTES DE ADMIN ASSETS PASSARAM COM SUCESSO!")

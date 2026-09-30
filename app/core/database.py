@@ -1,7 +1,18 @@
 import logging
 import os
+import sys
 from passlib.context import CryptContext
 from app.config import settings
+
+# --- Windows DLL Directory Setup for sqlite3 ---
+if sys.platform == "win32":
+    for extra_dll_path in [r"C:\Program Files\QGIS 3.44.12\bin", r"C:\Program Files\QGIS 3.44.12\apps\Python312\DLLs"]:
+        if os.path.exists(extra_dll_path):
+            try:
+                os.add_dll_directory(extra_dll_path)
+            except Exception:
+                pass
+            os.environ["PATH"] = extra_dll_path + ";" + os.environ.get("PATH", "")
 
 # --- DEBUG AUDIT (Handshake 2025) ---
 print(f"DEBUG: VERCEL_ENV_VAR: {os.getenv('VERCEL')}")
@@ -33,8 +44,8 @@ def get_db_connection(request=None):
                 raise RuntimeError(f"Database connection failed in production: {e}")
             
     # Fallback apenas para DEV LOCAL
-    import sqlite3
     try:
+        import sqlite3
         from app.database.wrapper import AuditConnection
         conexao = AuditConnection(os.path.join(os.getcwd(), "agendha.db"), timeout=30.0, check_same_thread=False)
         conexao.execute("PRAGMA journal_mode = WAL")
@@ -582,6 +593,25 @@ def init_db():
         fornecedor_vencedor TEXT,
         status TEXT DEFAULT 'Pendente',
         FOREIGN KEY (cotacao_master_id) REFERENCES p12_cotacoes_master(id) ON DELETE CASCADE
+    )
+    """)
+
+    # --- MÓDULO BAHIA SEM FOME: PENDÊNCIAS SIGATER ---
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bsf_sigater_pendencias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mes_contrato INTEGER NOT NULL,
+        mes_ano_referencia TEXT NOT NULL,
+        atividade_nome TEXT NOT NULL,
+        beneficiario_nome TEXT NOT NULL,
+        beneficiario_cpf TEXT,
+        tecnico TEXT,
+        comunidade TEXT,
+        municipio TEXT,
+        data_execucao TEXT,
+        status TEXT DEFAULT 'PENDENTE',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
     """)
 

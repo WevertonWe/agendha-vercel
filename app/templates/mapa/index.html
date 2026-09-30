@@ -56,6 +56,11 @@
                     <i class="bi bi-geo-alt-fill me-1"></i> Adicionar
                 </button>
                 <div class="vr my-2"></div>
+                <button class="btn btn-light border-0 px-3 fw-semibold text-success"
+                    onclick="openModalExportar()" title="Exportar para QGIS e Prefeitura">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Exportar
+                </button>
+                <div class="vr my-2"></div>
                 <button class="btn btn-light border-0 px-3"
                     onclick="new bootstrap.Modal(document.getElementById('modalImport')).show()" title="Importar">
                     <i class="bi bi-cloud-upload-fill"></i>
@@ -66,6 +71,12 @@
                     <i class="bi bi-gear-fill"></i>
                 </a>
             </div>
+
+            <!-- Território Itaparica Shortcut -->
+            <button class="btn btn-glass shadow-sm ms-2" onclick="zoomTerritorioItaparica()"
+                title="Enquadrar Território Itaparica">
+                <i class="bi bi-geo-fill text-warning me-1"></i> Itaparica
+            </button>
 
             <!-- Draw Tools -->
             <div class="btn-group shadow-sm bg-white rounded-pill ms-2" role="group">
@@ -118,6 +129,10 @@
                         onclick="openModalManual()">
                         <i class="bi bi-geo-alt-fill"></i> Adicionar Ponto
                     </button>
+                    <button class="btn btn-success btn-lg d-flex align-items-center justify-content-center gap-2"
+                        onclick="openModalExportar()">
+                        <i class="bi bi-box-arrow-up-right"></i> Exportar (QGIS / Prefeitura)
+                    </button>
                     <button
                         class="btn btn-outline-primary btn-lg d-flex align-items-center justify-content-center gap-2"
                         onclick="openModalImport()">
@@ -165,89 +180,472 @@
     </div>
 </div>
 
-<!-- Modal Novo Ponto/Área -->
-<div class="modal fade" id="modalNovoPonto" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalTitle">Novo Ponto no Mapa</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Modal Novo Ponto / Ficha Técnica Semiárido (Passo a Passo em Abas) -->
+<div class="modal fade wizard-modal" id="modalNovoPonto" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <!-- Modal Header -->
+            <div class="modal-header bg-primary text-white py-3 px-4">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0" id="modalTitle">
+                        <i class="bi bi-geo-alt-fill me-2"></i>Ficha Técnica / Cadastro de Ponto
+                    </h5>
+                    <small class="text-white-50" id="wizardStepIndicator">Passo 1 de 4: Foto & Localização</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <!-- GPS Alert Container -->
-                <div id="gpsAlertContainer"></div>
 
+            <!-- Stepper Progress Navigation -->
+            <div class="wizard-stepper-wrapper px-2 px-md-3 py-2">
+                <div class="wizard-stepper" role="tablist">
+                    <button class="wizard-pill active" id="wizardPill1" type="button" onclick="setWizardStep(1)">
+                        <span class="step-num">1</span>
+                        <span class="step-label"><i class="bi bi-camera me-1"></i>Foto & GPS</span>
+                    </button>
+                    <button class="wizard-pill" id="wizardPill2" type="button" onclick="setWizardStep(2)">
+                        <span class="step-num">2</span>
+                        <span class="step-label"><i class="bi bi-droplet-half me-1"></i>Tecnologia</span>
+                    </button>
+                    <button class="wizard-pill" id="wizardPill3" type="button" onclick="setWizardStep(3)">
+                        <span class="step-num">3</span>
+                        <span class="step-label"><i class="bi bi-person-badge me-1"></i>Beneficiário</span>
+                    </button>
+                    <button class="wizard-pill" id="wizardPill4" type="button" onclick="setWizardStep(4)">
+                        <span class="step-num">4</span>
+                        <span class="step-label"><i class="bi bi-check2-circle me-1"></i>Revisão</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-body p-3 p-md-4">
                 <form id="formNovoPonto" onsubmit="salvarPonto(event)">
                     <input type="hidden" id="hidden_id" name="id">
                     <input type="hidden" id="hidden_poligono" name="poligono">
+                    <input type="hidden" id="fotoUrlHidden">
+                    <input type="hidden" id="dataColetaHidden">
 
-                    <div class="row align-items-end mb-3">
-                        <div class="col-md-5">
-                            <label for="lat" class="form-label">Latitude</label>
-                            <input type="number" step="any" class="form-control" id="lat" name="latitude" required>
-                        </div>
-                        <div class="col-md-5">
-                            <label for="lng" class="form-label">Longitude</label>
-                            <input type="number" step="any" class="form-control" id="lng" name="longitude" required>
-                        </div>
-                        <div class="col-md-2 d-flex gap-1 mt-2 mt-md-0">
-                            <button type="button" class="btn btn-outline-primary flex-grow-1"
-                                onclick="getCurrentLocation()" title="Usar GPS Atual">
-                                <i class="bi bi-crosshair"></i>
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary flex-grow-1"
-                                onclick="window.captureOnMap()" title="Clicar no mapa">
-                                <i class="bi bi-map"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="area_calc" class="form-label">Dimensão Calculada</label>
-                            <input type="text" class="form-control" id="area_calc" readonly placeholder="N/A">
-                        </div>
-                        <div class="col-md-4">
-                            <label for="cor" class="form-label">Cor do Marcador/Área</label>
-                            <input type="color" class="form-control form-control-color w-100" id="cor" name="cor"
-                                value="#3388ff" title="Escolha a cor">
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="nome" class="form-label">Nome do Local</label>
-                        <input type="text" class="form-control" id="nome" required
-                            placeholder="Ex: Cisterna da Dona Maria">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="tipo" class="form-label">Tipo</label>
-                        <select class="form-select" id="tipo" required>
-                            <!-- Populated via JS -->
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="descricao" class="form-label">Descrição</label>
-                        <textarea class="form-control" id="descricao" rows="3"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="fotoInput" class="form-label">Foto do Local</label>
-                        <div class="input-group">
-                            <input type="file" class="form-control" id="fotoInput" accept="image/*">
-                            <span class="input-group-text d-none" id="uploadStatus">
-                                <i class="bi bi-check-circle-fill text-success"></i>
+                    <!-- ==============================================
+                         ETAPA 1: FOTO & LOCALIZAÇÃO (GPS / TIMESTAMP)
+                         ============================================== -->
+                    <div id="wizardStep1" class="wizard-step-pane">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2 fs-6 me-2">
+                                <i class="bi bi-camera-fill me-1"></i> Etapa 1
                             </span>
+                            <h6 class="fw-bold mb-0 text-dark">Foto de Campo e Coordenadas do Ponto</h6>
                         </div>
-                        <input type="hidden" id="fotoUrlHidden">
-                        <small class="text-muted">A imagem será carregada automaticamente ao selecionar.</small>
+
+                        <!-- Card de Upload de Foto -->
+                        <div class="card border-2 border-dashed p-3 mb-3 text-center bg-light-subtle upload-dropzone">
+                            <div class="mb-2">
+                                <i class="bi bi-cloud-arrow-up-fill text-primary fs-1"></i>
+                            </div>
+                            <label for="fotoInput" class="form-label fw-bold text-dark mb-1">
+                                Tirar Foto ou Selecionar da Galeria
+                            </label>
+                            <p class="text-muted small mb-2">
+                                Ideal: foto do aplicativo <strong>Timestamp Camera</strong> com GPS gravado nos metadados.
+                            </p>
+                            
+                            <div class="d-flex justify-content-center">
+                                <div class="input-group" style="max-width: 420px;">
+                                    <input type="file" class="form-control" id="fotoInput" accept="image/*">
+                                    <span class="input-group-text d-none" id="uploadStatus">
+                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Preview da Foto e Badge de Data -->
+                            <div id="fotoPreviewContainer" class="mt-3 d-none">
+                                <div class="position-relative d-inline-block">
+                                    <img id="fotoPreviewImg" src="" alt="Prévia da foto" class="img-thumbnail rounded shadow-sm" style="max-height: 160px; object-fit: cover;">
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle" onclick="removerFotoPonto()" title="Remover Foto">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="mt-1">
+                                    <span id="dataColetaBadge" class="badge bg-dark-subtle text-dark border d-none"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alertas de Detecção EXIF / GPS -->
+                        <div id="exifGpsAlert" class="alert alert-success d-none py-2 px-3 small mb-3 border-success-subtle shadow-sm">
+                            <i class="bi bi-check-circle-fill me-2 fs-5 text-success align-middle"></i>
+                            <strong>GPS Detectado na Foto (Timestamp Camera)!</strong> Coordenadas e data preenchidas automaticamente.
+                        </div>
+                        <div id="noExifGpsAlert" class="alert alert-warning d-none py-2 px-3 small mb-3 border-warning-subtle">
+                            <i class="bi bi-exclamation-triangle-fill me-2 fs-5 text-warning align-middle"></i>
+                            <strong>Foto sem coordenadas embutidas.</strong> (Dica: fotos enviadas por WhatsApp perdem os dados de GPS). Use os botões abaixo para definir a localização.
+                        </div>
+                        <div id="gpsAlertContainer"></div>
+
+                        <!-- Coordenadas Geográficas -->
+                        <div class="card bg-white border p-3 mb-3 shadow-sm">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold text-dark small text-uppercase">
+                                    <i class="bi bi-pin-map-fill text-danger me-1"></i> Coordenadas Geográficas
+                                </span>
+                                <span class="badge bg-secondary-subtle text-secondary small">Graus Decimais</span>
+                            </div>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label for="lat" class="form-label small fw-semibold text-muted mb-1">Latitude</label>
+                                    <input type="number" step="any" class="form-control font-monospace fw-bold" id="lat" name="latitude" required placeholder="-9.400000">
+                                </div>
+                                <div class="col-6">
+                                    <label for="lng" class="form-label small fw-semibold text-muted mb-1">Longitude</label>
+                                    <input type="number" step="any" class="form-control font-monospace fw-bold" id="lng" name="longitude" required placeholder="-38.200000">
+                                </div>
+                            </div>
+
+                            <!-- Botões de Ação para Captura -->
+                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                <button type="button" class="btn btn-outline-primary flex-grow-1 py-2 fw-semibold"
+                                    onclick="getCurrentLocation()" id="btnGpsAparelho" title="Capturar GPS do aparelho agora">
+                                    <i class="bi bi-crosshair me-1"></i> Usar GPS do Celular
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary flex-grow-1 py-2 fw-semibold"
+                                    onclick="window.captureOnMap()" title="Escolher ponto clicando no mapa">
+                                    <i class="bi bi-map me-1"></i> Marcar no Mapa
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Rodapé do Passo 1 -->
+                        <div class="d-flex justify-content-end pt-3 border-top">
+                            <button type="button" class="btn btn-primary btn-lg px-4 fw-bold" onclick="setWizardStep(2)">
+                                Avançar: Tecnologia <i class="bi bi-arrow-right ms-1"></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary" id="btnSalvar">Salvar</button>
+                    <!-- ==============================================
+                         ETAPA 2: TECNOLOGIA SOCIAL
+                         ============================================== -->
+                    <div id="wizardStep2" class="wizard-step-pane d-none">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2 fs-6 me-2">
+                                <i class="bi bi-droplet-fill me-1"></i> Etapa 2
+                            </span>
+                            <h6 class="fw-bold mb-0 text-dark">Tecnologia Social e Parâmetros da Obra</h6>
+                        </div>
+
+                        <div class="card bg-white border p-3 mb-3 shadow-sm">
+                            <!-- Tipo de Tecnologia -->
+                            <div class="mb-3">
+                                <label for="tipo" class="form-label fw-bold text-dark">
+                                    Tipo de Tecnologia Social / Obra <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select form-select-lg" id="tipo" required>
+                                    <!-- Preenchido dinamicamente via JS -->
+                                </select>
+                            </div>
+
+                            <!-- Status da Obra -->
+                            <div class="mb-3">
+                                <label for="status_obra" class="form-label fw-bold text-dark">Status da Obra / Implementação</label>
+                                <select class="form-select" id="status_obra" name="status_obra">
+                                    <option value="Concluída / Em Uso" selected>✅ Concluída / Em Uso</option>
+                                    <option value="Em Construção">🚧 Em Construção</option>
+                                    <option value="Escavação">⛏️ Escavação</option>
+                                    <option value="Diagnóstico / Selecionado">📋 Diagnóstico / Selecionado</option>
+                                    <option value="Necessita Reforma">🔧 Necessita Reforma</option>
+                                </select>
+                            </div>
+
+                            <!-- Área de Captação e Cor -->
+                            <div class="row g-2 mb-2">
+                                <div class="col-8">
+                                    <label for="area_telhado" class="form-label fw-semibold text-dark">Área de Captação / Telhado (m²)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.1" class="form-control" id="area_telhado" name="area_telhado"
+                                            placeholder="Ex: 50 (telhado) ou 200 (calçadão)">
+                                        <span class="input-group-text">m²</span>
+                                    </div>
+                                    <small class="text-muted">Metragem quadrada da área que coleta a água da chuva.</small>
+                                </div>
+                                <div class="col-4">
+                                    <label for="cor" class="form-label fw-semibold text-dark">Cor do Pino</label>
+                                    <input type="color" class="form-control form-control-color w-100" id="cor" name="cor"
+                                        value="#3388ff" title="Escolha a cor do marcador" style="height: 38px;">
+                                </div>
+                            </div>
+
+                            <!-- Área Calculada de Polígono (se houver) -->
+                            <div class="mt-2" id="divAreaCalc">
+                                <label for="area_calc" class="form-label text-muted small mb-1">Dimensão da Geometria (se desenhada)</label>
+                                <input type="text" class="form-control form-control-sm bg-light" id="area_calc" readonly placeholder="N/A (ponto único)">
+                            </div>
+                        </div>
+
+                        <!-- Rodapé do Passo 2 -->
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary px-3" onclick="setWizardStep(1)">
+                                <i class="bi bi-arrow-left me-1"></i> Voltar
+                            </button>
+                            <button type="button" class="btn btn-primary btn-lg px-4 fw-bold" onclick="setWizardStep(3)">
+                                Avançar: Beneficiário <i class="bi bi-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ==============================================
+                         ETAPA 3: BENEFICIÁRIO & TERRITÓRIO
+                         ============================================== -->
+                    <div id="wizardStep3" class="wizard-step-pane d-none">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2 fs-6 me-2">
+                                <i class="bi bi-person-fill me-1"></i> Etapa 3
+                            </span>
+                            <h6 class="fw-bold mb-0 text-dark">Beneficiário e Localização no Território</h6>
+                        </div>
+
+                        <div class="card bg-white border p-3 mb-3 shadow-sm">
+                            <!-- Município e Comunidade -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-12 col-md-6">
+                                    <label for="municipio" class="form-label fw-bold text-dark">
+                                        Município (Território Itaparica)
+                                    </label>
+                                    <select class="form-select form-select-lg" id="municipio" name="municipio">
+                                        <option value="">Selecione o Município...</option>
+                                        <option value="Paulo Afonso">Paulo Afonso</option>
+                                        <option value="Glória">Glória</option>
+                                        <option value="Chorrochó">Chorrochó</option>
+                                        <option value="Macururé">Macururé</option>
+                                        <option value="Rodelas">Rodelas</option>
+                                        <option value="Abaré">Abaré</option>
+                                        <option value="Santa Brígida">Santa Brígida</option>
+                                        <option value="Outro">Outro</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="comunidade" class="form-label fw-bold text-dark">
+                                        Comunidade Rural / Assentamento
+                                    </label>
+                                    <input type="text" class="form-control form-select-lg" id="comunidade" name="comunidade"
+                                        placeholder="Ex: Xingozinho, Riacho Grande...">
+                                </div>
+                            </div>
+
+                            <!-- Beneficiário(a) -->
+                            <div class="mb-3">
+                                <label for="beneficiario" class="form-label fw-bold text-dark">
+                                    Nome do(a) Beneficiário(a) (Agricultor/a)
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="beneficiario" name="beneficiario"
+                                    placeholder="Ex: Maria José da Silva" oninput="autoSugerirNomePonto()">
+                            </div>
+
+                            <!-- Identificação / Nome do Ponto -->
+                            <div class="mb-2">
+                                <label for="nome" class="form-label fw-bold text-dark">
+                                    Identificação do Ponto no Mapa <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="nome" required
+                                        placeholder="Ex: Cisterna Calçadão - Dona Maria">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="autoSugerirNomePonto(true)" title="Sugerir nome com base nos dados">
+                                        <i class="bi bi-magic me-1"></i>Sugerir
+                                    </button>
+                                </div>
+                                <small class="text-muted">Este é o nome que aparece no marcador e nas buscas do mapa.</small>
+                            </div>
+                        </div>
+
+                        <!-- Rodapé do Passo 3 -->
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary px-3" onclick="setWizardStep(2)">
+                                <i class="bi bi-arrow-left me-1"></i> Voltar
+                            </button>
+                            <button type="button" class="btn btn-primary btn-lg px-4 fw-bold" onclick="setWizardStep(4)">
+                                Avançar: Revisão <i class="bi bi-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ==============================================
+                         ETAPA 4: PROJETO, OBSERVAÇÕES & REVISÃO FINAL
+                         ============================================== -->
+                    <div id="wizardStep4" class="wizard-step-pane d-none">
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-2 fs-6 me-2">
+                                <i class="bi bi-clipboard-check-fill me-1"></i> Etapa 4
+                            </span>
+                            <h6 class="fw-bold mb-0 text-dark">Projeto e Resumo Final para Salvar</h6>
+                        </div>
+
+                        <!-- Edital e Descrição -->
+                        <div class="card bg-white border p-3 mb-3 shadow-sm">
+                            <div class="mb-3">
+                                <label for="edital" class="form-label fw-semibold text-dark">Edital / Convênio / Projeto</label>
+                                <input type="text" class="form-control" id="edital" name="edital"
+                                    placeholder="Ex: Água que Alimenta / BNDES / ASA">
+                            </div>
+
+                            <div class="mb-2">
+                                <label for="descricao" class="form-label fw-semibold text-dark">Observações Técnicas de Campo</label>
+                                <textarea class="form-control" id="descricao" rows="2"
+                                    placeholder="Ex: Cisterna abastecida, calhas instaladas, tampa conservada, bomba funcionando..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Card de Resumo do Ponto -->
+                        <div class="card border-primary border-opacity-25 bg-light p-3 mb-3" id="wizardSummaryCard">
+                            <div class="d-flex align-items-center justify-content-between border-bottom pb-2 mb-2">
+                                <span class="fw-bold text-primary small text-uppercase">
+                                    <i class="bi bi-card-checklist me-1"></i> Resumo da Ficha Técnica
+                                </span>
+                                <span class="badge bg-success" id="sumStatus">Concluída / Em Uso</span>
+                            </div>
+
+                            <div class="row align-items-center g-3">
+                                <div class="col-4 col-sm-3 text-center">
+                                    <img id="sumFotoPreview" src="" alt="Foto" class="img-thumbnail rounded d-none" style="width: 80px; height: 80px; object-fit: cover;">
+                                    <div id="sumSemFoto" class="border rounded bg-white text-muted d-flex align-items-center justify-content-center mx-auto" style="width: 80px; height: 80px;">
+                                        <i class="bi bi-camera text-secondary fs-3"></i>
+                                    </div>
+                                </div>
+                                <div class="col-8 col-sm-9">
+                                    <h6 class="fw-bold mb-1 text-dark" id="sumNome">Ponto</h6>
+                                    <div class="small text-muted mb-1">
+                                        <i class="bi bi-droplet me-1 text-primary"></i><strong id="sumTipo">Tecnologia</strong>
+                                    </div>
+                                    <div class="small text-muted mb-1">
+                                        <i class="bi bi-person me-1 text-dark"></i>Beneficiário: <strong id="sumBeneficiario">--</strong>
+                                    </div>
+                                    <div class="small text-muted mb-1">
+                                        <i class="bi bi-geo-alt me-1 text-danger"></i><span id="sumLocal">--</span>
+                                    </div>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-pin me-1 text-secondary"></i>Coords: <span id="sumCoords" class="font-monospace">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rodapé do Passo 4: Salvar Ponto -->
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <button type="button" class="btn btn-outline-secondary px-3" onclick="setWizardStep(3)">
+                                <i class="bi bi-arrow-left me-1"></i> Voltar
+                            </button>
+                            <button type="submit" class="btn btn-success btn-lg px-4 fw-bold shadow-sm" id="btnSalvar">
+                                <i class="bi bi-check-lg me-1"></i> Salvar Ponto no Mapa
+                            </button>
+                        </div>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Exportar Dados GIS (QGIS & Prefeitura) -->
+<div class="modal fade" id="modalExportar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-box-arrow-up-right me-2"></i>Exportar Dados GIS (QGIS & Prefeitura)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted mb-4">
+                    Selecione o formato técnico adequado para a entrega à Prefeitura, relatórios de projeto ou análise espacial no <strong>QGIS</strong>:
+                </p>
+
+                <div class="row g-3">
+                    <!-- Opção 1: Shapefile .zip -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border-2 border-primary-subtle shadow-sm p-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="p-2 bg-primary bg-opacity-10 rounded text-primary fs-3 me-3">
+                                    <i class="bi bi-file-earmark-zip-fill"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-primary">Shapefile (.zip)</h6>
+                                    <span class="badge bg-primary">Padrão Prefeitura & QGIS</span>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Pacote ZIP contendo <code>.shp</code>, <code>.shx</code>, <code>.dbf</code>, <code>.prj</code> (SIRGAS 2000 - EPSG:4674) e <code>.cpg</code> (UTF-8).
+                            </p>
+                            <button class="btn btn-primary w-100 mt-auto fw-bold" onclick="downloadExport('shapefile')">
+                                <i class="bi bi-download me-1"></i> Baixar Shapefile (.zip)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Opção 2: GeoJSON -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border-2 border-success-subtle shadow-sm p-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="p-2 bg-success bg-opacity-10 rounded text-success fs-3 me-3">
+                                    <i class="bi bi-globe-americas"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-success">GeoJSON (.geojson)</h6>
+                                    <span class="badge bg-success">SIG Web & QGIS</span>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Formato vetorial aberto padrão W3C/OGC com todos os atributos completos e geometrias espaciais.
+                            </p>
+                            <button class="btn btn-outline-success w-100 mt-auto fw-bold" onclick="downloadExport('geojson')">
+                                <i class="bi bi-download me-1"></i> Baixar GeoJSON
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Opção 3: KML (Google Earth & Avenza) -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border-2 border-warning-subtle shadow-sm p-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="p-2 bg-warning bg-opacity-10 rounded text-warning fs-3 me-3">
+                                    <i class="bi bi-pin-map-fill"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-warning-emphasis">KML (.kml)</h6>
+                                    <span class="badge bg-warning text-dark">Google Earth & Avenza</span>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Arquivo de visualização rápida com balões descritivos e fotos embutidas para celular, GPS e Google Earth.
+                            </p>
+                            <button class="btn btn-outline-warning text-dark w-100 mt-auto fw-bold" onclick="downloadExport('kml')">
+                                <i class="bi bi-download me-1"></i> Baixar KML
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Opção 4: Excel (.xlsx) -->
+                    <div class="col-md-6">
+                        <div class="card h-100 border-2 border-secondary-subtle shadow-sm p-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="p-2 bg-secondary bg-opacity-10 rounded text-secondary fs-3 me-3">
+                                    <i class="bi bi-file-earmark-excel-fill"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-0 text-secondary">Planilha Excel (.xlsx)</h6>
+                                    <span class="badge bg-secondary">Relatório Tabular</span>
+                                </div>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Planilha completa com coordenadas em graus decimais, dados dos agricultores, status e links das fotos.
+                            </p>
+                            <button class="btn btn-outline-secondary w-100 mt-auto fw-bold" onclick="downloadExport('excel')">
+                                <i class="bi bi-download me-1"></i> Baixar Excel (.xlsx)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>

@@ -69,9 +69,21 @@ def detect_test_framework(project_path: Path) -> dict:
     # Python project
     if (project_path / "pyproject.toml").exists() or (project_path / "requirements.txt").exists():
         result["type"] = "python"
-        result["framework"] = "pytest"
-        result["cmd"] = [sys.executable, "-m", "pytest", "-v"]
-        result["coverage_cmd"] = [sys.executable, "-m", "pytest", "--cov", "--cov-report=term-missing"]
+        
+        if (project_path / "tests" / "run_tests.py").exists():
+            result["framework"] = "run_tests.py"
+            result["cmd"] = [sys.executable, "tests/run_tests.py"]
+            result["coverage_cmd"] = [sys.executable, "tests/run_tests.py"]
+        else:
+            try:
+                subprocess.run([sys.executable, "-m", "pytest", "--version"], capture_output=True, check=True)
+                result["framework"] = "pytest"
+                result["cmd"] = [sys.executable, "-m", "pytest", "-v"]
+                result["coverage_cmd"] = [sys.executable, "-m", "pytest", "--cov", "--cov-report=term-missing"]
+            except Exception:
+                result["framework"] = "unittest"
+                result["cmd"] = [sys.executable, "-m", "unittest", "discover", "tests"]
+                result["coverage_cmd"] = [sys.executable, "-m", "unittest", "discover", "tests"]
     
     return result
 

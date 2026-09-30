@@ -1,7 +1,14 @@
 {
+  "version": 2,
   "regions": [
     "gru1"
   ],
+  "functions": {
+    "api/vercel_app.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

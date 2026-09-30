@@ -346,19 +346,29 @@ def verificar_conformidade_atividade(pasta_atividade: Path) -> Dict[str, Any]:
     """
     Analisa os arquivos dentro de uma pasta de atividade de beneficiário
     (ex: '28.04.2026 - PLANO PRODUTIVO' ou '15.05.2026').
-    Retorna se possui Ateste, Coletum e seus respectivos arquivos.
+    Retorna se possui Ateste, Coletum, Ficha SIGATER/Cadastro e seus respectivos arquivos.
+    Para atividades exclusivas do SIGATER (ex: CADASTRO GRUPO FAMILIAR), dispensa Coletum.
     """
     tem_ateste = False
     tem_coletum = False
+    tem_sigater = False
     arquivos_ateste = []
     arquivos_coletum = []
+    arquivos_sigater = []
     outros_arquivos = []
 
     if not pasta_atividade.exists() or not pasta_atividade.is_dir():
         return {
             "status": "INEXISTENTE",
+            "categoria": "OUTROS",
+            "somente_sigater": False,
             "tem_ateste": False,
             "tem_coletum": False,
+            "tem_sigater": False,
+            "arquivos_ateste": [],
+            "arquivos_coletum": [],
+            "arquivos_sigater": [],
+            "outros_arquivos": [],
             "arquivos": []
         }
 
@@ -374,26 +384,44 @@ def verificar_conformidade_atividade(pasta_atividade: Path) -> Dict[str, Any]:
                 elif "COLLETUM" in nome_upper or "COLETUM" in nome_upper:
                     tem_coletum = True
                     arquivos_coletum.append(f.name)
+                elif "SIGATER" in nome_upper or "CADASTRO" in nome_upper:
+                    tem_sigater = True
+                    arquivos_sigater.append(f.name)
                 else:
                     outros_arquivos.append(f.name)
             else:
                 outros_arquivos.append(f.name)
 
-    if tem_ateste and tem_coletum:
-        status = "COMPLETO"
-    elif tem_coletum and not tem_ateste:
-        status = "PENDENTE_ATESTE"
-    elif tem_ateste and not tem_coletum:
-        status = "PENDENTE_COLETUM"
+    cat_ativ = extrair_categoria_atividade(pasta_atividade.name)
+    nome_pasta_upper = pasta_atividade.name.upper()
+    somente_sigater = (cat_ativ == "CADASTRO GRUPO FAMILIAR") or ("CADASTRO" in nome_pasta_upper) or ("GRUPO FAMILIAR" in nome_pasta_upper)
+
+    if somente_sigater:
+        # Atividade exclusiva do SIGATER (não possui formulário no Coletum)
+        if tem_ateste or tem_sigater or tem_coletum:
+            status = "COMPLETO"
+        else:
+            status = "VAZIA" if not outros_arquivos else "SEM_DOCUMENTOS_PADRAO"
     else:
-        status = "VAZIA" if not (arquivos_ateste or arquivos_coletum or outros_arquivos) else "SEM_DOCUMENTOS_PADRAO"
+        if tem_ateste and tem_coletum:
+            status = "COMPLETO"
+        elif tem_coletum and not tem_ateste:
+            status = "PENDENTE_ATESTE"
+        elif tem_ateste and not tem_coletum:
+            status = "PENDENTE_COLETUM"
+        else:
+            status = "VAZIA" if not (arquivos_ateste or arquivos_coletum or outros_arquivos) else "SEM_DOCUMENTOS_PADRAO"
 
     return {
         "status": status,
+        "categoria": cat_ativ,
+        "somente_sigater": somente_sigater,
         "tem_ateste": tem_ateste,
         "tem_coletum": tem_coletum,
+        "tem_sigater": tem_sigater,
         "arquivos_ateste": arquivos_ateste,
         "arquivos_coletum": arquivos_coletum,
+        "arquivos_sigater": arquivos_sigater,
         "outros_arquivos": outros_arquivos
     }
 
@@ -554,11 +582,14 @@ def executar_auditoria_completa_pastas_locais(
                     atividades_info.append({
                         "pasta_atividade": nome_exibicao_ativ,
                         "categoria": cat_ativ,
+                        "somente_sigater": conf.get("somente_sigater", False),
                         "status": status,
                         "tem_ateste": conf["tem_ateste"],
                         "tem_coletum": conf["tem_coletum"],
+                        "tem_sigater": conf.get("tem_sigater", False),
                         "arquivos_ateste": conf["arquivos_ateste"],
                         "arquivos_coletum": conf["arquivos_coletum"],
+                        "arquivos_sigater": conf.get("arquivos_sigater", []),
                         "outros_arquivos": conf["outros_arquivos"]
                     })
 

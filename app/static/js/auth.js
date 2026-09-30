@@ -60,7 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const confirmarSenha = document.getElementById('confirmar_senha').value;
 
             if (novaSenha !== confirmarSenha) {
-                alert('A nova senha e a confirmação não conferem.');
+                if (window.ui) ui.feedbackAviso('A nova senha e a confirmação não conferem.');
+                else alert('A nova senha e a confirmação não conferem.');
                 return;
             }
 
@@ -83,17 +84,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (response.ok) {
-                    alert('Senha alterada com sucesso!');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalTrocarSenha'));
-                    modal.hide();
+                    if (window.ui) ui.feedbackSucesso('Senha alterada com sucesso!');
+                    else alert('Senha alterada com sucesso!');
+                    
+                    const modalEl = document.getElementById('modalTrocarSenha');
+                    if (modalEl && typeof bootstrap !== 'undefined') {
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                    }
                     formTrocarSenha.reset();
                 } else {
                     const errorData = await response.json();
-                    alert(errorData.detail || 'Erro ao alterar senha.');
+                    const msg = errorData.detail || 'Erro ao alterar senha.';
+                    if (window.ui) ui.feedbackErro(msg);
+                    else alert(msg);
                 }
             } catch (error) {
                 console.error('Erro:', error);
-                alert('Erro de conexão ao alterar senha.');
+                if (window.ui) ui.feedbackErro('Erro de conexão ao alterar senha.');
+                else alert('Erro de conexão ao alterar senha.');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText; // nosec

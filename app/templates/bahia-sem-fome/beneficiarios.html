@@ -25,22 +25,33 @@
 
     <!-- Nav Tabs para Alternar entre Lista de Beneficiários, Auditoria Local e Coletum -->
     <div class="d-flex justify-content-center mb-4">
-        <ul class="nav nav-pills p-1 bg-white rounded shadow-sm border" id="bsfMainTabs" role="tablist">
+        <ul class="nav nav-pills p-1 bg-white rounded-pill shadow-sm border d-inline-flex flex-wrap justify-content-center" id="bsfMainTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active fw-semibold btn-sm px-3" id="tab-beneficiarios" data-bs-toggle="pill" data-bs-target="#conteudo-beneficiarios" type="button" role="tab">
+                <button class="nav-link active fw-semibold btn-sm px-3 rounded-pill" id="tab-beneficiarios" data-bs-toggle="pill" data-bs-target="#conteudo-beneficiarios" type="button" role="tab">
                     <i class="fas fa-users me-1 text-primary"></i> Beneficiários
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link fw-semibold btn-sm px-3 text-secondary" id="tab-auditoria" data-bs-toggle="pill" data-bs-target="#conteudo-auditoria" type="button" role="tab" onclick="carregarAuditoriaLocal()">
-                    <i class="fas fa-folder-open me-1 text-success"></i> Auditoria de Pastas (Ateste + Coletum)
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary rounded-pill" id="tab-auditoria" data-bs-toggle="pill" data-bs-target="#conteudo-auditoria" type="button" role="tab" onclick="carregarAuditoriaLocal()">
+                    <i class="fas fa-folder-open me-1 text-success"></i> Auditoria de Pastas
                     <span id="badgeAvisosAuditoria" class="badge bg-danger ms-1 d-none">0</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link fw-semibold btn-sm px-3 text-secondary" id="tab-coletum" data-bs-toggle="pill" data-bs-target="#conteudo-coletum" type="button" role="tab" onclick="carregarAuditoriaColetum()">
-                    <i class="fas fa-sync-alt me-1 text-info"></i> Verificação Coletum API
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary rounded-pill" id="tab-coletum" data-bs-toggle="pill" data-bs-target="#conteudo-coletum" type="button" role="tab" onclick="carregarAuditoriaColetum()">
+                    <i class="fas fa-sync-alt me-1 text-info"></i> Coletum API
                     <span id="badgeAvisosColetum" class="badge bg-warning text-dark ms-1 d-none">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary rounded-pill" id="tab-sigater-hub" data-bs-toggle="pill" data-bs-target="#conteudo-sigater-hub" type="button" role="tab" onclick="inicializarSigaterHub()">
+                    <i class="fas fa-robot me-1 text-primary"></i> SIGATER Hub
+                    <span id="badgePendenciasSigater" class="badge bg-danger ms-1 d-none">0</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link fw-semibold btn-sm px-3 text-secondary rounded-pill" id="tab-metas" data-bs-toggle="pill" data-bs-target="#conteudo-metas" type="button" role="tab" onclick="carregarPainelMetas()">
+                    <i class="fas fa-bullseye me-1 text-danger"></i> Metas & Produtividade
                 </button>
             </li>
         </ul>
@@ -120,6 +131,9 @@
                         <span id="benefCount" class="badge bg-primary">0</span>
                     </div>
                     <div>
+                        <button class="btn btn-sm btn-outline-secondary me-1" onclick="abrirModalExportarAtestesZip()">
+                            <i class="fas fa-file-archive me-1 text-warning"></i> Baixar Atestes (ZIP)
+                        </button>
                         <button class="btn btn-sm btn-outline-info me-1" onclick="sincronizarBeneficiariosDasPastas()">
                             <i class="fas fa-sync-alt me-1"></i> Sincronizar com Pastas (490)
                         </button>
@@ -221,21 +235,21 @@
                     <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-success border-4">
                         <div class="text-success small fw-bold mb-1"><i class="fas fa-check-circle me-1"></i>100% COMPLETAS</div>
                         <h3 class="fw-bold text-success mb-0" id="cardAuditCompletas">0</h3>
-                        <span class="text-muted small">Ateste + Coletum</span>
+                        <span class="text-muted small">Ateste + Coletum / SIGATER</span>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-warning border-4">
                         <div class="text-warning small fw-bold mb-1"><i class="fas fa-clock me-1"></i>PENDENTE ATESTE</div>
                         <h3 class="fw-bold text-warning mb-0" id="cardAuditPendAteste">0</h3>
-                        <span class="text-muted small">Só possui Coletum</span>
+                        <span class="text-muted small">Falta Ateste</span>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-danger border-4">
                         <div class="text-danger small fw-bold mb-1"><i class="fas fa-exclamation-circle me-1"></i>PENDENTE COLETUM</div>
                         <h3 class="fw-bold text-danger mb-0" id="cardAuditPendColetum">0</h3>
-                        <span class="text-muted small">Só possui Ateste</span>
+                        <span class="text-muted small">Falta Coletum</span>
                     </div>
                 </div>
             </div>
@@ -384,6 +398,448 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ============================================================= -->
+        <!-- ABA 4: CENTRAL DE LANÇAMENTOS & AUDITORIA SIGATER (F12) -->
+        <!-- ============================================================= -->
+        <div class="tab-pane fade" id="conteudo-sigater-hub" role="tabpanel">
+            <!-- Header e Ações -->
+            <div class="d-flex justify-content-between align-items-center mb-3 mx-auto" style="max-width: 1100px;">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="fas fa-satellite-dish text-primary me-2"></i>Central de Lançamentos & Auditoria SIGATER
+                    </h5>
+                    <small class="text-muted">Monitore todos os beneficiários lançados com Códigos SIGATER, visualize arquivos salvos no sistema e gerencie pendências.</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success btn-sm fw-semibold" onclick="abrirModalRegistrarRetornoSigater()">
+                        <i class="fas fa-file-import me-1"></i> Registrar Retorno / Lançamentos
+                    </button>
+                    <button class="btn btn-primary btn-sm fw-semibold" id="btnGerarScriptHub" onclick="gerarScriptSigaterHub()">
+                        <i class="fas fa-magic me-1"></i> Gerar Script F12 Agora
+                    </button>
+                </div>
+            </div>
+
+            <!-- Seleção de Mês e Atividade -->
+            <div class="card bg-white shadow-sm border rounded-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="card-body p-3 p-md-4">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small text-secondary mb-1">
+                                <i class="fas fa-calendar-alt me-1 text-primary"></i> Mês do Contrato
+                            </label>
+                            <select id="hubSelectMes" class="form-select" onchange="aoMudarMesOuAtividadeSigaterHub()">
+                                <!-- Preenchido dinamicamente via JS (Mês 1 a Mês 36) -->
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small text-secondary mb-1">
+                                <i class="fas fa-tasks me-1 text-success"></i> Atividade BSF
+                            </label>
+                            <select id="hubSelectAtividade" class="form-select" onchange="aoMudarMesOuAtividadeSigaterHub()">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-outline-primary w-100 py-2 fw-semibold" onclick="consultarPreviaColetumHub()">
+                                <i class="fas fa-search me-1"></i> Consultar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 pt-2 border-top d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-primary-subtle text-primary border border-primary px-3 py-2 fw-semibold" id="badgeHubCompetencia">
+                                <i class="fas fa-info-circle me-1"></i>Competência: Carregando...
+                            </span>
+                        </div>
+                        <div class="text-muted small" id="txtHubColetumStatus">
+                            Selecione a atividade e o mês para carregar os registros.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stat Cards Hub -->
+            <div class="row g-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-primary border-4 h-100">
+                        <div class="text-primary small fw-bold mb-1">REGISTROS NO COLETUM</div>
+                        <h3 class="fw-bold text-dark mb-0" id="cardHubTotalColetum">0</h3>
+                        <span class="text-muted small" id="cardHubSubColetum">Cadastros na competência</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-success border-4 h-100">
+                        <div class="text-success small fw-bold mb-1">LANÇADOS NO SIGATER</div>
+                        <h3 class="fw-bold text-success mb-0" id="cardHubTotalLancados">0</h3>
+                        <span class="text-muted small">Com Código SIGATER</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-danger border-4 h-100">
+                        <div class="text-danger small fw-bold mb-1">PENDÊNCIAS A LANÇAR</div>
+                        <h3 class="fw-bold text-danger mb-0" id="cardHubTotalPendentes">0</h3>
+                        <span class="text-muted small">Faltando no SIGATER</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 text-center border-start border-warning border-4 h-100">
+                        <div class="text-warning small fw-bold mb-1">SEM PAR NO COLETUM</div>
+                        <h3 class="fw-bold text-warning mb-0" id="cardHubTotalSemColetum">0</h3>
+                        <span class="text-muted small" id="cardHubSubSemColetum">Lançados sem formulário</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card de Visualização do Script Gerado -->
+            <div class="card shadow-sm border-0 mx-auto mb-4 d-none" id="cardScriptGerado" style="max-width: 1100px;">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                    <div class="fw-semibold small">
+                        <i class="fas fa-code text-info me-1"></i> Script F12 Gerado com Sucesso
+                    </div>
+                    <div>
+                        <button class="btn btn-info btn-sm text-white fw-bold shadow-sm" onclick="copiarScriptF12Clipboard()">
+                            <i class="fas fa-copy me-1"></i> Copiar Código para o F12
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-3 bg-light">
+                    <div class="alert alert-info border-info py-2 px-3 mb-2 small">
+                        <i class="fas fa-lightbulb me-1 text-warning"></i>
+                        <strong>Como aplicar:</strong> Abra o portal do SIGATER na tela da atividade <span id="txtNomeAtivNoAviso" class="fw-bold"></span>, abra o Console (<strong>F12</strong>), cole o código e pressione <strong>[ENTER]</strong>.
+                    </div>
+                    <textarea class="form-control font-monospace small bg-white text-dark" id="areaScriptGerado" rows="7" readonly style="font-size: 11px;"></textarea>
+                </div>
+            </div>
+
+            <!-- Tabela de Lançamentos e Histórico SIGATER -->
+            <div class="card shadow-sm border-0 mx-auto" style="max-width: 1100px;">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <h6 class="fw-bold text-secondary mb-0 d-inline-block me-2">
+                            <i class="fas fa-clipboard-check text-primary me-1"></i>Beneficiários Cadastrados & Lançamentos SIGATER
+                        </h6>
+                        <span id="badgeContadorPendenciasTabela" class="badge bg-primary">0</span>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" id="btnFiltroStatusTodos" onclick="filtrarStatusPendencias('')">Todos</button>
+                            <button type="button" class="btn btn-outline-success" id="btnFiltroStatusLancado" onclick="filtrarStatusPendencias('LANCADO')">Lançados no SIGATER</button>
+                            <button type="button" class="btn btn-outline-danger" id="btnFiltroStatusPendente" onclick="filtrarStatusPendencias('PENDENTE')">Apenas Pendentes</button>
+                            <button type="button" class="btn btn-outline-warning text-dark" id="btnFiltroStatusSemColetum" onclick="filtrarStatusPendencias('SEM_COLETUM')">⚠️ Sem Par no Coletum</button>
+                            <button type="button" class="btn btn-outline-info" id="btnFiltroStatusResolvido" onclick="filtrarStatusPendencias('RESOLVIDO')">Resolvidos</button>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" onclick="copiarPendenciasWhatsApp()">
+                            <i class="fab fa-whatsapp me-1"></i> Copiar Lista
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0" id="tabelaPendenciasHub">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3" style="width: 40px;">#</th>
+                                    <th>Beneficiário</th>
+                                    <th>CPF</th>
+                                    <th class="text-center">Código SIGATER</th>
+                                    <th>Técnico & Local</th>
+                                    <th>Data</th>
+                                    <th class="text-center">Arquivos Salvos</th>
+                                    <th class="text-center">Status</th>
+                                    <th class="text-center pe-3" style="width: 110px;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaPendenciasHub">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4 small">
+                                        Nenhum registro encontrado para esta competência. Use o botão "Registrar Retorno / Lançamentos" acima.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- ABA 5: PAINEL EXECUTIVO DE METAS & PRODUTIVIDADE OPERACIONAL -->
+        <!-- ============================================================= -->
+        <div class="tab-pane fade" id="conteudo-metas" role="tabpanel">
+            <!-- Header Executivo -->
+            <div class="d-flex justify-content-between align-items-center mb-4 mx-auto" style="max-width: 1100px;">
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">
+                        <i class="fas fa-chart-line text-primary me-2"></i>Acompanhamento de Metas & Produtividade da Equipe
+                    </h5>
+                    <p class="text-muted small mb-0">Consolidação executiva de entregas em campo, cobertura de beneficiários e conformidade documental.</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary btn-sm fw-semibold" id="btnAtualizarPainelMetas" onclick="carregarPainelMetas(true)">
+                        <i class="fas fa-sync-alt me-1"></i> Atualizar Indicadores
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPIs Executivos do Contrato BSF -->
+            <div class="row g-3 mb-4 mx-auto" style="max-width: 1100px;">
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 border-start border-primary border-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-secondary small fw-bold">BENEFICIÁRIOS ATENDIDOS</span>
+                            <i class="fas fa-users text-primary opacity-50"></i>
+                        </div>
+                        <h3 class="fw-bold text-dark mb-1" id="kpiMetaTotalBenef">0</h3>
+                        <div class="progress mb-1" style="height: 6px;">
+                            <div class="progress-bar bg-primary" id="kpiMetaBarraBenef" style="width: 0%;"></div>
+                        </div>
+                        <span class="text-muted small" id="kpiMetaSubBenef">Meta contratual: 490 famílias</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 border-start border-success border-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-secondary small fw-bold">ATESTES COLETADOS</span>
+                            <i class="fas fa-file-signature text-success opacity-50"></i>
+                        </div>
+                        <h3 class="fw-bold text-success mb-1" id="kpiMetaTaxaAtestes">0%</h3>
+                        <div class="progress mb-1" style="height: 6px;">
+                            <div class="progress-bar bg-success" id="kpiMetaBarraAtestes" style="width: 0%;"></div>
+                        </div>
+                        <span class="text-muted small" id="kpiMetaSubAtestes">0 atestes assinados</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 border-start border-info border-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-secondary small fw-bold">COLETUM SINCRONIZADO</span>
+                            <i class="fas fa-clipboard-check text-info opacity-50"></i>
+                        </div>
+                        <h3 class="fw-bold text-info mb-1" id="kpiMetaTaxaColetum">0%</h3>
+                        <div class="progress mb-1" style="height: 6px;">
+                            <div class="progress-bar bg-info" id="kpiMetaBarraColetum" style="width: 0%;"></div>
+                        </div>
+                        <span class="text-muted small" id="kpiMetaSubColetum">0 formulários integrados</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card shadow-sm border-0 bg-white p-3 border-start border-warning border-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-secondary small fw-bold">EQUIPE TÉCNICA</span>
+                            <i class="fas fa-user-tie text-warning opacity-50"></i>
+                        </div>
+                        <h3 class="fw-bold text-dark mb-1" id="kpiMetaTotalTecnicos">0</h3>
+                        <div class="progress mb-1" style="height: 6px;">
+                            <div class="progress-bar bg-warning" id="kpiMetaBarraTecnicos" style="width: 100%;"></div>
+                        </div>
+                        <span class="text-muted small" id="kpiMetaSubTecnicos">Técnicos ativos em campo</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABELA CORPORATIVA DE METAS E PRODUTIVIDADE POR TÉCNICO -->
+            <div class="card shadow-sm border-0 bg-white mx-auto mb-4" style="max-width: 1100px;">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-bottom">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-0">
+                            <i class="fas fa-tasks text-primary me-2"></i>Quadro de Metas & Indicadores Individuais
+                        </h6>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-success-subtle text-success border border-success px-2 py-1"><i class="fas fa-check-circle me-1"></i> 100% Completo</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary px-2 py-1"><i class="fas fa-spinner me-1"></i> Em Andamento</span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning px-2 py-1"><i class="fas fa-exclamation-triangle me-1"></i> Atenção</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0" id="tabelaMetasTecnicos">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Técnico Responsável</th>
+                                    <th class="text-center">Beneficiários</th>
+                                    <th class="text-center">Atividades</th>
+                                    <th style="min-width: 140px;">Atestes (PDF)</th>
+                                    <th style="min-width: 140px;">Coletum</th>
+                                    <th style="min-width: 180px;">Conformidade Geral</th>
+                                    <th class="text-center pe-3">Status da Meta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaMetas">
+                                <tr>
+                                    <td colspan="7" class="text-center py-5 text-muted small">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                        Carregando indicadores de metas e produtividade...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Retorno e Lançamentos do SIGATER -->
+<div class="modal fade" id="modalRegistrarRetornoSigater" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-file-import me-2"></i>Registrar Lançamentos e Retorno do SIGATER
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-success border-success py-2 px-3 mb-3 small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Cole abaixo os dados copiados pelo botão <strong>"📦 Copiar Todos para o Agendha"</strong> gerados no console (F12) do SIGATER.
+                    O sistema irá salvar todos os <strong>beneficiários lançados</strong> com seus respectivos <strong>Códigos SIGATER</strong> e as <strong>pendências</strong> a realizar!
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-dark">JSON ou Texto Copiado do SIGATER:</label>
+                    <textarea id="txtRetornoSigater" class="form-control font-monospace small" rows="9" 
+                              placeholder="Cole aqui o payload copiado do script do F12 (JSON completo ou lista de lançados/pendentes)..."></textarea>
+                </div>
+
+                <div id="msgAlertaRetorno" class="alert alert-warning py-2 small d-none"></div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm fw-semibold" id="btnSalvarRetornoSigater" onclick="salvarRetornoPendenciasSigater()">
+                    <i class="fas fa-save me-1"></i> Salvar Lançamentos e Códigos no Sistema
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Registro & Código SIGATER Individual -->
+<div class="modal fade" id="modalEditarCodigoSigater" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-user-edit me-2"></i>Editar Registro & Código SIGATER
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="editSigaterRegistroId" value="">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-dark mb-1">
+                        Nome do Beneficiário <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" id="editSigaterNomeBenef" class="form-control form-control-sm fw-bold text-dark" placeholder="Digite ou corrija o nome do beneficiário">
+                    <small class="text-muted" style="font-size: 11px;">Você pode alterar o nome caso tenha sido importado incorretamente do SIGATER.</small>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">CPF do Beneficiário</label>
+                        <input type="text" id="editSigaterCpfBenef" class="form-control form-control-sm font-monospace" placeholder="000.000.000-00">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">
+                            Código SIGATER (Execução)
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light fw-bold">#</span>
+                            <input type="text" id="editSigaterCodigoInput" class="form-control fw-bold text-primary font-monospace" placeholder="Ex: 633530">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">Técnico Responsável</label>
+                        <input type="text" id="editSigaterTecnico" class="form-control form-control-sm" placeholder="Nome do técnico">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">Status do Registro</label>
+                        <select id="editSigaterStatusSelect" class="form-select form-select-sm">
+                            <option value="LANCADO">LANCADO (Concluído no SIGATER)</option>
+                            <option value="PENDENTE">PENDENTE (Ainda não lançado)</option>
+                            <option value="SEM_COLETUM">SEM COLETUM (Lançado no SIGATER sem par)</option>
+                            <option value="RESOLVIDO">RESOLVIDO (Validado Manualmente)</option>
+                            <option value="IGNORADO">IGNORADO</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">Comunidade</label>
+                        <input type="text" id="editSigaterComunidade" class="form-control form-control-sm" placeholder="Comunidade / Local">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold small text-dark mb-1">Município</label>
+                        <input type="text" id="editSigaterMunicipio" class="form-control form-control-sm" placeholder="Município (ex: Paulo Afonso)">
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-bold small text-dark mb-1">Observações / Motivo da Correção</label>
+                    <input type="text" id="editSigaterObs" class="form-control form-control-sm" placeholder="Ex: Nome corrigido manualmente">
+                </div>
+
+                <div id="msgAlertaEditCodigo" class="alert alert-danger py-2 small d-none mt-3"></div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btnSalvarCodigoSigaterModal" onclick="salvarEdicaoCodigoSigater()">
+                    <i class="fas fa-save me-1"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Visualizador de Arquivos Salvos no Sistema (SIGATER Hub) -->
+<div class="modal fade" id="modalArquivosBeneficiarioSigater" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow border-0">
+            <div class="modal-header bg-dark text-white py-3">
+                <div>
+                    <h5 class="modal-title fw-bold mb-0">
+                        <i class="fas fa-folder-open text-warning me-2"></i>Arquivos Salvos no Sistema
+                    </h5>
+                    <small class="text-white-50" id="txtModalArquivosSubtitulo">Documentos de conformidade local</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="loadingArquivosBeneficiario" class="text-center py-4">
+                    <div class="spinner-border text-primary mb-2" role="status"></div>
+                    <p class="text-muted small mb-0">Localizando arquivos PDFs no disco do sistema...</p>
+                </div>
+                <div id="containerArquivosBeneficiario" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tipo de Documento</th>
+                                    <th>Arquivo</th>
+                                    <th class="text-center">Tamanho</th>
+                                    <th class="text-end pe-3">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaArquivosBeneficiario"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
     </div>
@@ -699,6 +1155,80 @@
             </div>
         </div>
     </div>
+<!-- Modal Exportar Atestes em ZIP -->
+<div class="modal fade" id="modalExportarAtestesZip" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-file-archive text-warning me-2"></i>Exportar Documentos em Lote (ZIP)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted small mb-3">
+                    Selecione os filtros abaixo para compactar e baixar os documentos (PDFs/Comprovantes) armazenados no servidor.
+                </p>
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Mês de Competência</label>
+                        <select class="form-select form-select-sm" id="exportZipMes">
+                            <option value="">Todos os Meses</option>
+                            <option value="1">01 - Janeiro</option>
+                            <option value="2">02 - Fevereiro</option>
+                            <option value="3">03 - Março</option>
+                            <option value="4">04 - Abril</option>
+                            <option value="5">05 - Maio</option>
+                            <option value="6">06 - Junho</option>
+                            <option value="7">07 - Julho</option>
+                            <option value="8">08 - Agosto</option>
+                            <option value="9">09 - Setembro</option>
+                            <option value="10">10 - Outubro</option>
+                            <option value="11">11 - Novembro</option>
+                            <option value="12">12 - Dezembro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold small">Ano</label>
+                        <select class="form-select form-select-sm" id="exportZipAno">
+                            <option value="">Todos os Anos</option>
+                            <option value="2026" selected>2026</option>
+                            <option value="2025">2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold small">Técnico Responsável</label>
+                        <select class="form-select form-select-sm" id="exportZipTecnico">
+                            <option value="">Todos os Técnicos</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold small">Tipo de Documento</label>
+                        <select class="form-select form-select-sm" id="exportZipTipo">
+                            <option value="todos">Todos os Documentos (Atestes + Coletum + SIGATER)</option>
+                            <option value="ateste">Apenas Atestes Assinados</option>
+                            <option value="coletum">Apenas Relatórios Coletum</option>
+                            <option value="sigater">Apenas Documentos SIGATER</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="exportZipProgresso" class="d-none text-center mt-3 pt-3 border-top">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    <span class="small text-muted">Compactando arquivos no servidor, aguarde o download...</span>
+                </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm fw-semibold" id="btnConfirmarExportZip" onclick="executarExportacaoZip()">
+                    <i class="fas fa-download me-1"></i> Gerar e Baixar ZIP
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -714,6 +1244,7 @@ let detalheModalInst = null;
 let modalWizardImportacaoInst = null;
 let modalCadastroInst = null;
 let modalNovaAtividadeInst = null;
+let modalExportarZipInst = null;
 
 let debounceTimerBusca = null;
 
@@ -798,8 +1329,134 @@ async function carregarFiltros() {
         (data.statuses || []).forEach(s => {
             selSt.innerHTML += `<option value="${s}">${s}</option>`;
         });
+
+        // Preencher dropdown de técnicos do modal de exportação ZIP
+        const selTecExport = document.getElementById('exportZipTecnico');
+        if (selTecExport && data.tecnicos) {
+            data.tecnicos.forEach(t => {
+                selTecExport.innerHTML += `<option value="${t}">${t}</option>`;
+            });
+        }
     } catch (e) {
         console.error('Erro ao carregar filtros:', e);
+    }
+}
+
+function abrirModalExportarAtestesZip() {
+    const modalEl = document.getElementById('modalExportarAtestesZip');
+    if (!modalEl) return;
+    
+    // Sincronizar opções de técnicos se ainda não populadas
+    const selTecExport = document.getElementById('exportZipTecnico');
+    const selTecMain = document.getElementById('filtroTecnico');
+    if (selTecExport && selTecMain && selTecExport.options.length <= 1) {
+        selTecExport.innerHTML = '<option value="">Todos os Técnicos</option>';
+        for (let i = 1; i < selTecMain.options.length; i++) {
+            const opt = selTecMain.options[i];
+            selTecExport.innerHTML += `<option value="${opt.value}">${opt.text}</option>`;
+        }
+    }
+    
+    // Se houver um técnico selecionado no filtro principal, pré-selecionar
+    if (selTecMain && selTecMain.value && selTecExport) {
+        selTecExport.value = selTecMain.value;
+    }
+    
+    const progresso = document.getElementById('exportZipProgresso');
+    if (progresso) progresso.classList.add('d-none');
+    
+    const btnConfirmar = document.getElementById('btnConfirmarExportZip');
+    if (btnConfirmar) btnConfirmar.disabled = false;
+    
+    if (typeof bootstrap !== 'undefined') {
+        modalExportarZipInst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modalExportarZipInst.show();
+    }
+}
+
+async function executarExportacaoZip() {
+    const selMes = document.getElementById('exportZipMes');
+    const selAno = document.getElementById('exportZipAno');
+    const selTec = document.getElementById('exportZipTecnico');
+    const selTipo = document.getElementById('exportZipTipo');
+    const progresso = document.getElementById('exportZipProgresso');
+    const btnConfirmar = document.getElementById('btnConfirmarExportZip');
+    
+    const mes = selMes ? selMes.value : '';
+    const ano = selAno ? selAno.value : '';
+    const tec = selTec ? selTec.value : '';
+    const tipo = selTipo ? selTipo.value : 'todos';
+    
+    let url = `/api/bsf/beneficiarios/exportar-atestes-zip?tipo=${encodeURIComponent(tipo)}`;
+    if (mes) url += `&mes=${encodeURIComponent(mes)}`;
+    if (ano) url += `&ano=${encodeURIComponent(ano)}`;
+    if (tec) url += `&tecnico=${encodeURIComponent(tec)}`;
+    
+    if (progresso) progresso.classList.remove('d-none');
+    if (btnConfirmar) btnConfirmar.disabled = true;
+    
+    try {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            let errorMsg = "Erro ao exportar lote de documentos.";
+            try {
+                const errJson = await response.json();
+                errorMsg = errJson.detail || errorMsg;
+            } catch (jsonErr) {
+                // response não é json
+            }
+            throw new Error(errorMsg);
+        }
+        
+        const blob = await response.blob();
+        
+        // Extrair nome do arquivo do header Content-Disposition se disponível
+        let filename = `atestes_bsf_${ano || 'todos'}.zip`;
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition && disposition.includes('filename=')) {
+            const match = disposition.match(/filename="?([^";]+)"?/);
+            if (match && match[1]) filename = match[1];
+        }
+        
+        // Disparar download direto no navegador
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+        
+        if (modalExportarZipInst) {
+            modalExportarZipInst.hide();
+        }
+        
+        if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+            ui.feedbackSucesso(`Arquivo ${filename} gerado e baixado com sucesso!`);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Download Concluído',
+                text: `Arquivo ${filename} baixado com sucesso!`,
+                timer: 3000
+            });
+        }
+    } catch (err) {
+        console.error("Erro na exportação ZIP:", err);
+        if (typeof ui !== 'undefined' && ui.feedbackErro) {
+            ui.feedbackErro(err.message || 'Erro ao gerar arquivo ZIP.');
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro na Exportação',
+                text: err.message || 'Não foi possível gerar o arquivo ZIP com os filtros selecionados.'
+            });
+        }
+    } finally {
+        if (progresso) progresso.classList.add('d-none');
+        if (btnConfirmar) btnConfirmar.disabled = false;
     }
 }
 
@@ -2286,10 +2943,22 @@ async function carregarAuditoriaLocal() {
                 btnPill.className = 'btn btn-outline-secondary btn-sm py-1 px-2 d-flex align-items-center gap-2 shadow-xs';
                 btnPill.style.fontSize = '0.78rem';
                 btnPill.onclick = () => filtrarPorAtividadeChip(cat);
+
+                let badgesExtras = '';
+                if (info.pendentes_ateste > 0) {
+                    badgesExtras += `<span class="badge bg-warning-subtle text-dark border border-warning">${info.pendentes_ateste} pend. ateste</span>`;
+                }
+                if (info.pendentes_coletum > 0) {
+                    badgesExtras += `<span class="badge bg-danger-subtle text-danger border border-danger">${info.pendentes_coletum} pend. coletum</span>`;
+                }
+                if (cat === 'CADASTRO GRUPO FAMILIAR') {
+                    badgesExtras += `<span class="badge bg-light text-secondary border">Apenas SIGATER</span>`;
+                }
+
                 btnPill.innerHTML = `
                     <strong class="text-dark">${cat}</strong>
                     <span class="badge bg-success-subtle text-success border border-success">${info.completas} ok</span>
-                    <span class="badge bg-warning-subtle text-dark border border-warning">${info.pendentes_ateste} pend. ateste</span>
+                    ${badgesExtras}
                 `;
                 pillsContainer.appendChild(btnPill);
             });
@@ -2445,6 +3114,8 @@ function renderizarTabelaAuditoriaLocal(detalhes) {
                 totalLinhas++;
                 const tr = document.createElement('tr');
                 
+                const isSomenteSigater = ativ.somente_sigater || ativ.categoria === 'CADASTRO GRUPO FAMILIAR' || (ativ.pasta_atividade && (ativ.pasta_atividade.toUpperCase().includes('CADASTRO') || ativ.pasta_atividade.toUpperCase().includes('GRUPO FAMILIAR')));
+
                 let badgeStatus = '';
                 if (ativ.status === 'COMPLETO') {
                     badgeStatus = '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Completo</span>';
@@ -2456,13 +3127,60 @@ function renderizarTabelaAuditoriaLocal(detalhes) {
                     badgeStatus = '<span class="badge bg-secondary">Vazia / Outros</span>';
                 }
 
-                const badgeAteste = ativ.tem_ateste 
-                    ? `<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_ateste.length})</span>` 
-                    : `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+                // Ateste com link direto para o PDF
+                let badgeAteste = '';
+                if (ativ.tem_ateste && ativ.arquivos_ateste && ativ.arquivos_ateste.length > 0) {
+                    const arqAteste = ativ.arquivos_ateste[0];
+                    const relAteste = (benef.caminho_relativo + '/' + ativ.pasta_atividade + '/' + arqAteste).replace(/\\/g, '/');
+                    const urlAteste = `/api/bsf/beneficiarios/documento-local?caminho=${encodeURIComponent(relAteste)}`;
+                    badgeAteste = `<a href="${urlAteste}" target="_blank" class="badge bg-success-subtle text-success border border-success text-decoration-none shadow-xs" title="Visualizar ${arqAteste}"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_ateste.length})</a>`;
+                } else {
+                    badgeAteste = `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+                }
 
-                const badgeColetum = ativ.tem_coletum 
-                    ? `<span class="badge bg-success-subtle text-success border border-success"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_coletum.length})</span>` 
-                    : `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+                // Coletum ou Apenas SIGATER
+                let badgeColetum = '';
+                if (isSomenteSigater) {
+                    if (ativ.arquivos_sigater && ativ.arquivos_sigater.length > 0) {
+                        const arqSig0 = ativ.arquivos_sigater[0];
+                        const relSig0 = (benef.caminho_relativo + '/' + ativ.pasta_atividade + '/' + arqSig0).replace(/\\/g, '/');
+                        const urlSig0 = `/api/bsf/beneficiarios/documento-local?caminho=${encodeURIComponent(relSig0)}`;
+                        badgeColetum = `
+                            <div class="d-flex flex-column align-items-center gap-1">
+                                <span class="badge bg-light text-secondary border fw-normal"><i class="fas fa-info-circle me-1"></i>Apenas SIGATER</span>
+                                <a href="${urlSig0}" target="_blank" class="badge bg-primary text-white border-0 text-decoration-none shadow-xs" title="Visualizar ficha de cadastro">
+                                    <i class="fas fa-file-pdf me-1"></i>Ficha PDF
+                                </a>
+                            </div>
+                        `;
+                    } else {
+                        badgeColetum = `<span class="badge bg-light text-secondary border fw-normal"><i class="fas fa-info-circle me-1"></i>Apenas SIGATER</span>`;
+                    }
+                } else if (ativ.tem_coletum && ativ.arquivos_coletum && ativ.arquivos_coletum.length > 0) {
+                    const arqColetum = ativ.arquivos_coletum[0];
+                    const relColetum = (benef.caminho_relativo + '/' + ativ.pasta_atividade + '/' + arqColetum).replace(/\\/g, '/');
+                    const urlColetum = `/api/bsf/beneficiarios/documento-local?caminho=${encodeURIComponent(relColetum)}`;
+                    badgeColetum = `<a href="${urlColetum}" target="_blank" class="badge bg-success-subtle text-success border border-success text-decoration-none shadow-xs" title="Visualizar ${arqColetum}"><i class="fas fa-check me-1"></i>Sim (${ativ.arquivos_coletum.length})</a>`;
+                } else {
+                    badgeColetum = `<span class="badge bg-danger-subtle text-danger border border-danger"><i class="fas fa-times me-1"></i>Falta</span>`;
+                }
+
+                // Bloco do PDF do Cadastro (Ficha SIGATER) na coluna da atividade
+                let htmlPdfCadastro = '';
+                if (ativ.arquivos_sigater && ativ.arquivos_sigater.length > 0) {
+                    htmlPdfCadastro = '<div class="mt-1 d-flex flex-wrap gap-1 align-items-center">';
+                    ativ.arquivos_sigater.forEach(arqSig => {
+                        const relSig = (benef.caminho_relativo + '/' + ativ.pasta_atividade + '/' + arqSig).replace(/\\/g, '/');
+                        const urlSig = `/api/bsf/beneficiarios/documento-local?caminho=${encodeURIComponent(relSig)}`;
+                        htmlPdfCadastro += `
+                            <a href="${urlSig}" target="_blank" class="badge bg-primary-subtle text-primary border border-primary text-decoration-none d-inline-flex align-items-center gap-1 shadow-xs" title="Abrir Ficha de Cadastro: ${arqSig}">
+                                <i class="fas fa-file-pdf text-danger"></i>
+                                <span>${arqSig}</span>
+                            </a>
+                        `;
+                    });
+                    htmlPdfCadastro += '</div>';
+                }
 
                 const catBadge = ativ.categoria && ativ.categoria !== 'OUTROS'
                     ? `<span class="badge bg-dark-subtle text-dark border me-1">${ativ.categoria}</span>`
@@ -2472,7 +3190,10 @@ function renderizarTabelaAuditoriaLocal(detalhes) {
                     <td><strong class="small text-secondary">${benef.tecnico || '-'}</strong></td>
                     <td><span class="small">${benef.comunidade || '-'}</span></td>
                     <td><span class="fw-semibold text-dark small">${benef.beneficiario}</span></td>
-                    <td>${catBadge}<code class="small text-dark fw-semibold">${ativ.pasta_atividade}</code></td>
+                    <td>
+                        ${catBadge}<code class="small text-dark fw-semibold">${ativ.pasta_atividade}</code>
+                        ${htmlPdfCadastro}
+                    </td>
                     <td class="text-center">${badgeAteste}</td>
                     <td class="text-center">${badgeColetum}</td>
                     <td class="text-center">${badgeStatus}</td>
@@ -2785,6 +3506,1136 @@ async function carregarAuditoriaColetum(forcar = false) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i> Atualizar Respostas Coletum';
         }
+    }
+}
+
+// =========================================================================
+// MÓDULO: GERADOR & AUDITOR AUTOMÁTICO SIGATER (F12) - HUB BSF
+// =========================================================================
+
+let hubConfigCache = null;
+let hubPendenciasCache = [];
+let hubFiltroStatusAtual = '';
+
+async function inicializarSigaterHub() {
+    try {
+        if (!hubConfigCache) {
+            const res = await fetch('/api/bsf/sigater-hub/configuracoes');
+            if (!res.ok) throw new Error('Falha ao obter configurações do SIGATER Hub');
+            hubConfigCache = await res.json();
+
+            // 1. Popula select de Meses (1 a 36)
+            const selMes = document.getElementById('hubSelectMes');
+            if (selMes && selMes.options.length === 0) {
+                selMes.innerHTML = '';
+                (hubConfigCache.meses || []).forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.mes_contrato;
+                    opt.textContent = m.label || `Mês ${m.mes_contrato} (${m.mes_ano}) - Ano ${m.ano_contrato}`;
+                    // Padrão: Mês 24
+                    if (m.mes_contrato === 24) opt.selected = true;
+                    selMes.appendChild(opt);
+                });
+            }
+
+            // 2. Popula select de Atividades
+            const selAtiv = document.getElementById('hubSelectAtividade');
+            if (selAtiv && selAtiv.options.length === 0) {
+                selAtiv.innerHTML = '';
+                (hubConfigCache.atividades || []).forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a.codigo;
+                    opt.textContent = `${a.nome} ${a.form_id ? `(Form ${a.form_id})` : '(SIGATER)'}`;
+                    selAtiv.appendChild(opt);
+                });
+            }
+        }
+
+        aoMudarMesOuAtividadeSigaterHub();
+    } catch (err) {
+        console.error("Erro ao inicializar SIGATER Hub:", err);
+        if (typeof ui !== 'undefined' && ui.feedbackErro) {
+            ui.feedbackErro("Erro ao inicializar o SIGATER Hub.");
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Erro', text: 'Não foi possível carregar as configurações do SIGATER Hub.' });
+        }
+    }
+}
+
+function aoMudarMesOuAtividadeSigaterHub() {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    if (!selMes || !selAtiv) return;
+
+    const mes = parseInt(selMes.value, 10);
+    const ativCodigo = selAtiv.value;
+
+    // Atualiza o badge de competência
+    const badge = document.getElementById('badgeHubCompetencia');
+    const txtStatus = document.getElementById('txtHubColetumStatus');
+    const cardScript = document.getElementById('cardScriptGerado');
+    if (cardScript) cardScript.classList.add('d-none');
+
+    if (hubConfigCache && hubConfigCache.meses) {
+        const infoMes = hubConfigCache.meses.find(m => m.mes_contrato === mes);
+        if (infoMes && badge) {
+            badge.innerHTML = `<i class="fas fa-calendar-check me-1"></i>Competência: <strong>${infoMes.mes_ano} (${infoMes.nome_mes})</strong> - Ano ${infoMes.ano_contrato} do Contrato`;
+        }
+    }
+
+    if (txtStatus) {
+        txtStatus.innerHTML = `Mês selecionado: <strong>Mês ${mes}</strong>. Clique em "Consultar" ou "Gerar Script".`;
+    }
+
+    // Carrega pendências do banco para este mês e atividade
+    carregarTabelaPendenciasHub();
+}
+
+async function consultarPreviaColetumHub() {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    if (!selMes || !selAtiv) return;
+
+    const mes = selMes.value;
+    const ativCodigo = selAtiv.value;
+    const txtStatus = document.getElementById('txtHubColetumStatus');
+
+    if (txtStatus) {
+        txtStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-1 text-primary"></span>Consultando Coletum API...`;
+    }
+
+    try {
+        const res = await fetch(`/api/bsf/sigater-hub/consultar-coletum?mes_contrato=${mes}&atividade_codigo=${ativCodigo}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Erro ao consultar Coletum');
+        }
+
+        const totalColetum = data.total_coletum || 0;
+        const elTotalColetum = document.getElementById('cardHubTotalColetum');
+        const elSubColetum = document.getElementById('cardHubSubColetum');
+        if (elTotalColetum) elTotalColetum.innerText = totalColetum;
+        if (elSubColetum) elSubColetum.innerText = `${data.competencia?.mes_ano || ''} (${totalColetum} registros)`;
+
+        if (txtStatus) {
+            let msgExtra = '';
+            if (data.duplicados && data.duplicados.length > 0) {
+                const nomesDupl = data.duplicados.map(d => `${d.beneficiario} (${d.data})`).join(', ');
+                msgExtra = ` <span class="badge bg-warning text-dark ms-1" title="Duplicidades no Coletum: ${nomesDupl}"><i class="fas fa-exclamation-triangle me-1"></i>${data.duplicados.length} duplicidade(s) no Coletum (${data.total_preenchimentos} preenchimentos)</span>`;
+            }
+            txtStatus.innerHTML = `<i class="fas fa-check-circle text-success me-1"></i>Coletum consultado: <strong>${totalColetum}</strong> beneficiários únicos em ${data.competencia?.mes_ano || ''}.${msgExtra}`;
+        }
+    } catch (err) {
+        console.error("Erro na prévia do Coletum:", err);
+        if (txtStatus) {
+            txtStatus.innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Erro ao consultar Coletum: ${err.message}</span>`;
+        }
+    }
+}
+
+async function gerarScriptSigaterHub() {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    const btnGerar = document.getElementById('btnGerarScriptHub');
+    if (!selMes || !selAtiv) return;
+
+    const mes = parseInt(selMes.value, 10);
+    const ativCodigo = selAtiv.value;
+
+    const textoOriginal = btnGerar ? btnGerar.innerHTML : '';
+    if (btnGerar) {
+        btnGerar.disabled = true;
+        btnGerar.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Gerando Script...`;
+    }
+
+    try {
+        const res = await fetch('/api/bsf/sigater-hub/gerar-script', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mes_contrato: mes, atividade_codigo: ativCodigo })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Erro ao gerar script');
+
+        // Atualiza card com script
+        const cardScript = document.getElementById('cardScriptGerado');
+        const areaScript = document.getElementById('areaScriptGerado');
+        const txtAtiv = document.getElementById('txtNomeAtivNoAviso');
+
+        if (areaScript) areaScript.value = data.script_js || '';
+        if (txtAtiv) txtAtiv.innerText = data.atividade?.nome || '';
+        if (cardScript) cardScript.classList.remove('d-none');
+
+        // Atualiza contadores
+        const elTotalColetum = document.getElementById('cardHubTotalColetum');
+        const elSubColetum = document.getElementById('cardHubSubColetum');
+        if (elTotalColetum) elTotalColetum.innerText = data.total_coletum || 0;
+        if (elSubColetum) elSubColetum.innerText = `${data.competencia?.mes_ano || ''} (${data.total_coletum || 0} registros)`;
+
+        // Rola até o card do script
+        if (cardScript) {
+            cardScript.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Script F12 Gerado!',
+                html: `Foram carregados <strong>${data.total_coletum} beneficiários</strong> do Coletum para <strong>${data.competencia?.mes_ano}</strong>.<br><br>Copie o código gerado, cole no console do SIGATER (F12) e dê Enter.`,
+                confirmButtonText: 'Entendido'
+            });
+        }
+    } catch (err) {
+        console.error("Erro ao gerar script:", err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Falha ao Gerar Script', text: err.message });
+        }
+    } finally {
+        if (btnGerar) {
+            btnGerar.disabled = false;
+            btnGerar.innerHTML = textoOriginal;
+        }
+    }
+}
+
+function copiarScriptF12Clipboard() {
+    const area = document.getElementById('areaScriptGerado');
+    if (!area || !area.value) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhum script gerado para copiar.' });
+        }
+        return;
+    }
+
+    navigator.clipboard.writeText(area.value).then(() => {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Código Copiado!',
+                text: 'Cole no Console (F12) do SIGATER e pressione Enter.',
+                timer: 2500,
+                showConfirmButton: false
+            });
+        } else if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+            ui.feedbackSucesso('Código copiado para a Área de Transferência!');
+        }
+    }).catch(err => {
+        console.error("Erro ao copiar clipboard:", err);
+        area.select();
+        document.execCommand('copy');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'Copiado!', text: 'Código selecionado e copiado.' });
+        }
+    });
+}
+
+function abrirModalRegistrarRetornoSigater() {
+    const txtArea = document.getElementById('txtRetornoSigater');
+    const msgAlerta = document.getElementById('msgAlertaRetorno');
+    if (txtArea) txtArea.value = '';
+    if (msgAlerta) {
+        msgAlerta.classList.add('d-none');
+        msgAlerta.innerText = '';
+    }
+
+    const modalEl = document.getElementById('modalRegistrarRetornoSigater');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+}
+
+async function salvarRetornoPendenciasSigater() {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    const txtArea = document.getElementById('txtRetornoSigater');
+    const msgAlerta = document.getElementById('msgAlertaRetorno');
+    const btnSalvar = document.getElementById('btnSalvarRetornoSigater');
+
+    if (!selMes || !selAtiv || !txtArea) return;
+
+    const texto = txtArea.value.trim();
+    if (!texto) {
+        if (msgAlerta) {
+            msgAlerta.classList.remove('d-none');
+            msgAlerta.innerText = 'Por favor, cole os dados retornados do SIGATER antes de salvar.';
+        }
+        return;
+    }
+
+    const mes = parseInt(selMes.value, 10);
+    const ativCodigo = selAtiv.value;
+    const ativNome = selAtiv.options[selAtiv.selectedIndex]?.text.split(' (Form')[0].split(' (SIGATER')[0].trim() || '';
+
+    const textoOriginal = btnSalvar ? btnSalvar.innerHTML : '';
+    if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Processando Lançamentos...`;
+    }
+
+    try {
+        const res = await fetch('/api/bsf/sigater-hub/salvar-pendencias', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                mes_contrato: mes,
+                atividade_codigo: ativCodigo,
+                atividade_nome: ativNome,
+                conteudo_colado: texto
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Falha ao salvar retorno');
+
+        // Fecha o modal
+        const modalEl = document.getElementById('modalRegistrarRetornoSigater');
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        if (typeof Swal !== 'undefined') {
+            let htmlMsg = `Foram processados <strong>${data.total_processados}</strong> registros para o <strong>Mês ${mes}</strong>!<br><br>`;
+            htmlMsg += `<span class="text-success fw-bold">✅ ${data.total_lancados || 0} lançados com Código SIGATER</span><br>`;
+            htmlMsg += `<span class="text-danger fw-bold">⚠️ ${data.total_pendentes || 0} pendentes a realizar</span>`;
+            if (data.total_apenas_sigater > 0) {
+                htmlMsg += `<br><span class="text-warning fw-bold">⚠️ ${data.total_apenas_sigater} lançados sem Coletum</span>`;
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Retorno Registrado!',
+                html: htmlMsg,
+                timer: 4500
+            });
+        } else if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+            ui.feedbackSucesso(`Foram processados ${data.total_processados} registros do SIGATER!`);
+        }
+
+        // Recarrega a tabela e contadores
+        await carregarTabelaPendenciasHub();
+    } catch (err) {
+        console.error("Erro ao salvar retorno:", err);
+        if (msgAlerta) {
+            msgAlerta.classList.remove('d-none');
+            msgAlerta.innerText = `Erro: ${err.message}`;
+        }
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginal;
+        }
+    }
+}
+
+async function carregarTabelaPendenciasHub(filtroStatus = '') {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    if (!selMes || !selAtiv) return;
+
+    const mes = selMes.value;
+    const ativNome = selAtiv.options[selAtiv.selectedIndex]?.text.split(' (Form')[0].split(' (SIGATER')[0].trim() || '';
+    if (filtroStatus !== undefined) {
+        hubFiltroStatusAtual = filtroStatus;
+    }
+
+    try {
+        let url = `/api/bsf/sigater-hub/pendencias?mes_contrato=${mes}&atividade_nome=${encodeURIComponent(ativNome)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || 'Erro ao carregar registros');
+
+        hubPendenciasCache = data.pendencias || [];
+
+        // Atualiza contadores por status
+        const totalLancados = hubPendenciasCache.filter(p => p.status === 'LANCADO' || (p.codigo_sigater && p.status !== 'PENDENTE' && p.status !== 'SEM_COLETUM')).length;
+        const totalPendentes = hubPendenciasCache.filter(p => p.status === 'PENDENTE').length;
+        const totalSemColetum = hubPendenciasCache.filter(p => p.status === 'SEM_COLETUM' || p.match_tipo === 'APENAS_SIGATER').length;
+        const totalResolvidos = hubPendenciasCache.filter(p => p.status === 'RESOLVIDO').length;
+
+        const elCardLancados = document.getElementById('cardHubTotalLancados');
+        const elCardPendentes = document.getElementById('cardHubTotalPendentes');
+        const elCardSemColetum = document.getElementById('cardHubTotalSemColetum');
+        const elBadgeContador = document.getElementById('badgeContadorPendenciasTabela');
+        const elBadgeHeader = document.getElementById('badgePendenciasSigater');
+
+        if (elCardLancados) elCardLancados.innerText = totalLancados;
+        if (elCardPendentes) elCardPendentes.innerText = totalPendentes;
+        if (elCardSemColetum) elCardSemColetum.innerText = totalSemColetum;
+        if (elBadgeContador) elBadgeContador.innerText = hubPendenciasCache.length;
+
+        if (elBadgeHeader) {
+            const pendentesEAlertas = totalPendentes + totalSemColetum;
+            if (pendentesEAlertas > 0) {
+                elBadgeHeader.innerText = pendentesEAlertas;
+                elBadgeHeader.classList.remove('d-none');
+            } else {
+                elBadgeHeader.classList.add('d-none');
+            }
+        }
+
+        renderizarTabelaPendenciasHub();
+    } catch (err) {
+        console.error("Erro ao listar lançamentos/pendências:", err);
+    }
+}
+
+function filtrarStatusPendencias(status) {
+    hubFiltroStatusAtual = status;
+
+    // Atualiza botões
+    const btnTodos = document.getElementById('btnFiltroStatusTodos');
+    const btnLancado = document.getElementById('btnFiltroStatusLancado');
+    const btnPendente = document.getElementById('btnFiltroStatusPendente');
+    const btnSemColetum = document.getElementById('btnFiltroStatusSemColetum');
+    const btnResolvido = document.getElementById('btnFiltroStatusResolvido');
+
+    if (btnTodos) btnTodos.classList.toggle('active', status === '');
+    if (btnLancado) btnLancado.classList.toggle('active', status === 'LANCADO');
+    if (btnPendente) btnPendente.classList.toggle('active', status === 'PENDENTE');
+    if (btnSemColetum) btnSemColetum.classList.toggle('active', status === 'SEM_COLETUM');
+    if (btnResolvido) btnResolvido.classList.toggle('active', status === 'RESOLVIDO');
+
+    renderizarTabelaPendenciasHub();
+}
+
+function renderizarTabelaPendenciasHub() {
+    const tbody = document.getElementById('corpoTabelaPendenciasHub');
+    if (!tbody) return;
+
+    let lista = hubPendenciasCache || [];
+    if (hubFiltroStatusAtual) {
+        if (hubFiltroStatusAtual === 'LANCADO') {
+            lista = lista.filter(item => item.status === 'LANCADO' || (item.codigo_sigater && item.status !== 'PENDENTE' && item.status !== 'SEM_COLETUM'));
+        } else if (hubFiltroStatusAtual === 'SEM_COLETUM') {
+            lista = lista.filter(item => item.status === 'SEM_COLETUM' || item.match_tipo === 'APENAS_SIGATER');
+        } else {
+            lista = lista.filter(item => item.status === hubFiltroStatusAtual);
+        }
+    }
+
+    if (lista.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4 small">
+                    Nenhum registro encontrado ${hubFiltroStatusAtual ? `com status "${hubFiltroStatusAtual}"` : 'para esta competência'}.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = '';
+    lista.forEach((p, idx) => {
+        const tr = document.createElement('tr');
+
+        let badgeStatus = '<span class="badge bg-danger"><i class="fas fa-exclamation-circle me-1"></i>PENDENTE</span>';
+        if (p.status === 'LANCADO' || (p.codigo_sigater && p.status !== 'PENDENTE' && p.status !== 'SEM_COLETUM')) {
+            badgeStatus = '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>LANÇADO</span>';
+        } else if (p.status === 'SEM_COLETUM' || p.match_tipo === 'APENAS_SIGATER') {
+            badgeStatus = '<span class="badge bg-warning text-dark border border-warning" title="Lançado no SIGATER, sem formulário correspondente no Coletum"><i class="fas fa-exclamation-triangle me-1"></i>SEM COLETUM</span>';
+        } else if (p.status === 'RESOLVIDO') {
+            badgeStatus = '<span class="badge bg-info text-dark"><i class="fas fa-check-double me-1"></i>RESOLVIDO</span>';
+        } else if (p.status === 'IGNORADO') {
+            badgeStatus = '<span class="badge bg-secondary">IGNORADO</span>';
+        }
+
+        const nomeSanitizado = (p.beneficiario_nome || '').replace(/'/g, "\\'");
+        const tecnicoSanitizado = (p.tecnico || '').replace(/'/g, "\\'");
+        const comunidadeSanitizada = (p.comunidade || '').replace(/'/g, "\\'");
+        const codSigater = (p.codigo_sigater || '').replace('#', '').trim();
+
+        // Badge de Código SIGATER clicável
+        let badgeCodigoSigater = `<button class="btn btn-outline-secondary btn-sm py-0 px-2 text-nowrap" style="font-size: 11px;" title="Adicionar Código SIGATER" onclick="abrirModalEditarCodigoSigater(${p.id})"><i class="fas fa-plus me-1"></i>Adicionar Cód</button>`;
+        if (codSigater) {
+            badgeCodigoSigater = `
+                <div class="d-inline-flex align-items-center gap-1">
+                    <span class="badge ${p.status === 'SEM_COLETUM' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-success-subtle text-success border border-success'} fw-bold font-monospace px-2 py-1" style="font-size: 12px; cursor: pointer;" title="Código SIGATER registrado. Clique para editar dados." onclick="abrirModalEditarCodigoSigater(${p.id})">
+                        <i class="fas fa-barcode me-1"></i>#${codSigater}
+                    </span>
+                    <button class="btn btn-link btn-sm text-secondary p-0" title="Editar Registro e Nome" onclick="abrirModalEditarCodigoSigater(${p.id})">
+                        <i class="fas fa-pencil-alt" style="font-size: 10px;"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        // Botão de visualização de arquivos salvos
+        const btnArquivos = `
+            <button class="btn btn-outline-primary btn-sm py-0 px-2 text-nowrap" style="font-size: 11px;" title="Visualizar PDFs de Ateste e Coletum salvos no sistema" onclick="abrirModalArquivosBeneficiarioSigater('${nomeSanitizado}', '${tecnicoSanitizado}', '${comunidadeSanitizada}')">
+                <i class="fas fa-file-pdf text-danger me-1"></i>Ver Arquivos
+            </button>
+        `;
+
+        // Botão de link para a página do SIGATER (se houver)
+        let linkSigaterBtn = '';
+        if (p.link_sigater) {
+            linkSigaterBtn = `<a href="${p.link_sigater}" target="_blank" class="btn btn-outline-secondary btn-sm py-0 px-2 ms-1" title="Abrir execução no portal SIGATER"><i class="fas fa-external-link-alt" style="font-size: 10px;"></i></a>`;
+        }
+
+        // Botões de Ações
+        const btnEditarRegistro = `<button class="btn btn-outline-primary btn-sm py-0 px-2" title="Editar dados do beneficiário e Código SIGATER" onclick="abrirModalEditarCodigoSigater(${p.id})"><i class="fas fa-edit"></i></button>`;
+
+        const btnToggleStatus = (p.status === 'LANCADO' || p.status === 'RESOLVIDO')
+            ? `<button class="btn btn-outline-warning btn-sm py-0 px-2 ms-1" title="Reabrir como Pendente" onclick="alternarStatusPendenciaHub(${p.id}, 'PENDENTE')"><i class="fas fa-undo"></i></button>`
+            : `<button class="btn btn-outline-success btn-sm py-0 px-2 ms-1" title="Marcar como Lançado" onclick="alternarStatusPendenciaHub(${p.id}, 'LANCADO')"><i class="fas fa-check"></i></button>`;
+
+        const btnExcluir = `<button class="btn btn-outline-danger btn-sm py-0 px-2 ms-1" title="Excluir Registro" onclick="excluirPendenciaHub(${p.id})"><i class="fas fa-trash"></i></button>`;
+
+        tr.innerHTML = `
+            <td class="ps-3 text-muted small">${idx + 1}</td>
+            <td>
+                <div class="d-flex align-items-center justify-content-between">
+                    <strong class="text-dark small">${p.beneficiario_nome || 'SEM NOME'}</strong>
+                    <button class="btn btn-link btn-sm text-primary p-0 ms-1" title="Editar nome/dados do beneficiário" onclick="abrirModalEditarCodigoSigater(${p.id})">
+                        <i class="fas fa-edit" style="font-size: 11px;"></i>
+                    </button>
+                </div>
+                ${p.observacoes ? `<small class="text-warning-emphasis d-block" style="font-size: 10px;"><i class="fas fa-info-circle me-1"></i>${p.observacoes}</small>` : ''}
+            </td>
+            <td><code class="small text-muted">${p.beneficiario_cpf || '-'}</code></td>
+            <td class="text-center">${badgeCodigoSigater}</td>
+            <td>
+                <small class="text-dark d-block fw-semibold">${p.tecnico || '-'}</small>
+                <small class="text-muted">${p.comunidade || '-'} ${p.municipio ? `(${p.municipio})` : ''}</small>
+            </td>
+            <td><small class="text-muted">${p.data_execucao || '-'}</small></td>
+            <td class="text-center">${btnArquivos}</td>
+            <td class="text-center">${badgeStatus}</td>
+            <td class="text-center pe-3">${btnEditarRegistro}${btnToggleStatus}${linkSigaterBtn}${btnExcluir}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function abrirModalEditarCodigoSigater(id, nomeFallback = '', codigoFallback = '', statusFallback = '') {
+    const item = (hubPendenciasCache || []).find(r => r.id === id) || {};
+
+    const inputId = document.getElementById('editSigaterRegistroId');
+    const inputNome = document.getElementById('editSigaterNomeBenef');
+    const inputCpf = document.getElementById('editSigaterCpfBenef');
+    const inputCodigo = document.getElementById('editSigaterCodigoInput');
+    const selectStatus = document.getElementById('editSigaterStatusSelect');
+    const inputTecnico = document.getElementById('editSigaterTecnico');
+    const inputComunidade = document.getElementById('editSigaterComunidade');
+    const inputMunicipio = document.getElementById('editSigaterMunicipio');
+    const inputObs = document.getElementById('editSigaterObs');
+    const msgAlerta = document.getElementById('msgAlertaEditCodigo');
+
+    if (inputId) inputId.value = id;
+    if (inputNome) inputNome.value = item.beneficiario_nome || nomeFallback || '';
+    if (inputCpf) inputCpf.value = item.beneficiario_cpf || '';
+    if (inputCodigo) inputCodigo.value = (item.codigo_sigater || codigoFallback || '').replace('#', '').trim();
+    if (selectStatus) selectStatus.value = item.status || statusFallback || (item.codigo_sigater ? 'LANCADO' : 'PENDENTE');
+    if (inputTecnico) inputTecnico.value = item.tecnico || '';
+    if (inputComunidade) inputComunidade.value = item.comunidade || '';
+    if (inputMunicipio) inputMunicipio.value = item.municipio || '';
+    if (inputObs) inputObs.value = item.observacoes || '';
+
+    if (msgAlerta) {
+        msgAlerta.classList.add('d-none');
+        msgAlerta.innerText = '';
+    }
+
+    const modalEl = document.getElementById('modalEditarCodigoSigater');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+}
+
+async function salvarEdicaoCodigoSigater() {
+    const inputId = document.getElementById('editSigaterRegistroId');
+    const inputNome = document.getElementById('editSigaterNomeBenef');
+    const inputCpf = document.getElementById('editSigaterCpfBenef');
+    const inputCodigo = document.getElementById('editSigaterCodigoInput');
+    const selectStatus = document.getElementById('editSigaterStatusSelect');
+    const inputTecnico = document.getElementById('editSigaterTecnico');
+    const inputComunidade = document.getElementById('editSigaterComunidade');
+    const inputMunicipio = document.getElementById('editSigaterMunicipio');
+    const inputObs = document.getElementById('editSigaterObs');
+    const msgAlerta = document.getElementById('msgAlertaEditCodigo');
+    const btnSalvar = document.getElementById('btnSalvarCodigoSigaterModal');
+
+    if (!inputId) return;
+
+    const id = inputId.value;
+    const nome = inputNome ? inputNome.value.trim() : '';
+    const cpf = inputCpf ? inputCpf.value.trim() : '';
+    const codigo = inputCodigo ? inputCodigo.value.trim().replace('#', '') : '';
+    const status = selectStatus ? selectStatus.value : (codigo ? 'LANCADO' : 'PENDENTE');
+    const tecnico = inputTecnico ? inputTecnico.value.trim() : '';
+    const comunidade = inputComunidade ? inputComunidade.value.trim() : '';
+    const municipio = inputMunicipio ? inputMunicipio.value.trim() : '';
+    const obs = inputObs ? inputObs.value.trim() : '';
+
+    if (!nome) {
+        if (msgAlerta) {
+            msgAlerta.classList.remove('d-none');
+            msgAlerta.innerText = 'Por favor, informe o nome do beneficiário.';
+        }
+        return;
+    }
+
+    const textoOriginal = btnSalvar ? btnSalvar.innerHTML : '';
+    if (btnSalvar) {
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Salvando...`;
+    }
+
+    try {
+        const res = await fetch(`/api/bsf/sigater-hub/pendencias/${id}/codigo`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                codigo_sigater: codigo,
+                status: status,
+                beneficiario_nome: nome,
+                beneficiario_cpf: cpf,
+                tecnico: tecnico,
+                comunidade: comunidade,
+                municipio: municipio,
+                observacoes: obs
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar dados do beneficiário');
+
+        // Fecha modal
+        const modalEl = document.getElementById('modalEditarCodigoSigater');
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+
+        if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+            ui.feedbackSucesso('Beneficiário e dados atualizados com sucesso!');
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Atualizado!',
+                text: 'Beneficiário e Código SIGATER salvos com sucesso.',
+                timer: 2500,
+                showConfirmButton: false
+            });
+        }
+
+        // Recarrega a tabela e contadores
+        await carregarTabelaPendenciasHub(hubFiltroStatusAtual);
+    } catch (err) {
+        console.error("Erro ao salvar dados do beneficiário:", err);
+        if (msgAlerta) {
+            msgAlerta.classList.remove('d-none');
+            msgAlerta.innerText = err.message;
+        }
+    } finally {
+        if (btnSalvar) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = textoOriginal;
+        }
+    }
+}
+
+async function abrirModalArquivosBeneficiarioSigater(nome, tecnico, comunidade) {
+    const modalEl = document.getElementById('modalArquivosBeneficiarioSigater');
+    const subTitulo = document.getElementById('txtModalArquivosSubtitulo');
+    const loading = document.getElementById('loadingArquivosBeneficiario');
+    const container = document.getElementById('containerArquivosBeneficiario');
+    const tbody = document.getElementById('corpoTabelaArquivosBeneficiario');
+
+    if (subTitulo) subTitulo.innerText = `Beneficiário: ${nome} ${tecnico ? `• Técnico: ${tecnico}` : ''}`;
+    if (loading) loading.classList.remove('d-none');
+    if (container) container.classList.add('d-none');
+    if (tbody) tbody.innerHTML = '';
+
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+
+    try {
+        const url = `/api/bsf/sigater-hub/arquivos-beneficiario?nome=${encodeURIComponent(nome)}&tecnico=${encodeURIComponent(tecnico || '')}&comunidade=${encodeURIComponent(comunidade || '')}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (loading) loading.classList.add('d-none');
+        if (container) container.classList.remove('d-none');
+
+        const arquivos = data.arquivos || [];
+        if (arquivos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4 small">
+                        <i class="fas fa-folder-open fa-2x mb-2 text-secondary opacity-50 d-block"></i>
+                        Nenhum arquivo PDF encontrado na pasta local para <strong>${nome}</strong>.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = '';
+        arquivos.forEach((arq) => {
+            const tr = document.createElement('tr');
+            
+            let badgeTipo = '<span class="badge bg-secondary">Outro</span>';
+            if (arq.tipo === 'ateste') {
+                badgeTipo = '<span class="badge bg-success"><i class="fas fa-file-signature me-1"></i>Ateste SIGATER</span>';
+            } else if (arq.tipo === 'colletum' || arq.tipo === 'coletum') {
+                badgeTipo = '<span class="badge bg-primary"><i class="fas fa-mobile-alt me-1"></i>Coletum App</span>';
+            } else if (arq.tipo === 'sigater') {
+                badgeTipo = '<span class="badge bg-info text-dark"><i class="fas fa-satellite me-1"></i>SIGATER</span>';
+            }
+
+            const tamanhoKb = arq.tamanho ? `${Math.round(arq.tamanho / 1024)} KB` : '-';
+            const nomeArquivoSafe = (arq.nome || 'Documento').replace(/'/g, "\\'");
+
+            tr.innerHTML = `
+                <td>
+                    ${badgeTipo}
+                    <small class="text-muted d-block mt-1">${arq.atividade || ''}</small>
+                </td>
+                <td>
+                    <strong class="text-dark small d-block">${arq.nome}</strong>
+                    <small class="text-muted">${arq.data ? `📅 Data: ${arq.data}` : ''}</small>
+                </td>
+                <td class="text-center small text-muted">${tamanhoKb}</td>
+                <td class="text-end pe-3">
+                    <button class="btn btn-sm btn-primary py-1 px-2 fw-semibold" onclick="abrirVisualizadorPdf('${arq.url}', '${nomeArquivoSafe}')">
+                        <i class="fas fa-eye me-1"></i> Ver PDF
+                    </button>
+                    <a href="${arq.url}&download=true" class="btn btn-sm btn-outline-secondary py-1 px-2 ms-1" title="Baixar Arquivo">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error("Erro ao carregar arquivos:", err);
+        if (loading) loading.classList.add('d-none');
+        if (container) container.classList.remove('d-none');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-danger text-center py-3">Erro ao buscar arquivos: ${err.message}</td></tr>`;
+        }
+    }
+}
+
+async function alternarStatusPendenciaHub(id, novoStatus) {
+    try {
+        const res = await fetch(`/api/bsf/sigater-hub/pendencias/${id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: novoStatus })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Falha ao alterar status');
+        }
+
+        // Atualiza item no cache local
+        const item = hubPendenciasCache.find(p => p.id === id);
+        if (item) item.status = novoStatus;
+
+        // Recarrega contadores e tabela
+        await carregarTabelaPendenciasHub(hubFiltroStatusAtual);
+    } catch (err) {
+        console.error("Erro ao alterar status:", err);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+        }
+    }
+}
+
+async function excluirPendenciaHub(id) {
+    const acaoExcluir = async () => {
+        try {
+            const res = await fetch(`/api/bsf/sigater-hub/pendencias/${id}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.detail || 'Erro ao excluir pendência');
+            }
+            if (typeof ui !== 'undefined' && ui.feedbackSucesso) {
+                ui.feedbackSucesso('Registro excluído com sucesso.');
+            }
+            await carregarTabelaPendenciasHub(hubFiltroStatusAtual);
+        } catch (err) {
+            console.error("Erro ao excluir:", err);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'error', title: 'Erro', text: err.message });
+            }
+        }
+    };
+
+    if (typeof ui !== 'undefined' && ui.confirmarExclusao) {
+        ui.confirmarExclusao(acaoExcluir, "Excluir Registro?", "Tem certeza que deseja remover este registro do SIGATER Hub?");
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Excluir Registro?',
+            text: 'Tem certeza que deseja remover este registro do SIGATER Hub?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sim, excluir',
+            cancelButtonText: 'Cancelar'
+        }).then((res) => {
+            if (res.isConfirmed) acaoExcluir();
+        });
+    }
+}
+
+function copiarPendenciasWhatsApp() {
+    const selMes = document.getElementById('hubSelectMes');
+    const selAtiv = document.getElementById('hubSelectAtividade');
+    const mes = selMes ? selMes.value : '';
+    const ativNome = selAtiv ? selAtiv.options[selAtiv.selectedIndex]?.text : '';
+
+    const pendentes = hubPendenciasCache.filter(p => p.status === 'PENDENTE');
+    const semColetum = hubPendenciasCache.filter(p => p.status === 'SEM_COLETUM');
+
+    if (pendentes.length === 0 && semColetum.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'Nenhuma Pendência', text: 'Não há pendências ou divergências para copiar neste filtro.' });
+        }
+        return;
+    }
+
+    let texto = `*RELATÓRIO DE AUDITORIA SIGATER - MÊS ${mes}*\n`;
+    texto += `*Atividade:* ${ativNome}\n`;
+    texto += `*Total a Lançar:* ${pendentes.length}\n`;
+    if (semColetum.length > 0) {
+        texto += `*Lançados no SIGATER sem Coletum:* ${semColetum.length}\n`;
+    }
+    texto += `----------------------------------------\n`;
+
+    if (pendentes.length > 0) {
+        texto += `\n*⚠️ PENDÊNCIAS A LANÇAR NO SIGATER (${pendentes.length}):*\n`;
+        pendentes.forEach((p, idx) => {
+            texto += `${idx + 1}. *${p.beneficiario_nome}*\n`;
+            if (p.beneficiario_cpf) texto += `   CPF: ${p.beneficiario_cpf}\n`;
+            if (p.tecnico) texto += `   Técnico: ${p.tecnico}\n`;
+            if (p.comunidade) texto += `   Local: ${p.comunidade}${p.municipio ? ' / ' + p.municipio : ''}\n`;
+            if (p.data_execucao) texto += `   Data: ${p.data_execucao}\n`;
+            texto += `\n`;
+        });
+    }
+
+    if (semColetum.length > 0) {
+        texto += `\n*⚠️ LANÇAMENTOS NO SIGATER SEM PAR NO COLETUM (${semColetum.length}):*\n`;
+        semColetum.forEach((s, idx) => {
+            texto += `${idx + 1}. *${s.beneficiario_nome}* (Cód SIGATER: #${s.codigo_sigater || 'S/N'})\n`;
+            if (s.beneficiario_cpf) texto += `   CPF: ${s.beneficiario_cpf}\n`;
+            if (s.link_sigater) texto += `   Link: ${s.link_sigater}\n`;
+            texto += `\n`;
+        });
+    }
+
+    navigator.clipboard.writeText(texto).then(() => {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Lista Copiada!',
+                text: `${pendentes.length + semColetum.length} registros formatados e copiados para a Área de Transferência. Pronto para colar no WhatsApp!`,
+                timer: 3000
+            });
+        }
+    }).catch(err => {
+        console.error("Erro ao copiar para WhatsApp:", err);
+    });
+}
+
+// ==============================================================================
+// SEÇÃO F: PAINEL EXECUTIVO DE METAS & PRODUTIVIDADE OPERACIONAL
+// ==============================================================================
+let painelMetasCache = null;
+
+async function carregarPainelMetas(force = false) {
+    const tbody = document.getElementById('corpoTabelaMetas');
+    const btnAtualizar = document.getElementById('btnAtualizarPainelMetas');
+    
+    if (painelMetasCache && !force) {
+        renderizarPainelMetas(painelMetasCache);
+        return;
+    }
+    
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5 text-muted small">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                    Consolidando indicadores de metas e produtividade dos técnicos...
+                </td>
+            </tr>
+        `;
+    }
+    
+    if (btnAtualizar && typeof ui !== 'undefined' && ui.setLoadingButton) {
+        ui.setLoadingButton(btnAtualizar, 'Atualizando...');
+    }
+    
+    try {
+        let auditData = dadosAuditoriaLocalCache;
+        if (!auditData || force) {
+            const res = await fetch('/api/bsf/auditoria/relatorio');
+            if (res.ok) {
+                auditData = await res.json();
+                dadosAuditoriaLocalCache = auditData;
+            }
+        }
+        
+        const detalhes = (auditData && auditData.detalhes) ? auditData.detalhes : [];
+        const resumo = (auditData && auditData.resumo) ? auditData.resumo : {};
+        
+        if (!detalhes.length) {
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <div class="mb-2"><i class="fas fa-folder-open fa-2x text-muted opacity-50"></i></div>
+                            <strong class="d-block text-dark">Nenhum dado auditado encontrado</strong>
+                            <p class="small text-muted mb-3">Execute a auditoria de pastas locais para consolidar os números dos técnicos.</p>
+                            <button class="btn btn-sm btn-primary" onclick="executarVarreduraLocalAgora()">
+                                <i class="fas fa-search me-1"></i> Executar Auditoria de Pastas
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            return;
+        }
+
+        // Compilação por Técnico
+        const tecnicosMap = {};
+        let totalBenefGeral = new Set();
+        let totalAtestesGeral = 0;
+        let totalColetumGeral = 0;
+        let totalAtividadesGeral = 0;
+
+        detalhes.forEach(benef => {
+            const tecNome = (benef.tecnico || 'Técnico Não Identificado').trim();
+            const tecKey = tecNome.toUpperCase();
+            const benefNome = (benef.beneficiario || '').trim();
+            if (benefNome) totalBenefGeral.add(benefNome);
+
+            if (!tecnicosMap[tecKey]) {
+                tecnicosMap[tecKey] = {
+                    nome: tecNome,
+                    comunidades: new Set(),
+                    beneficiarios: new Set(),
+                    totalAtividades: 0,
+                    completas: 0,
+                    temAteste: 0,
+                    temColetum: 0,
+                    pendenteAteste: 0,
+                    pendenteColetum: 0
+                };
+            }
+
+            if (benef.comunidade) tecnicosMap[tecKey].comunidades.add(benef.comunidade);
+            if (benefNome) tecnicosMap[tecKey].beneficiarios.add(benefNome);
+
+            const atvs = benef.atividades || [];
+            atvs.forEach(a => {
+                totalAtividadesGeral++;
+                tecnicosMap[tecKey].totalAtividades++;
+                
+                const temAteste = a.tem_ateste || (a.status === 'COMPLETO') || (a.status === 'PENDENTE_COLETUM');
+                const temColetum = a.tem_coletum || (a.status === 'COMPLETO') || (a.status === 'PENDENTE_ATESTE');
+                
+                if (temAteste) {
+                    tecnicosMap[tecKey].temAteste++;
+                    totalAtestesGeral++;
+                } else {
+                    tecnicosMap[tecKey].pendenteAteste++;
+                }
+
+                if (temColetum) {
+                    tecnicosMap[tecKey].temColetum++;
+                    totalColetumGeral++;
+                } else {
+                    tecnicosMap[tecKey].pendenteColetum++;
+                }
+
+                if (a.status === 'COMPLETO' || (temAteste && temColetum)) {
+                    tecnicosMap[tecKey].completas++;
+                }
+            });
+        });
+
+        const listaTecnicos = Object.values(tecnicosMap).map(t => {
+            const total = t.totalAtividades || 1;
+            const pctAtestes = Math.round((t.temAteste / total) * 100);
+            const pctColetum = Math.round((t.temColetum / total) * 100);
+            const pctConformidade = Math.round((t.completas / total) * 100);
+
+            let statusMeta = 'PENDENTE';
+            let badgeStatus = '<span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1"><i class="fas fa-exclamation-triangle me-1"></i> Atenção</span>';
+
+            if (pctConformidade >= 95) {
+                statusMeta = 'CONCLUIDO';
+                badgeStatus = '<span class="badge bg-success-subtle text-success border border-success px-2 py-1"><i class="fas fa-check-circle me-1"></i> Meta Atingida</span>';
+            } else if (pctConformidade >= 60) {
+                statusMeta = 'EM_ANDAMENTO';
+                badgeStatus = '<span class="badge bg-primary-subtle text-primary border border-primary px-2 py-1"><i class="fas fa-spinner me-1"></i> Em Andamento</span>';
+            }
+
+            return {
+                nome: t.nome,
+                comunidadesStr: Array.from(t.comunidades).slice(0, 2).join(', ') + (t.comunidades.size > 2 ? ` (+${t.comunidades.size - 2})` : ''),
+                totalBeneficiarios: t.beneficiarios.size,
+                totalAtividades: t.totalAtividades,
+                completas: t.completas,
+                temAteste: t.temAteste,
+                temColetum: t.temColetum,
+                pctAtestes,
+                pctColetum,
+                pctConformidade,
+                statusMeta,
+                badgeStatus
+            };
+        });
+
+        // Ordena por maior conformidade e maior volume de atendimentos
+        listaTecnicos.sort((a, b) => b.pctConformidade - a.pctConformidade || b.totalAtividades - a.totalAtividades);
+
+        const totalBenefCount = totalBenefGeral.size || resumo.total_beneficiarios || 0;
+        const totalAtivCount = totalAtividadesGeral || resumo.total_atividades || 1;
+
+        painelMetasCache = {
+            tecnicos: listaTecnicos,
+            resumo: {
+                totalBeneficiarios: totalBenefCount,
+                totalAtividades: totalAtivCount,
+                totalAtestes: totalAtestesGeral,
+                totalColetum: totalColetumGeral,
+                totalTecnicos: listaTecnicos.length,
+                taxaAtestes: Math.round((totalAtestesGeral / totalAtivCount) * 100),
+                taxaColetum: Math.round((totalColetumGeral / totalAtivCount) * 100),
+                taxaGeral: resumo.percentual_conformidade || Math.round((listaTecnicos.reduce((acc, t) => acc + t.completas, 0) / totalAtivCount) * 100)
+            }
+        };
+
+        renderizarPainelMetas(painelMetasCache);
+
+    } catch (err) {
+        console.error("Erro ao carregar painel de metas:", err);
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-danger small">
+                        <i class="fas fa-exclamation-triangle me-1"></i> Erro ao consolidar indicadores de metas.
+                    </td>
+                </tr>
+            `;
+        }
+    } finally {
+        if (btnAtualizar && typeof ui !== 'undefined' && ui.resetLoadingButton) {
+            ui.resetLoadingButton(btnAtualizar);
+        }
+    }
+}
+
+function renderizarPainelMetas(dados) {
+    if (!dados) return;
+
+    const { tecnicos, resumo } = dados;
+
+    // Atualiza KPIs Executivos
+    const elBenef = document.getElementById('kpiMetaTotalBenef');
+    const elBarraBenef = document.getElementById('kpiMetaBarraBenef');
+    const elSubBenef = document.getElementById('kpiMetaSubBenef');
+
+    const elTaxaAtestes = document.getElementById('kpiMetaTaxaAtestes');
+    const elBarraAtestes = document.getElementById('kpiMetaBarraAtestes');
+    const elSubAtestes = document.getElementById('kpiMetaSubAtestes');
+
+    const elTaxaColetum = document.getElementById('kpiMetaTaxaColetum');
+    const elBarraColetum = document.getElementById('kpiMetaBarraColetum');
+    const elSubColetum = document.getElementById('kpiMetaSubColetum');
+
+    const elTotalTecnicos = document.getElementById('kpiMetaTotalTecnicos');
+    const elSubTecnicos = document.getElementById('kpiMetaSubTecnicos');
+
+    const pctMetaBenef = Math.min(100, Math.round((resumo.totalBeneficiarios / 490) * 100));
+
+    if (elBenef) elBenef.textContent = `${resumo.totalBeneficiarios}`;
+    if (elBarraBenef) elBarraBenef.style.width = `${pctMetaBenef}%`;
+    if (elSubBenef) elSubBenef.textContent = `${pctMetaBenef}% da meta de 490 famílias`;
+
+    if (elTaxaAtestes) elTaxaAtestes.textContent = `${resumo.taxaAtestes}%`;
+    if (elBarraAtestes) elBarraAtestes.style.width = `${resumo.taxaAtestes}%`;
+    if (elSubAtestes) elSubAtestes.textContent = `${resumo.totalAtestes} de ${resumo.totalAtividades} atividades`;
+
+    if (elTaxaColetum) elTaxaColetum.textContent = `${resumo.taxaColetum}%`;
+    if (elBarraColetum) elBarraColetum.style.width = `${resumo.taxaColetum}%`;
+    if (elSubColetum) elSubColetum.textContent = `${resumo.totalColetum} de ${resumo.totalAtividades} integrados`;
+
+    if (elTotalTecnicos) elTotalTecnicos.textContent = `${resumo.totalTecnicos}`;
+    if (elSubTecnicos) elSubTecnicos.textContent = `Média de ${Math.round(resumo.totalBeneficiarios / (resumo.totalTecnicos || 1))} famílias/técnico`;
+
+    // Renderiza Tabela Executiva de Indicadores
+    const tbody = document.getElementById('corpoTabelaMetas');
+    if (tbody) {
+        if (!tecnicos.length) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted small">Nenhum técnico para listar.</td></tr>`;
+            return;
+        }
+
+        let htmlRows = '';
+        tecnicos.forEach((t) => {
+            const corBarra = t.pctConformidade >= 85 ? 'bg-success' : (t.pctConformidade >= 50 ? 'bg-primary' : 'bg-warning');
+
+            htmlRows += `
+                <tr>
+                    <td class="ps-3">
+                        <strong class="text-dark small d-block">${t.nome}</strong>
+                        ${t.comunidadesStr ? `<span class="text-muted" style="font-size: 11px;"><i class="fas fa-map-marker-alt me-1 text-danger opacity-75"></i>${t.comunidadesStr}</span>` : ''}
+                    </td>
+                    <td class="text-center small fw-semibold text-secondary">${t.totalBeneficiarios}</td>
+                    <td class="text-center small text-secondary">${t.totalAtividades}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: ${t.pctAtestes}%;"></div>
+                            </div>
+                            <span class="small fw-semibold text-muted" style="font-size: 11px;">${t.pctAtestes}%</span>
+                        </div>
+                        <span class="text-muted d-block" style="font-size: 10px;">${t.temAteste}/${t.totalAtividades} atestes</span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 6px;">
+                                <div class="progress-bar bg-info" style="width: ${t.pctColetum}%;"></div>
+                            </div>
+                            <span class="small fw-semibold text-muted" style="font-size: 11px;">${t.pctColetum}%</span>
+                        </div>
+                        <span class="text-muted d-block" style="font-size: 10px;">${t.temColetum}/${t.totalAtividades} Coletum</span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar ${corBarra}" style="width: ${t.pctConformidade}%;"></div>
+                            </div>
+                            <strong class="small text-dark" style="font-size: 12px;">${t.pctConformidade}%</strong>
+                        </div>
+                        <span class="text-muted d-block" style="font-size: 10px;">${t.completas} atividades 100% completas</span>
+                    </td>
+                    <td class="text-center pe-3">
+                        ${t.badgeStatus}
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = htmlRows;
     }
 }
 </script>
